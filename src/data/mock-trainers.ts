@@ -13,7 +13,7 @@ export const trainers: Trainer[] = [
   {
     id: "anna-kowalska",
     name: "Anna Kowalska",
-    avatar: "/images/avatar-placeholder.svg",
+    avatar: "https://images.unsplash.com/photo-1548690312-e3b507d8c110?w=400&h=400&fit=crop&crop=faces",
     specializations: ["weight-loss", "nutrition", "cardio"],
     tagline: "Pomogę Ci schudnąć zdrowo i bez efektu jo-jo",
     about:
@@ -129,7 +129,7 @@ export const trainers: Trainer[] = [
   {
     id: "marek-nowak",
     name: "Marek Nowak",
-    avatar: "/images/avatar-placeholder.svg",
+    avatar: "https://images.unsplash.com/photo-1583468982228-19f19164aee2?w=400&h=400&fit=crop&crop=faces",
     specializations: ["muscle-gain", "strength", "crossfit"],
     tagline: "Zbuduję z Tobą siłę i masę mięśniową",
     about:
@@ -224,7 +224,7 @@ export const trainers: Trainer[] = [
   {
     id: "katarzyna-zielinska",
     name: "Katarzyna Zielińska",
-    avatar: "/images/avatar-placeholder.svg",
+    avatar: "https://images.unsplash.com/photo-1518611012118-696072aa579a?w=400&h=400&fit=crop&crop=faces",
     specializations: ["yoga", "flexibility", "rehabilitation"],
     tagline: "Odkryj harmonię ciała i umysłu przez jogę",
     about:
@@ -319,7 +319,7 @@ export const trainers: Trainer[] = [
   {
     id: "jakub-wisniewski",
     name: "Jakub Wiśniewski",
-    avatar: "/images/avatar-placeholder.svg",
+    avatar: "https://images.unsplash.com/photo-1567013127542-490d757e51fc?w=400&h=400&fit=crop&crop=faces",
     specializations: ["martial-arts", "cardio", "weight-loss"],
     tagline: "Naucz się sztuk walki i wejdź na nowy poziom kondycji",
     about:
@@ -414,7 +414,7 @@ export const trainers: Trainer[] = [
   {
     id: "ewa-dabrowska",
     name: "Ewa Dąbrowska",
-    avatar: "/images/avatar-placeholder.svg",
+    avatar: "https://images.unsplash.com/photo-1594381898411-846e7d193883?w=400&h=400&fit=crop&crop=faces",
     specializations: ["rehabilitation", "flexibility", "strength"],
     tagline: "Wrócę Cię do formy po kontuzji — bezpiecznie i skutecznie",
     about:
@@ -496,7 +496,7 @@ export const trainers: Trainer[] = [
   {
     id: "tomasz-kaczmarek",
     name: "Tomasz Kaczmarek",
-    avatar: "/images/avatar-placeholder.svg",
+    avatar: "https://images.unsplash.com/photo-1534367610401-9f5ed68180aa?w=400&h=400&fit=crop&crop=faces",
     specializations: ["muscle-gain", "nutrition", "strength"],
     tagline: "Kompleksowe podejście do budowy sylwetki — trening + dieta",
     about:
