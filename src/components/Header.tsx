@@ -5,7 +5,7 @@ export default function Header() {
     <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/80 backdrop-blur-lg">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2">
-          <span className="text-2xl font-bold text-emerald-600">Zdorovite</span>
+          <span className="text-2xl font-bold text-emerald-600">Zdrovite</span>
           <span className="hidden sm:inline text-sm text-gray-500 font-medium">
             Trenerzy
           </span>

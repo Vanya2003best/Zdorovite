@@ -15,9 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Zdorovite — Znajdź idealnego trenera",
+  title: "Zdrovite — Znajdź idealnego trenera",
   description:
-    "Platforma trenerów personalnych Zdorovite. Znajdź trenera idealnie dopasowanego do Twoich celów: odchudzanie, masa mięśniowa, rehabilitacja, joga i więcej.",
+    "Platforma trenerów personalnych Zdrovite. Znajdź trenera idealnie dopasowanego do Twoich celów: odchudzanie, masa mięśniowa, rehabilitacja, joga i więcej.",
 };
 
 export default function RootLayout({
