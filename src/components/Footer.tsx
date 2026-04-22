@@ -4,7 +4,7 @@ export default function Footer() {
       <div className="mx-auto max-w-6xl px-4 py-8">
         <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
           <p className="text-sm text-gray-500">
-            &copy; {new Date().getFullYear()} Zdrovite. Wszystkie prawa
+            &copy; {new Date().getFullYear()} NaZdrow!. Wszystkie prawa
             zastrzeżone.
           </p>
           <div className="flex gap-6">

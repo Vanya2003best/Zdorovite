@@ -7,9 +7,11 @@ interface Props {
 
 export default function AboutSection({ about, styles: s }: Props) {
   return (
-    <section>
-      <h2 className={`text-xl font-bold ${s.headingColor}`}>O mnie</h2>
-      <p className={`mt-3 leading-relaxed ${s.textColor}`}>{about}</p>
+    <section className={`${s.sectionPadding} ${s.sectionBorder}`}>
+      <div className={s.sectionTitleStyle}>
+        {s.name === "cozy" ? "Moja filozofia" : s.name === "sport" ? "Misja" : "O mnie"}
+      </div>
+      <p className={s.bodyText}>{about}</p>
     </section>
   );
 }

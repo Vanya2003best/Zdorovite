@@ -17,7 +17,7 @@ export default function Home() {
             <span className="text-emerald-200">Ciebie</span>
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-emerald-100">
-            Zdrovite to platforma, gdzie najlepsi trenerzy w Polsce prezentują
+            NaZdrow! to platforma, gdzie najlepsi trenerzy w Polsce prezentują
             swoje usługi. Filtruj po specjalizacji, czytaj opinie i wybierz
             trenera dopasowanego do Twoich celów.
           </p>
@@ -93,7 +93,7 @@ export default function Home() {
       <section className="mx-auto max-w-6xl px-4 py-16">
         <div className="rounded-2xl bg-emerald-600 p-8 sm:p-12 text-center">
           <h2 className="text-2xl font-bold text-white sm:text-3xl">
-            Jesteś trenerem? Dołącz do Zdrovite!
+            Jesteś trenerem? Dołącz do NaZdrow!!
           </h2>
           <p className="mt-3 text-emerald-100 max-w-lg mx-auto">
             Stwórz swoją profesjonalną wizytówkę, pokaż usługi i portfolio,

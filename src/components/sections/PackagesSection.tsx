@@ -4,71 +4,55 @@ import { TemplateStyles } from "@/data/templates";
 interface Props {
   packages: Package[];
   styles: TemplateStyles;
-  accentColor: string;
 }
 
-export default function PackagesSection({ packages, styles: s, accentColor }: Props) {
+export default function PackagesSection({ packages, styles: s }: Props) {
   if (packages.length === 0) return null;
 
   return (
-    <section>
-      <h2 className={`text-xl font-bold ${s.headingColor}`}>Pakiety</h2>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <section className={`${s.sectionPadding} ${s.sectionBorder}`}>
+      <div className={s.sectionTitleStyle}>
+        {s.name === "cozy" ? "Pakiety z sercem" : "Pakiety"}
+      </div>
+      <div className={s.pkgContainerStyle}>
         {packages.map((pkg) => (
           <div
             key={pkg.id}
-            className={`relative flex flex-col ${s.rounded} ${s.cardBg} ${s.cardShadow} p-6 ${
-              pkg.featured
-                ? "ring-2"
-                : s.cardBorder
-            }`}
-            style={pkg.featured ? { boxShadow: `0 0 0 2px ${accentColor}` } : undefined}
+            className={pkg.featured ? s.pkgFeaturedStyle : s.pkgCardStyle}
           >
             {pkg.featured && (
-              <span
-                className="absolute -top-3 left-4 rounded-full px-3 py-0.5 text-xs font-bold text-white"
-                style={{ backgroundColor: accentColor }}
-              >
-                Popularne
+              <span className={s.pkgFeaturedBadge}>
+                {s.name === "sport"
+                  ? "TOP"
+                  : s.name === "cozy"
+                    ? "✨ Ulubione"
+                    : s.name === "minimal"
+                      ? "Popularne"
+                      : "Popularne"}
               </span>
             )}
-            <h3 className={`text-lg font-bold ${s.headingColor}`}>
-              {pkg.name}
-            </h3>
-            <p className={`mt-1 text-sm ${s.textColor}`}>{pkg.description}</p>
-
-            <div className="mt-4">
-              <span className="text-3xl font-bold" style={{ color: accentColor }}>
-                {pkg.price} zł
-              </span>
-              {pkg.period && (
-                <span className={`text-sm ${s.mutedColor}`}>
-                  {" "}
-                  / {pkg.period}
-                </span>
-              )}
+            <div className={s.pkgNameStyle}>{pkg.name}</div>
+            <div className={s.pkgPriceStyle}>
+              {pkg.price.toLocaleString("pl-PL")}
+              {s.name !== "sport" ? " zł" : ""}
             </div>
-
-            <ul className="mt-4 flex-1 space-y-2">
+            <ul className="list-none p-0 m-0 grid gap-0.5 mt-1.5">
               {pkg.items.map((item) => (
-                <li
-                  key={item}
-                  className={`flex items-start gap-2 text-sm ${s.textColor}`}
-                >
-                  <span className="mt-0.5" style={{ color: accentColor }}>
-                    &#10003;
-                  </span>
+                <li key={item} className={s.pkgItemStyle}>
+                  {s.name === "sport" && (
+                    <span className={s.pkgItemPrefix}>&#9656; </span>
+                  )}
+                  {s.name === "cozy" && "🌿 "}
+                  {s.name === "premium" && (
+                    <span className={s.pkgItemPrefix}>&#10003; </span>
+                  )}
                   {item}
                 </li>
               ))}
             </ul>
-
-            <button
-              className={`mt-6 w-full ${s.rounded} px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90`}
-              style={{ backgroundColor: accentColor }}
-            >
-              Wybierz pakiet
-            </button>
+            {s.pkgButtonStyle !== "hidden" && (
+              <button className={s.pkgButtonStyle}>Wybierz pakiet</button>
+            )}
           </div>
         ))}
       </div>

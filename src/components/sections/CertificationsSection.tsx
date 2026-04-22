@@ -3,28 +3,18 @@ import { TemplateStyles } from "@/data/templates";
 interface Props {
   certifications: string[];
   styles: TemplateStyles;
-  accentColor: string;
 }
 
-export default function CertificationsSection({
-  certifications,
-  styles: s,
-  accentColor,
-}: Props) {
+export default function CertificationsSection({ certifications, styles: s }: Props) {
   if (certifications.length === 0) return null;
 
   return (
-    <section>
-      <h2 className={`text-xl font-bold ${s.headingColor}`}>Certyfikaty</h2>
-      <ul className="mt-3 space-y-2">
+    <section className={`${s.sectionPadding} ${s.sectionBorder}`}>
+      <div className={s.sectionTitleStyle}>Certyfikaty</div>
+      <ul className="space-y-2 list-none p-0 m-0">
         {certifications.map((cert) => (
-          <li
-            key={cert}
-            className={`flex items-start gap-2 ${s.textColor}`}
-          >
-            <span className="mt-0.5" style={{ color: accentColor }}>
-              &#10003;
-            </span>
+          <li key={cert} className={`flex items-start gap-2 ${s.certTextStyle}`}>
+            <span className={`mt-0.5 ${s.certCheckColor}`}>&#10003;</span>
             {cert}
           </li>
         ))}
