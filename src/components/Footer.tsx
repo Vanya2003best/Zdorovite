@@ -6,6 +6,7 @@ export default async function Footer() {
   const h = await headers();
   const pathname = h.get("x-pathname") ?? "";
   if (pathname.startsWith("/studio")) return null;
+  if (pathname.startsWith("/account")) return null;
   if (pathname === "/login" || pathname.startsWith("/register")) return null;
   if (h.get("x-embed") === "1") return null;
 
