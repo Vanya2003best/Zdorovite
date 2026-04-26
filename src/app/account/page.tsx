@@ -162,28 +162,45 @@ export default async function AccountDashboardPage() {
   return (
     <div className="max-w-[1320px] mx-auto px-5 sm:px-7 py-7 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
       {/* ============ HERO ============ */}
-      <div className="lg:col-span-2 relative overflow-hidden rounded-[18px] p-7 sm:p-8 text-white flex flex-col sm:flex-row sm:justify-between sm:items-center gap-6 [background:linear-gradient(135deg,#064e3b_0%,#047857_50%,#14b8a6_100%)]">
-        <div className="pointer-events-none absolute -right-20 -top-24 w-[360px] h-[360px] rounded-full [background:radial-gradient(circle,rgba(255,255,255,0.12),transparent_70%)]" />
+      <div className="lg:col-span-2 relative overflow-hidden rounded-[18px] p-5 sm:p-7 lg:p-8 text-white flex flex-col lg:flex-row lg:justify-between lg:items-center gap-5 lg:gap-6 [background:linear-gradient(135deg,#064e3b_0%,#047857_50%,#14b8a6_100%)]">
+        <div className="pointer-events-none absolute -right-12 -top-16 lg:-right-20 lg:-top-24 w-[180px] h-[180px] lg:w-[360px] lg:h-[360px] rounded-full [background:radial-gradient(circle,rgba(255,255,255,0.12),transparent_70%)]" />
         <div className="relative z-[2]">
-          <h1 className="text-[26px] sm:text-[28px] tracking-[-0.02em] font-semibold m-0 mb-1.5">
-            Cześć {firstName}, ruszamy 💪
-          </h1>
-          <p className="text-sm opacity-85 m-0">{heroSub}</p>
-        </div>
-        <div className="relative z-[2] flex gap-7 sm:gap-8 flex-wrap">
-          <div>
-            <div className="text-[26px] sm:text-[28px] font-bold tracking-[-0.02em]">{yearCount}</div>
-            <div className="text-[11px] opacity-70 uppercase tracking-wider mt-0.5">Sesji w tym roku</div>
-          </div>
-          <div>
-            <div className="text-[26px] sm:text-[28px] font-bold tracking-[-0.02em]">
-              {activePackages[0] ? `${activePackages[0].count}` : "—"}
+          {/* Mobile: package-focused; greeting is in the top bar already */}
+          <div className="lg:hidden">
+            <div className="text-[11px] opacity-85 uppercase tracking-wider font-semibold">
+              {activePackages[0] ? "Aktywny pakiet" : "Twoja podróż"}
             </div>
-            <div className="text-[11px] opacity-70 uppercase tracking-wider mt-0.5">Aktywny pakiet</div>
+            <h1 className="text-[22px] tracking-[-0.02em] font-semibold leading-[1.15] mt-1">
+              {activePackages[0] ? (
+                <>
+                  {activePackages[0].count} sesji w pakiecie.<br />
+                  W trakcie 💪
+                </>
+              ) : (
+                <>Zacznij swoją drogę 💪</>
+              )}
+            </h1>
+          </div>
+          {/* Desktop: greeting + sub */}
+          <div className="hidden lg:block">
+            <h1 className="text-[28px] tracking-[-0.02em] font-semibold m-0 mb-1.5">
+              Cześć {firstName}, ruszamy 💪
+            </h1>
+            <p className="text-sm opacity-85 m-0">{heroSub}</p>
+          </div>
+        </div>
+        <div className="relative z-[2] flex gap-5 sm:gap-7 lg:gap-8 flex-wrap">
+          <div>
+            <div className="text-[18px] lg:text-[28px] font-bold tracking-[-0.02em]">{yearCount}</div>
+            <div className="text-[10px] lg:text-[11px] opacity-70 uppercase tracking-wider mt-0.5">Sesji 2026</div>
           </div>
           <div>
-            <div className="text-[26px] sm:text-[28px] font-bold tracking-[-0.02em]">{MOCK_HERO_WEIGHT}</div>
-            <div className="text-[11px] opacity-70 uppercase tracking-wider mt-0.5">Od stycznia</div>
+            <div className="text-[18px] lg:text-[28px] font-bold tracking-[-0.02em]">{MOCK_HERO_WEIGHT}</div>
+            <div className="text-[10px] lg:text-[11px] opacity-70 uppercase tracking-wider mt-0.5">Od stycznia</div>
+          </div>
+          <div>
+            <div className="text-[18px] lg:text-[28px] font-bold tracking-[-0.02em]">62%</div>
+            <div className="text-[10px] lg:text-[11px] opacity-70 uppercase tracking-wider mt-0.5">Cel biegania</div>
           </div>
         </div>
       </div>

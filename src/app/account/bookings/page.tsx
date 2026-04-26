@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireClient } from "@/lib/auth";
 import { cancelMyBooking } from "./actions";
 
-type SP = Promise<{ booked?: string }>;
+type SP = Promise<{ booked?: string; tab?: string }>;
 
 type BookingRow = {
   id: string;
@@ -13,6 +13,7 @@ type BookingRow = {
   price: number;
   note: string | null;
   service: { name: string; duration: number } | null;
+  package: { name: string } | null;
   trainer: {
     slug: string;
     profile: { display_name: string; avatar_url: string | null } | null;
@@ -20,8 +21,23 @@ type BookingRow = {
   } | null;
 };
 
+const PL_DAY_SHORT = ["Nd", "Pn", "Wt", "Śr", "Cz", "Pt", "So"];
+const STATUS_LABEL: Record<string, string> = {
+  pending: "Oczekuje",
+  confirmed: "Potwierdzone",
+  paid: "Opłacone",
+  completed: "Ukończona",
+  cancelled: "Anulowane",
+  no_show: "Nie przybył/a",
+};
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+}
+
 export default async function BookingsPage(props: { searchParams: SP }) {
-  const { booked } = await props.searchParams;
+  const { booked, tab } = await props.searchParams;
+  const showHistory = tab === "history";
   const { user } = await requireClient("/account/bookings");
   const supabase = await createClient();
 
@@ -30,34 +46,52 @@ export default async function BookingsPage(props: { searchParams: SP }) {
     .select(`
       id, start_time, end_time, status, price, note,
       service:services ( name, duration ),
+      package:packages ( name ),
       trainer:trainers (
-        slug,
-        location,
+        slug, location,
         profile:profiles!id ( display_name, avatar_url )
       )
     `)
     .eq("client_id", user.id)
-    .order("start_time", { ascending: false });
+    .order("start_time", { ascending: true });
 
   if (error) throw error;
   const bookings = (data ?? []) as unknown as BookingRow[];
 
-  const upcoming = bookings.filter((b) => new Date(b.start_time) > new Date() && b.status !== "cancelled");
-  const past = bookings.filter((b) => new Date(b.start_time) <= new Date() || b.status === "cancelled");
+  const now = new Date();
+  const upcoming = bookings.filter((b) => new Date(b.start_time) > now && b.status !== "cancelled");
+  const past = bookings
+    .filter((b) => new Date(b.start_time) <= now || b.status === "cancelled")
+    .reverse();
+
+  const visible = showHistory ? past : upcoming;
+  const nextId = upcoming[0]?.id;
 
   return (
-    <div className="mx-auto max-w-[860px] px-5 sm:px-6 py-8 sm:py-12">
-      <h1 className="text-3xl font-semibold tracking-tight">Twoje rezerwacje</h1>
-      <p className="text-sm text-slate-600 mt-2 mb-8">
-        <Link href="/account" className="text-emerald-700 hover:underline">
-          ← Wróć do konta
-        </Link>
-      </p>
+    <div className="mx-auto max-w-[860px] px-4 sm:px-6 py-5 sm:py-8">
+      {/* Mobile header — page title */}
+      <header className="md:hidden mb-4">
+        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+          Wszystkie sesje
+        </div>
+        <h1 className="text-[18px] font-semibold tracking-[-0.01em]">
+          {upcoming.length} zaplanowanych
+        </h1>
+      </header>
+      {/* Desktop header */}
+      <header className="hidden md:block mb-6">
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Twoje sesje</h1>
+        <p className="text-sm text-slate-600 mt-1.5">
+          {upcoming.length} nadchodzących · {past.length} w historii
+        </p>
+      </header>
 
       {booked && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 mb-8 flex items-start gap-3">
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 mb-5 flex items-start gap-3">
           <span className="w-6 h-6 rounded-full bg-emerald-500 text-white inline-flex items-center justify-center shrink-0 mt-0.5">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5" /></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
           </span>
           <div>
             <p className="font-semibold text-emerald-900">Rezerwacja potwierdzona</p>
@@ -66,97 +100,156 @@ export default async function BookingsPage(props: { searchParams: SP }) {
         </div>
       )}
 
-      {bookings.length === 0 && (
-        <div className="rounded-2xl border-2 border-dashed border-slate-300 py-16 text-center">
-          <p className="text-lg font-medium text-slate-500">Brak rezerwacji</p>
-          <Link href="/trainers" className="mt-3 inline-block text-sm font-medium text-emerald-600 hover:text-emerald-700">
-            Znajdź trenera →
-          </Link>
+      {/* Segmented control */}
+      <div className="inline-flex p-[3px] bg-slate-100 rounded-full mb-4 text-xs">
+        <Link
+          href="/account/bookings"
+          className={`px-3.5 py-1.5 rounded-full font-medium transition ${
+            !showHistory
+              ? "bg-white text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+              : "text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          Nadchodzące · {upcoming.length}
+        </Link>
+        <Link
+          href="/account/bookings?tab=history"
+          className={`px-3.5 py-1.5 rounded-full font-medium transition ${
+            showHistory
+              ? "bg-white text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+              : "text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          Historia · {past.length}
+        </Link>
+      </div>
+
+      {visible.length === 0 ? (
+        <div className="rounded-2xl border-2 border-dashed border-slate-300 py-12 text-center">
+          <p className="text-base font-medium text-slate-500">
+            {showHistory ? "Brak sesji w historii." : "Nie masz zaplanowanych sesji."}
+          </p>
+          {!showHistory && (
+            <Link
+              href="/trainers"
+              className="mt-3 inline-block text-sm font-medium text-emerald-600 hover:text-emerald-700"
+            >
+              Znajdź trenera →
+            </Link>
+          )}
         </div>
-      )}
-
-      {upcoming.length > 0 && (
-        <section className="mb-10">
-          <h2 className="text-[13px] uppercase tracking-[0.08em] text-emerald-700 font-medium mb-4">Nadchodzące</h2>
-          <div className="grid gap-3">
-            {upcoming.map((b) => <BookingCard key={b.id} booking={b} canCancel />)}
-          </div>
-        </section>
-      )}
-
-      {past.length > 0 && (
-        <section>
-          <h2 className="text-[13px] uppercase tracking-[0.08em] text-slate-500 font-medium mb-4">Poprzednie</h2>
-          <div className="grid gap-3">
-            {past.map((b) => <BookingCard key={b.id} booking={b} />)}
-          </div>
-        </section>
+      ) : (
+        <div className="grid gap-2.5">
+          {visible.map((b) => (
+            <SessionCard key={b.id} booking={b} isPast={showHistory} isNext={b.id === nextId} />
+          ))}
+        </div>
       )}
     </div>
   );
 }
 
-function BookingCard({ booking: b, canCancel = false }: { booking: BookingRow; canCancel?: boolean }) {
-  const dateStr = new Date(b.start_time).toLocaleDateString("pl-PL", {
-    weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Warsaw",
-  });
-  const timeStr = new Date(b.start_time).toLocaleTimeString("pl-PL", {
-    hour: "2-digit", minute: "2-digit", timeZone: "Europe/Warsaw",
-  });
-  const statusLabel: Record<string, string> = {
-    pending: "Oczekuje na płatność",
-    confirmed: "Potwierdzone",
-    paid: "Opłacone",
-    completed: "Zakończone",
-    cancelled: "Anulowane",
-    no_show: "Nie przybył/a",
-  };
-  const statusColor: Record<string, string> = {
-    pending: "bg-amber-100 text-amber-800",
-    confirmed: "bg-emerald-100 text-emerald-800",
-    paid: "bg-emerald-100 text-emerald-800",
-    completed: "bg-slate-100 text-slate-700",
-    cancelled: "bg-red-100 text-red-800",
-    no_show: "bg-red-100 text-red-800",
-  };
-
+function SessionCard({
+  booking: b,
+  isPast,
+  isNext,
+}: {
+  booking: BookingRow;
+  isPast: boolean;
+  isNext: boolean;
+}) {
+  const d = new Date(b.start_time);
   const trainerName = b.trainer?.profile?.display_name ?? "Trener";
-  const trainerAvatar = b.trainer?.profile?.avatar_url;
+  const what = b.package?.name
+    ? `${b.package.name}`
+    : b.service?.name ?? "Sesja";
+  const completed = b.status === "completed";
+  const cancelled = b.status === "cancelled";
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 flex items-start gap-4">
-      {trainerAvatar ? (
-        <img src={trainerAvatar} alt="" className="w-12 h-12 rounded-xl object-cover shrink-0" />
-      ) : (
-        <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-700 inline-flex items-center justify-center font-semibold shrink-0">
-          {trainerName.charAt(0)}
+    <div className={`bg-white border border-slate-200 rounded-[14px] p-3.5 grid grid-cols-[64px_1fr] gap-3 ${isPast ? "opacity-90" : ""}`}>
+      {/* Date tile */}
+      <div className={`rounded-[10px] text-center py-2 ${
+        isNext ? "bg-emerald-50" : isPast ? "bg-slate-100" : "bg-slate-50"
+      }`}>
+        <div className={`text-[9px] uppercase font-bold tracking-wider ${
+          isNext ? "text-emerald-700" : "text-slate-500"
+        }`}>
+          {PL_DAY_SHORT[d.getDay()]} {d.getDate()}
         </div>
-      )}
-      <div className="flex-1 min-w-0">
-        <div className="flex flex-wrap items-center gap-2 mb-1">
-          <strong className="text-slate-900">{trainerName}</strong>
-          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${statusColor[b.status] ?? "bg-slate-100 text-slate-700"}`}>
-            {statusLabel[b.status] ?? b.status}
-          </span>
+        <div className={`text-[22px] font-bold tracking-[-0.02em] leading-tight my-0.5 ${
+          isPast && !isNext ? "text-slate-700" : "text-slate-900"
+        }`}>
+          {d.getDate()}
         </div>
-        <div className="text-sm text-slate-700">
-          {b.service?.name ?? "Usługa"} · {dateStr}, {timeStr}
+        <div className="text-[10px] text-slate-700 font-semibold">{fmtTime(b.start_time)}</div>
+      </div>
+
+      {/* Info */}
+      <div className="flex flex-col min-w-0">
+        <div className="text-[13px] font-semibold truncate">{what}</div>
+        <div className="text-[11.5px] text-slate-600 mt-0.5">
+          <div className="truncate">
+            {trainerName}
+            {b.service?.duration ? ` · ${b.service.duration} min` : ""}
+            {cancelled ? " · anulowana" : completed ? " · ukończona" : ""}
+          </div>
+          <div className="flex gap-2 items-center mt-1 flex-wrap text-[11px]">
+            {b.trainer?.location && (
+              <span className="inline-flex gap-1 items-center text-slate-500">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1118 0z" />
+                  <circle cx="12" cy="10" r="3" />
+                </svg>
+                {b.trainer.location}
+              </span>
+            )}
+            {!isPast && !cancelled && (
+              <span className="inline-flex items-center text-slate-500">
+                · {STATUS_LABEL[b.status] ?? b.status}
+              </span>
+            )}
+            {isNext && (
+              <span className="text-emerald-700 font-medium">· Najbliższa</span>
+            )}
+          </div>
         </div>
-        {b.trainer?.location && <div className="text-xs text-slate-500 mt-0.5">📍 {b.trainer.location}</div>}
-        {b.note && <div className="text-xs text-slate-500 mt-1.5 italic">&ldquo;{b.note}&rdquo;</div>}
-        {canCancel && b.status !== "cancelled" && (
-          <form action={cancelMyBooking} className="mt-3">
-            <input type="hidden" name="booking_id" value={b.id} />
-            <button
-              type="submit"
-              className="text-[12px] text-red-600 font-medium hover:text-red-700 transition"
+
+        {!isPast && !cancelled ? (
+          <div className="mt-2 flex gap-1.5">
+            <Link
+              href="/account/messages"
+              className="px-2.5 py-1 rounded-[7px] text-[11px] font-medium bg-slate-900 text-white hover:bg-black transition"
             >
-              Anuluj rezerwację
-            </button>
-          </form>
+              Otwórz
+            </Link>
+            <form action={cancelMyBooking}>
+              <input type="hidden" name="booking_id" value={b.id} />
+              <button
+                type="submit"
+                className="px-2.5 py-1 rounded-[7px] text-[11px] font-medium bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-400 transition"
+              >
+                Anuluj
+              </button>
+            </form>
+            <span className="ml-auto text-[12px] font-semibold text-slate-900 self-center">{b.price} zł</span>
+          </div>
+        ) : (
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-[12px] font-semibold text-slate-900">{b.price} zł</span>
+            {completed && (
+              // TODO: only show if no review by this client for this trainer; needs query against reviews table
+              <Link
+                href={`/trainers/${b.trainer?.slug ?? ""}#reviews`}
+                className="ml-auto inline-flex gap-1.5 items-center px-2.5 py-1.5 rounded-[8px] text-[11px] font-medium border border-amber-300 bg-gradient-to-br from-amber-50 to-white text-amber-800 hover:border-amber-400 transition"
+              >
+                <span className="text-amber-600">★★★★★</span>
+                Wystaw opinię
+              </Link>
+            )}
+          </div>
         )}
       </div>
-      <div className="text-sm font-semibold text-slate-900 whitespace-nowrap">{b.price} zł</div>
     </div>
   );
 }
