@@ -17,6 +17,7 @@ export interface SpecializationInfo {
 }
 
 export interface Service {
+  id?: string;
   name: string;
   description: string;
   duration: number;
@@ -43,7 +44,15 @@ export interface Review {
   date: string;
 }
 
-export type TemplateName = "minimal" | "sport" | "premium" | "cozy";
+export type TemplateName =
+  | "minimal"
+  | "sport"
+  | "premium"
+  | "cozy"
+  | "luxury"
+  | "studio"
+  | "cinematic"
+  | "signature";
 
 export type SectionId =
   | "about"
