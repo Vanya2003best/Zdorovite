@@ -1,12 +1,16 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import MessagesBadge from "./MessagesBadge";
 
 type NavItem = {
   href: string;
   label: string;
   match: (p: string) => boolean;
   icon: React.ReactNode;
+  /** When true, the live <MessagesBadge/> is rendered next to this item. */
+  hasUnreadBadge?: boolean;
 };
 
 const HomeIcon = (
@@ -41,7 +45,13 @@ const NAV: NavItem[] = [
   { href: "/account", label: "Pulpit", match: (p) => p === "/account", icon: HomeIcon },
   { href: "/account/bookings", label: "Sesje", match: (p) => p.startsWith("/account/bookings"), icon: CalIcon },
   { href: "/trainers", label: "Trenerzy", match: (p) => p.startsWith("/trainers"), icon: SearchIcon },
-  { href: "/account/messages", label: "Czat", match: (p) => p.startsWith("/account/messages"), icon: ChatIcon },
+  {
+    href: "/account/messages",
+    label: "Czat",
+    match: (p) => p.startsWith("/account/messages"),
+    icon: ChatIcon,
+    hasUnreadBadge: true,
+  },
   { href: "/account/progress", label: "Postępy", match: (p) => p.startsWith("/account/progress"), icon: PulseIcon },
 ];
 
@@ -53,6 +63,20 @@ export default async function AccountLayout({ children }: { children: React.Reac
   const firstName = displayName.split(" ")[0] || "Konto";
   const avatarUrl = cu?.profile.avatar_url ?? null;
   const initial = displayName.charAt(0).toUpperCase();
+
+  // Initial unread count — used as the SSR seed for <MessagesBadge/>, which
+  // then keeps itself in sync via Supabase realtime (INSERT/UPDATE on messages).
+  let unreadMessages = 0;
+  const myId = cu?.user.id;
+  if (myId) {
+    const supabase = await createClient();
+    const { count } = await supabase
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("to_id", myId)
+      .is("read_at", null);
+    unreadMessages = count ?? 0;
+  }
 
   return (
     <div className="bg-slate-100 min-h-[100dvh] flex flex-col">
@@ -82,13 +106,16 @@ export default async function AccountLayout({ children }: { children: React.Reac
                 <Link
                   key={item.label}
                   href={item.href}
-                  className={`px-3.5 py-2 rounded-lg text-[13.5px] font-medium transition ${
+                  className={`relative px-3.5 py-2 rounded-lg text-[13.5px] font-medium transition ${
                     active
                       ? "bg-slate-100 text-slate-900"
                       : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                   }`}
                 >
                   {item.label}
+                  {item.hasUnreadBadge && myId && (
+                    <MessagesBadge initialCount={unreadMessages} myId={myId} variant="inline" />
+                  )}
                 </Link>
               );
             })}
@@ -105,8 +132,10 @@ export default async function AccountLayout({ children }: { children: React.Reac
             Szukaj trenera, sesji…
           </div>
 
-          {/* Notifications */}
-          <button
+          {/* Notifications — for now the bell mirrors unread messages
+              (no separate notifications table yet). */}
+          <Link
+            href="/account/messages"
             aria-label="Powiadomienia"
             className="relative w-9 h-9 rounded-[11px] md:rounded-[9px] bg-slate-100 md:bg-white md:border md:border-slate-200 inline-flex items-center justify-center text-slate-700 md:hover:border-slate-400 transition"
           >
@@ -114,8 +143,10 @@ export default async function AccountLayout({ children }: { children: React.Reac
               <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 01-3.46 0" />
             </svg>
-            <span className="absolute top-2 right-2 w-[7px] h-[7px] bg-red-500 rounded-full border-[1.5px] border-white" />
-          </button>
+            {myId && (
+              <MessagesBadge initialCount={unreadMessages} myId={myId} variant="dot" />
+            )}
+          </Link>
 
           {/* Avatar — pill on desktop, square on mobile */}
           <Link
@@ -149,11 +180,16 @@ export default async function AccountLayout({ children }: { children: React.Reac
             <Link
               key={item.label}
               href={item.href}
-              className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition ${
+              className={`relative flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition ${
                 active ? "text-emerald-700" : "text-slate-500"
               }`}
             >
-              {item.icon}
+              <span className="relative">
+                {item.icon}
+                {item.hasUnreadBadge && myId && (
+                  <MessagesBadge initialCount={unreadMessages} myId={myId} variant="floating" />
+                )}
+              </span>
               <span>{item.label}</span>
             </Link>
           );

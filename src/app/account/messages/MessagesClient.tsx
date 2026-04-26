@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { sendMessage } from "./actions";
@@ -18,6 +18,9 @@ const QUICK_REPLIES = [
 
 const PL_DAY_LONG = ["Niedziela", "Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota"];
 
+const TYPING_HEARTBEAT_MS = 1500; // throttle outgoing pings
+const TYPING_LINGER_MS = 4000;    // how long to show "pisze…" after the last ping
+
 function fmtDaySep(iso: string) {
   const d = new Date(iso);
   const now = new Date();
@@ -33,6 +36,11 @@ function fmtDaySep(iso: string) {
 
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Per-thread channel name agreed by both sides regardless of who's sender. */
+function threadChannelName(a: string, b: string) {
+  return `thread:${[a, b].sort().join(":")}`;
 }
 
 export default function MessagesClient({
@@ -52,6 +60,11 @@ export default function MessagesClient({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
 
+  // Refs for typing throttle + linger timers (so they don't churn between renders)
+  const lastPingSentRef = useRef<number>(0);
+  const typingClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingChannelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
+
   useEffect(() => {
     setMessages(initialMessages);
   }, [initialMessages]);
@@ -62,28 +75,46 @@ export default function MessagesClient({
     }
   }, [messages, otherTyping]);
 
+  // ---------- Postgres-changes subscriptions ----------
+  // 1) INSERT on incoming messages → append + mark this side read on the next openThread mount.
+  // 2) UPDATE on messages I sent to this user → propagate read_at into local state so my ✓✓ turn green
+  //    when the other side opens the thread. This is the "live read receipt" path.
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
-      .channel(`messages-${myId}`)
+      .channel(`messages-${myId}-${other.id}`)
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-          filter: `to_id=eq.${myId}`,
-        },
+        { event: "INSERT", schema: "public", table: "messages", filter: `to_id=eq.${myId}` },
         (payload) => {
-          const m = payload.new as { from_id: string; to_id: string; id: string; text: string; created_at: string };
-          if (m.from_id === other.id) {
-            setMessages((prev) => [
-              ...prev,
-              { id: m.id, fromMe: false, text: m.text, createdAt: m.created_at },
-            ]);
-            setOtherTyping(false);
-          }
+          const m = payload.new as {
+            from_id: string;
+            to_id: string;
+            id: string;
+            text: string;
+            created_at: string;
+            read_at: string | null;
+          };
+          if (m.from_id !== other.id) return;
+          setMessages((prev) =>
+            prev.some((x) => x.id === m.id)
+              ? prev
+              : [...prev, { id: m.id, fromMe: false, text: m.text, createdAt: m.created_at, readAt: m.read_at }],
+          );
+          setOtherTyping(false);
           router.refresh();
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "messages", filter: `from_id=eq.${myId}` },
+        (payload) => {
+          const m = payload.new as { id: string; to_id: string; read_at: string | null };
+          // Only care about updates on this thread.
+          if (m.to_id !== other.id) return;
+          setMessages((prev) =>
+            prev.map((x) => (x.id === m.id ? { ...x, readAt: m.read_at } : x)),
+          );
         },
       )
       .subscribe();
@@ -91,6 +122,40 @@ export default function MessagesClient({
       supabase.removeChannel(channel);
     };
   }, [myId, other.id, router]);
+
+  // ---------- Typing presence (broadcast, no DB writes) ----------
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase.channel(threadChannelName(myId, other.id), {
+      config: { broadcast: { self: false } },
+    });
+    channel
+      .on("broadcast", { event: "typing" }, (payload) => {
+        const from = (payload.payload as { from?: string } | undefined)?.from;
+        if (from !== other.id) return;
+        setOtherTyping(true);
+        if (typingClearTimerRef.current) clearTimeout(typingClearTimerRef.current);
+        typingClearTimerRef.current = setTimeout(() => setOtherTyping(false), TYPING_LINGER_MS);
+      })
+      .subscribe();
+    typingChannelRef.current = channel;
+    return () => {
+      if (typingClearTimerRef.current) clearTimeout(typingClearTimerRef.current);
+      supabase.removeChannel(channel);
+      typingChannelRef.current = null;
+    };
+  }, [myId, other.id]);
+
+  const pingTyping = useCallback(() => {
+    const now = Date.now();
+    if (now - lastPingSentRef.current < TYPING_HEARTBEAT_MS) return;
+    lastPingSentRef.current = now;
+    typingChannelRef.current?.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { from: myId },
+    });
+  }, [myId]);
 
   const send = (value: string) => {
     const v = value.trim();
@@ -102,6 +167,7 @@ export default function MessagesClient({
       fromMe: true,
       text: v,
       createdAt: new Date().toISOString(),
+      readAt: null,
     };
     setMessages((prev) => [...prev, optimistic]);
     startTransition(async () => {
@@ -159,11 +225,11 @@ export default function MessagesClient({
           <div className="text-[14px] font-semibold truncate">{other.name || "Klient"}</div>
           <div className="text-[11px] text-emerald-600 inline-flex items-center gap-1.5">
             <span className="w-[7px] h-[7px] rounded-full bg-emerald-500" />
-            aktywna teraz
+            {otherTyping ? "pisze…" : "aktywna teraz"}
           </div>
         </div>
         <div className="flex gap-1">
-          {/* Decorative call buttons — see project_account_dashboard_followups for video-call follow-up */}
+          {/* Decorative call buttons — see project_chat_followups for the WebRTC follow-up */}
           <button
             aria-label="Połączenie głosowe"
             className="w-9 h-9 rounded-[11px] bg-slate-100 inline-flex items-center justify-center text-slate-700"
@@ -201,6 +267,7 @@ export default function MessagesClient({
             const next = messages[i + 1];
             const isLastInGroup =
               !next || next.fromMe !== m.fromMe || new Date(next.createdAt).getTime() - new Date(m.createdAt).getTime() >= 5 * 60 * 1000;
+            const isPending = m.id.startsWith("tmp-");
             return (
               <div key={m.id}>
                 {showDay && (
@@ -221,12 +288,12 @@ export default function MessagesClient({
                     </div>
                     {isLastInGroup && (
                       <div
-                        className={`text-[10px] text-slate-400 mt-1 px-2 ${
-                          m.fromMe ? "text-right" : "text-left"
+                        className={`text-[10px] text-slate-400 mt-1 px-2 inline-flex items-center gap-1 ${
+                          m.fromMe ? "self-end" : "self-start"
                         }`}
                       >
-                        {fmtTime(m.createdAt)}
-                        {m.fromMe && <span className="text-emerald-600 ml-1.5">✓✓</span>}
+                        <span>{fmtTime(m.createdAt)}</span>
+                        {m.fromMe && <ReadCheck pending={isPending} read={!!m.readAt} />}
                       </div>
                     )}
                   </div>
@@ -278,7 +345,10 @@ export default function MessagesClient({
           <div className="flex-1 flex items-end gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-full min-h-[38px]">
             <textarea
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                setText(e.target.value);
+                if (e.target.value.length > 0) pingTyping();
+              }}
               onKeyDown={onKeyDown}
               placeholder="Napisz wiadomość…"
               rows={1}
@@ -313,5 +383,48 @@ export default function MessagesClient({
         </form>
       </div>
     </div>
+  );
+}
+
+/**
+ * Three states:
+ *  - pending  → single hollow check (still in flight to the server)
+ *  - sent     → double check, slate-400 (delivered, not yet read)
+ *  - read     → double check, emerald-500 (other side opened the thread)
+ */
+function ReadCheck({ pending, read }: { pending: boolean; read: boolean }) {
+  if (pending) {
+    return (
+      <svg
+        aria-label="Wysyłanie"
+        width="11"
+        height="11"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        className="text-slate-400"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 6v6l4 2" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      aria-label={read ? "Przeczytane" : "Dostarczone"}
+      width="14"
+      height="11"
+      viewBox="0 0 24 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={read ? "text-emerald-500" : "text-slate-400"}
+    >
+      <path d="M2 9l4 4 8-10" />
+      <path d="M9 13l1.5 1.5L20 3" />
+    </svg>
   );
 }

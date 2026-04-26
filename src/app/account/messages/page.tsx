@@ -28,6 +28,7 @@ export type ConversationMessage = {
   fromMe: boolean;
   text: string;
   createdAt: string;
+  readAt: string | null;
 };
 
 export default async function MessagesPage(props: {
@@ -96,7 +97,7 @@ export default async function MessagesPage(props: {
   if (withId) {
     const { data: conv } = await supabase
       .from("messages")
-      .select("id, from_id, to_id, text, created_at")
+      .select("id, from_id, to_id, text, created_at, read_at")
       .or(`and(from_id.eq.${me},to_id.eq.${withId}),and(from_id.eq.${withId},to_id.eq.${me})`)
       .order("created_at", { ascending: true })
       .limit(500);
@@ -105,6 +106,7 @@ export default async function MessagesPage(props: {
       fromMe: m.from_id === me,
       text: m.text,
       createdAt: m.created_at,
+      readAt: m.read_at,
     }));
 
     const existing = threadsMap.get(withId);
