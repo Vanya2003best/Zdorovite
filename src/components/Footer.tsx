@@ -2,10 +2,11 @@ import Link from "next/link";
 import { headers } from "next/headers";
 
 export default async function Footer() {
-  // Hide on /studio routes (own layout) and in iframe preview (?embed=1).
+  // Hide on /studio (own layout), iframe preview (?embed=1), and auth screens.
   const h = await headers();
   const pathname = h.get("x-pathname") ?? "";
   if (pathname.startsWith("/studio")) return null;
+  if (pathname === "/login" || pathname.startsWith("/register")) return null;
   if (h.get("x-embed") === "1") return null;
 
   return (

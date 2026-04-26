@@ -4,11 +4,12 @@ import { getCurrentUser, isTrainer as checkIsTrainer } from "@/lib/auth";
 import AutoHideHeader from "./AutoHideHeader";
 
 export default async function Header() {
-  // Hide the public header in trainer Studio (it has its own sidebar)
-  // and when the page is rendered inside an iframe via ?embed=1 (Studio preview).
+  // Hide the public header in trainer Studio (own sidebar), in iframe
+  // previews (?embed=1), and on auth screens (full-bleed split layout).
   const h = await headers();
   const pathname = h.get("x-pathname") ?? "";
   if (pathname.startsWith("/studio")) return null;
+  if (pathname === "/login" || pathname.startsWith("/register")) return null;
   if (h.get("x-embed") === "1") return null;
 
   const cu = await getCurrentUser();
