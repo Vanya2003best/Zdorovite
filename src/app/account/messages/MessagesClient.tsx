@@ -9,6 +9,32 @@ import type { ConversationMessage } from "./page";
 
 type Other = { id: string; name: string; avatar: string | null };
 
+const QUICK_REPLIES = [
+  "👍 Jasne",
+  "📅 Sprawdzam terminy",
+  "💪 Dam znać po treningu",
+  "❓ Pytanie",
+];
+
+const PL_DAY_LONG = ["Niedziela", "Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota"];
+
+function fmtDaySep(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  const dayMs = 86_400_000;
+  const startD = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const startN = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const diff = (startN - startD) / dayMs;
+  if (diff === 0) return "Dziś";
+  if (diff === 1) return "Wczoraj";
+  if (diff < 7) return PL_DAY_LONG[d.getDay()];
+  return d.toLocaleDateString("pl-PL", { day: "numeric", month: "long" });
+}
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+}
+
 export default function MessagesClient({
   myId,
   other,
@@ -22,22 +48,20 @@ export default function MessagesClient({
   const [text, setText] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [otherTyping, setOtherTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
 
-  // Sync messages when prop changes (server re-render)
   useEffect(() => {
     setMessages(initialMessages);
   }, [initialMessages]);
 
-  // Scroll to bottom on new message
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, otherTyping]);
 
-  // Realtime subscription — listen for new messages where I'm the recipient AND from this thread
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
@@ -57,8 +81,8 @@ export default function MessagesClient({
               ...prev,
               { id: m.id, fromMe: false, text: m.text, createdAt: m.created_at },
             ]);
+            setOtherTyping(false);
           }
-          // Trigger router refresh to update thread list (unread counts, etc.)
           router.refresh();
         },
       )
@@ -68,33 +92,36 @@ export default function MessagesClient({
     };
   }, [myId, other.id, router]);
 
-  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const value = text.trim();
-    if (!value) return;
+  const send = (value: string) => {
+    const v = value.trim();
+    if (!v) return;
     setText("");
     setError(null);
-    // Optimistic add
     const optimistic: ConversationMessage = {
       id: `tmp-${Date.now()}`,
       fromMe: true,
-      text: value,
+      text: v,
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, optimistic]);
     startTransition(async () => {
       const fd = new FormData();
       fd.set("to_id", other.id);
-      fd.set("text", value);
+      fd.set("text", v);
       const res = await sendMessage(fd);
       if ("error" in res) {
         setError(res.error);
         setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
-        setText(value);
+        setText(v);
         return;
       }
       router.refresh();
     });
+  };
+
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    send(text);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -105,18 +132,23 @@ export default function MessagesClient({
     }
   };
 
+  const hasText = text.trim().length > 0;
+
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex-1 flex flex-col min-h-0 bg-slate-50">
       {/* Header */}
-      <header className="px-5 py-3.5 border-b border-slate-200 bg-white flex items-center gap-3">
-        {/* Mobile back to thread list */}
+      <header className="px-3 md:px-4 py-2.5 border-b border-slate-100 bg-white flex items-center gap-2.5">
         <Link
           href="/account/messages"
-          className="sm:hidden inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-500 hover:bg-slate-100"
+          aria-label="Wróć do listy"
+          className="md:hidden inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-700 hover:bg-slate-100"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
         </Link>
         {other.avatar ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img src={other.avatar} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
         ) : (
           <span className="w-9 h-9 rounded-full bg-emerald-50 text-emerald-700 inline-flex items-center justify-center font-semibold shrink-0">
@@ -124,72 +156,162 @@ export default function MessagesClient({
           </span>
         )}
         <div className="flex-1 min-w-0">
-          <div className="text-[14px] font-semibold text-slate-900 truncate">{other.name || "Klient"}</div>
-          <div className="text-[11px] text-slate-500 inline-flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> aktywny
+          <div className="text-[14px] font-semibold truncate">{other.name || "Klient"}</div>
+          <div className="text-[11px] text-emerald-600 inline-flex items-center gap-1.5">
+            <span className="w-[7px] h-[7px] rounded-full bg-emerald-500" />
+            aktywna teraz
           </div>
+        </div>
+        <div className="flex gap-1">
+          {/* Decorative call buttons — see project_account_dashboard_followups for video-call follow-up */}
+          <button
+            aria-label="Połączenie głosowe"
+            className="w-9 h-9 rounded-[11px] bg-slate-100 inline-flex items-center justify-center text-slate-700"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" />
+            </svg>
+          </button>
+          <button
+            aria-label="Wideo"
+            className="w-9 h-9 rounded-[11px] bg-slate-100 inline-flex items-center justify-center text-slate-700"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polygon points="23 7 16 12 23 17 23 7" />
+              <rect x="1" y="5" width="15" height="14" rx="2" />
+            </svg>
+          </button>
         </div>
       </header>
 
-      {/* Messages scroll */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-2">
-        {messages.length === 0 ? (
+      {/* Feed */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3.5 md:px-5 py-4">
+        {messages.length === 0 && !otherTyping ? (
           <div className="text-center text-[13px] text-slate-500 mt-12">
             Brak wiadomości. Napisz coś jako pierwszy/pierwsza.
           </div>
         ) : (
           messages.map((m, i) => {
             const prev = messages[i - 1];
-            const groupedWithPrev = prev && prev.fromMe === m.fromMe && (new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() < 5 * 60 * 1000);
+            const showDay =
+              !prev ||
+              new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString();
+            const groupedWithPrev =
+              prev && prev.fromMe === m.fromMe && !showDay && new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() < 5 * 60 * 1000;
+            const next = messages[i + 1];
+            const isLastInGroup =
+              !next || next.fromMe !== m.fromMe || new Date(next.createdAt).getTime() - new Date(m.createdAt).getTime() >= 5 * 60 * 1000;
             return (
-              <div
-                key={m.id}
-                className={`flex ${m.fromMe ? "justify-end" : "justify-start"} ${groupedWithPrev ? "mt-1" : "mt-3"}`}
-              >
-                <div
-                  className={`max-w-[78%] sm:max-w-[60%] px-3.5 py-2 rounded-2xl ${
-                    m.fromMe
-                      ? "bg-emerald-500 text-white rounded-br-md"
-                      : "bg-white border border-slate-200 text-slate-900 rounded-bl-md"
-                  }`}
-                >
-                  <p className="text-[14px] leading-snug whitespace-pre-wrap break-words">{m.text}</p>
-                  <p className={`text-[10px] mt-1 ${m.fromMe ? "text-emerald-50/80" : "text-slate-400"}`}>
-                    {new Date(m.createdAt).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })}
-                  </p>
+              <div key={m.id}>
+                {showDay && (
+                  <div className="text-center text-[10.5px] text-slate-400 my-3 uppercase tracking-wider font-semibold">
+                    {fmtDaySep(m.createdAt)}
+                  </div>
+                )}
+                <div className={`flex ${m.fromMe ? "justify-end" : "justify-start"} ${groupedWithPrev ? "mt-[2px]" : "mt-2"}`}>
+                  <div className="flex flex-col max-w-[78%]">
+                    <div
+                      className={`px-3 py-2 text-[14px] leading-[1.45] ${
+                        m.fromMe
+                          ? "bg-slate-900 text-white rounded-[18px] rounded-br-[6px]"
+                          : "bg-white border border-slate-200 text-slate-900 rounded-[18px] rounded-bl-[6px]"
+                      }`}
+                    >
+                      <p className="whitespace-pre-wrap break-words">{m.text}</p>
+                    </div>
+                    {isLastInGroup && (
+                      <div
+                        className={`text-[10px] text-slate-400 mt-1 px-2 ${
+                          m.fromMe ? "text-right" : "text-left"
+                        }`}
+                      >
+                        {fmtTime(m.createdAt)}
+                        {m.fromMe && <span className="text-emerald-600 ml-1.5">✓✓</span>}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );
           })
         )}
+        {otherTyping && (
+          <div className="flex justify-start mt-2">
+            <div className="px-3.5 py-3 bg-white border border-slate-200 rounded-[18px] rounded-bl-[6px] inline-flex gap-1 items-center">
+              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-[typing-bounce_1.2s_infinite]" />
+              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-[typing-bounce_1.2s_0.2s_infinite]" />
+              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-[typing-bounce_1.2s_0.4s_infinite]" />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Composer */}
-      <form onSubmit={onSubmit} className="px-3 sm:px-4 py-3 border-t border-slate-200 bg-white">
-        {error && (
-          <p className="text-[12px] text-red-600 mb-2 px-1">{error}</p>
-        )}
-        <div className="flex items-end gap-2">
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder="Napisz wiadomość…"
-            rows={1}
-            maxLength={4000}
-            className="flex-1 max-h-32 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 text-[14px] resize-none"
-          />
+      <div className="border-t border-slate-100 bg-white px-2.5 md:px-3 py-2.5 pb-5 md:pb-3">
+        {/* Quick replies */}
+        <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-hide">
+          {QUICK_REPLIES.map((q) => (
+            <button
+              key={q}
+              type="button"
+              onClick={() => send(q)}
+              disabled={pending}
+              className="whitespace-nowrap px-2.5 py-1.5 rounded-full border border-slate-200 bg-white text-[11.5px] text-slate-700 hover:border-slate-400 transition disabled:opacity-50"
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+
+        {error && <p className="text-[12px] text-red-600 mb-1.5 px-1">{error}</p>}
+
+        <form onSubmit={onSubmit} className="flex gap-2 items-end">
+          <button
+            type="button"
+            aria-label="Załącz plik"
+            className="w-9 h-9 rounded-full bg-slate-100 text-slate-700 inline-flex items-center justify-center shrink-0"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+          <div className="flex-1 flex items-end gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-full min-h-[38px]">
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder="Napisz wiadomość…"
+              rows={1}
+              maxLength={4000}
+              className="flex-1 bg-transparent text-[13.5px] py-[6px] outline-none resize-none max-h-32 placeholder:text-slate-400"
+            />
+            <button
+              type="button"
+              aria-label="Emoji"
+              className="text-slate-500 hover:text-slate-700 transition shrink-0 self-center"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01" />
+              </svg>
+            </button>
+          </div>
           <button
             type="submit"
-            disabled={pending || !text.trim()}
-            className="h-10 w-10 sm:w-auto sm:px-4 inline-flex items-center justify-center bg-emerald-500 text-white rounded-xl hover:brightness-105 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Wyślij (Enter)"
+            disabled={pending || !hasText}
+            aria-label="Wyślij"
+            className={`w-9 h-9 rounded-full inline-flex items-center justify-center transition shrink-0 disabled:opacity-50 ${
+              hasText
+                ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_6px_16px_-4px_rgba(16,185,129,0.4)]"
+                : "bg-slate-900 text-white"
+            }`}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
-            <span className="hidden sm:inline ml-2 text-[13px] font-medium">Wyślij</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2 21l21-9L2 3v7l15 2-15 2z" />
+            </svg>
           </button>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   );
 }
