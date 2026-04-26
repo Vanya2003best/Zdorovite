@@ -5,6 +5,17 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* On wide displays (≥ 1500px), scale the whole page up by 10%.
+   Equivalent to the user manually hitting Ctrl+= once — content fills
+   more of the viewport while the design stays pixel-exact in its own
+   coordinate space. Laptops and tablets stay at 100% so nothing
+   overflows. */
+@media (min-width: 1500px) {
+  html {
+    zoom: 1.1;
+  }
+}
+
 /* Hide scrollbar for horizontal scroll containers */
 .scrollbar-hide {
   scrollbar-width: none;
@@ -12,4 +23,16 @@
 }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+/* Typing-indicator dot bounce (chat) */
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0);    opacity: .4; }
+  30%           { transform: translateY(-4px); opacity: 1;  }
 }

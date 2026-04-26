@@ -71,7 +71,8 @@ export default function TrainerCard({ trainer }: { trainer: Trainer }) {
             od {trainer.priceFrom} zł <span className="text-xs text-slate-500 font-normal">/ sesja</span>
           </div>
           <span className="px-3.5 py-2 rounded-lg text-[13px] font-medium bg-slate-900 text-white group-hover:bg-emerald-500 transition-colors">
-            Zobacz profil
+            <span className="sm:hidden">Profil</span>
+            <span className="hidden sm:inline">Zobacz profil</span>
           </span>
         </div>
       </div>

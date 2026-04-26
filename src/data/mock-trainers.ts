@@ -1,4 +1,4 @@
-import { Trainer } from "@/types";
+import { Trainer } from "../types";
 
 const defaultSections = [
   { id: "about" as const, visible: true },
@@ -450,6 +450,12 @@ export const trainers: Trainer[] = [
         duration: 90,
         price: 250,
       },
+      {
+        name: "Konsultacja online",
+        description: "Wideokonsultacja — analiza kontuzji, plan ćwiczeń domowych, drugie zdanie",
+        duration: 45,
+        price: 120,
+      },
     ],
     packages: [
       {
@@ -465,6 +471,33 @@ export const trainers: Trainer[] = [
         price: 1400,
         period: "2 miesiące",
         featured: true,
+      },
+      {
+        id: "p10b",
+        name: "Sportowiec Plus",
+        description: "Kompleksowe przygotowanie dla sportowców amatorów i wyczynowych",
+        items: [
+          "12 sesji treningu prewencyjnego",
+          "Ocena FMS co 4 tygodnie",
+          "Plan periodyzacji sezonowej",
+          "Dostęp do aplikacji mobilnej",
+          "Priorytet w rezerwacji terminów",
+        ],
+        price: 2100,
+        period: "3 miesiące",
+      },
+      {
+        id: "p10c",
+        name: "Online Starter",
+        description: "Dla tych, którzy potrzebują eksperta zdalnie",
+        items: [
+          "4 konsultacje online (45 min)",
+          "Indywidualny plan ćwiczeń domowych",
+          "Korekta techniki przez wideo",
+          "Wsparcie na czacie 7 dni w tygodniu",
+        ],
+        price: 580,
+        period: "miesiąc",
       },
     ],
     reviews: [
@@ -483,6 +516,46 @@ export const trainers: Trainer[] = [
         rating: 5,
         text: "Profesjonalizm na najwyższym poziomie. Każda sesja jest przemyślana od A do Z.",
         date: "2026-02-10",
+      },
+      {
+        id: "r11b",
+        trainerId: "ewa-dabrowska",
+        authorName: "Paweł C.",
+        rating: 5,
+        text: "Po latach bólu w barku Ewa w 6 tygodni wyciągnęła mnie z dysfunkcji. Pełen zakres ruchu wrócił, gram znów w siatkę.",
+        date: "2026-04-08",
+      },
+      {
+        id: "r11c",
+        trainerId: "ewa-dabrowska",
+        authorName: "Magdalena W.",
+        rating: 5,
+        text: "Konsultacja online była równie skuteczna co wizyta stacjonarna. Bardzo konkretne wskazówki, plan na PDF — polecam każdej mamie po porodzie.",
+        date: "2026-03-30",
+      },
+      {
+        id: "r11d",
+        trainerId: "ewa-dabrowska",
+        authorName: "Kamil J.",
+        rating: 4,
+        text: "Solidna robota na pakiecie Sportowiec Plus. Jedyne zastrzeżenie — trudno dopasować terminy w okresie świąt, ale to zrozumiałe.",
+        date: "2026-02-28",
+      },
+      {
+        id: "r11e",
+        trainerId: "ewa-dabrowska",
+        authorName: "Dorota S.",
+        rating: 5,
+        text: "Terapia manualna u Ewy to klasa sama w sobie. Odważna, pewna ręka, efekty po pierwszej sesji. Dziękuję!",
+        date: "2026-01-22",
+      },
+      {
+        id: "r11f",
+        trainerId: "ewa-dabrowska",
+        authorName: "Łukasz R.",
+        rating: 5,
+        text: "Jako biegacz po złamaniu kości śródstopia wróciłem do pełnej formy po 4 miesiącach z Ewą. Plan był bardzo przemyślany.",
+        date: "2025-12-14",
       },
     ],
     customization: {

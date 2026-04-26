@@ -1,6 +1,13 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 
-export default function Footer() {
+export default async function Footer() {
+  // Hide on /studio routes (own layout) and in iframe preview (?embed=1).
+  const h = await headers();
+  const pathname = h.get("x-pathname") ?? "";
+  if (pathname.startsWith("/studio")) return null;
+  if (h.get("x-embed") === "1") return null;
+
   return (
     <footer className="border-t border-slate-200 bg-slate-50">
       <div className="mx-auto max-w-[1200px] px-5 sm:px-6 py-8 sm:pt-12 sm:pb-8">

@@ -1,13 +1,18 @@
 import Link from "next/link";
 import { specializations } from "@/data/specializations";
-import { trainers } from "@/data/mock-trainers";
+import { getTopTrainers } from "@/lib/db/trainers";
 import TrainerCard from "@/components/TrainerCard";
 
 const coverImages: Record<string, string> = {
   "anna-kowalska": "https://images.unsplash.com/photo-1518310383802-640c2de311b2?w=600&h=450&fit=crop",
   "marek-nowak": "https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=600&h=450&fit=crop",
   "katarzyna-zielinska": "https://images.unsplash.com/photo-1545205597-3d9d02c29597?w=600&h=450&fit=crop",
+  "jakub-wisniewski": "https://images.unsplash.com/photo-1549060279-7e168fcee0c2?w=600&h=450&fit=crop",
+  "ewa-dabrowska": "https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=600&h=450&fit=crop",
+  "tomasz-kaczmarek": "https://images.unsplash.com/photo-1579758629938-03607ccdbaba?w=600&h=450&fit=crop",
 };
+
+const fallbackCover = "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&h=450&fit=crop";
 
 const trainerCounts: Record<string, number> = {
   "weight-loss": 284, "muscle-gain": 198, "rehabilitation": 142,
@@ -15,8 +20,8 @@ const trainerCounts: Record<string, number> = {
   "crossfit": 78, "yoga": 134, "martial-arts": 61, "nutrition": 89,
 };
 
-export default function Home() {
-  const topTrainers = trainers.slice(0, 3);
+export default async function Home() {
+  const topTrainers = await getTopTrainers(3);
 
   return (
     <div>
@@ -24,7 +29,7 @@ export default function Home() {
       <section className="relative overflow-hidden bg-[radial-gradient(1200px_500px_at_20%_-10%,rgba(16,185,129,0.18),transparent_60%),radial-gradient(900px_500px_at_100%_10%,rgba(20,184,166,0.14),transparent_60%),linear-gradient(180deg,#f0fdf4_0%,#ffffff_65%)]">
         <div className="mx-auto max-w-[1200px] px-5 sm:px-6">
           {/* Desktop: 2-col grid */}
-          <div className="sm:grid sm:grid-cols-[1.05fr_1fr] sm:gap-16 sm:items-center sm:py-[72px] sm:pb-24 pt-5 pb-7">
+          <div className="sm:grid sm:grid-cols-[1.05fr_1fr] sm:gap-16 sm:items-center sm:pt-3 sm:pb-8 pt-5 pb-7">
             <div>
               {/* Eyebrow */}
               <span className="inline-flex items-center gap-2.5 bg-white border border-slate-200 rounded-full px-3 py-1.5 text-[13px] text-slate-700 font-medium shadow-[0_1px_2px_rgba(2,6,23,0.04)] mb-5">
@@ -36,10 +41,9 @@ export default function Home() {
               <h1 className="text-[38px] sm:text-[68px] leading-[1.05] sm:leading-[1.02] tracking-[-0.035em] sm:tracking-[-0.04em] font-semibold text-slate-950 mt-5 mb-5">
                 Znajdź trenera,
                 <br className="hidden sm:block" />{" "}
-                <span className="hidden sm:inline">który</span>
-                <span className="sm:hidden">który </span>
-                <span className="bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-500 bg-clip-text text-transparent">
-                  zmieni Twoje życie.
+                który
+                <span className="bg-[linear-gradient(135deg,#059669_0%,#0d9488_60%,#10b981_100%)] bg-clip-text text-transparent">
+                  {" "}zmieni Twoje życie.
                 </span>
               </h1>
 
@@ -55,7 +59,7 @@ export default function Home() {
                   Znajdź trenera
                   <svg className="hidden sm:block" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 5l7 7-7 7" /></svg>
                 </Link>
-                <Link href="#" className="flex items-center justify-center h-14 sm:h-14 border border-slate-200 bg-white text-slate-900 rounded-xl text-[15px] font-medium hover:border-slate-400 transition sm:px-6">
+                <Link href="/account/become-trainer" className="flex items-center justify-center h-14 sm:h-14 border border-slate-200 bg-white text-slate-900 rounded-xl text-[15px] font-medium hover:border-slate-400 transition sm:px-6">
                   Dołącz jako trener
                 </Link>
               </div>
@@ -150,23 +154,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ============ STATS STRIP — desktop only ============ */}
-      <section className="hidden sm:block border-y border-slate-200 bg-white py-10">
-        <div className="mx-auto max-w-[1200px] px-6 grid grid-cols-4 gap-10">
-          {[
-            { val: "1 240+", label: "Zweryfikowanych trenerów" },
-            { val: "38 000", label: "Zrealizowanych treningów" },
-            { val: "4.9 / 5", label: "Średnia ocena w 2026" },
-            { val: "42", label: "Miasta w Polsce" },
-          ].map((s) => (
-            <div key={s.label}>
-              <div className="text-4xl font-semibold tracking-tight text-slate-950">{s.val}</div>
-              <div className="text-sm text-slate-500 mt-1">{s.label}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* ============ CATEGORIES ============ */}
       <section className="px-5 py-9 sm:py-24 sm:mx-auto sm:max-w-[1200px] sm:px-6">
         <div className="sm:max-w-[640px] sm:mb-10">
@@ -223,7 +210,7 @@ export default function Home() {
             {topTrainers.map((t) => (
               <Link key={t.id} href={`/trainers/${t.id}`} className="shrink-0 w-[280px] snap-start bg-white border border-slate-200 rounded-[14px] overflow-hidden">
                 <div className="aspect-[4/3] overflow-hidden relative">
-                  <img src={coverImages[t.id] ?? ""} alt="" className="w-full h-full object-cover" />
+                  <img src={coverImages[t.id] ?? fallbackCover} alt="" className="w-full h-full object-cover" />
                   <span className="absolute top-2.5 left-2.5 bg-white/95 rounded-full px-2.5 py-1 text-[11px] font-semibold inline-flex items-center gap-1">
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="#f59e0b"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
                     {t.rating}
@@ -318,7 +305,7 @@ export default function Home() {
                 <span className="hidden sm:inline">Stwórz profesjonalny profil w 10 minut, zarządzaj kalendarzem, rezerwacjami i opiniami — wszystko w jednym miejscu.</span>
               </p>
               <div className="sm:flex sm:gap-3">
-                <Link href="#" className="flex items-center justify-center w-full sm:w-auto h-14 sm:h-14 bg-white text-slate-900 rounded-xl px-6 text-[15px] font-semibold hover:bg-slate-50 transition">
+                <Link href="/account/become-trainer" className="flex items-center justify-center w-full sm:w-auto h-14 sm:h-14 bg-white text-slate-900 rounded-xl px-6 text-[15px] font-semibold hover:bg-slate-50 transition">
                   Zacznij za darmo
                 </Link>
                 <Link href="#" className="hidden sm:flex items-center justify-center h-14 border border-white/30 text-white rounded-xl px-6 text-[15px] font-medium hover:bg-white/10 transition">
