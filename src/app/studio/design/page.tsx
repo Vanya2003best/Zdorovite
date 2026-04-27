@@ -159,6 +159,7 @@ export default async function DesignDashboard() {
       slug={trainer.slug}
       trainerId={user.id}
       trainerName={profile?.display_name ?? "Twój profil"}
+      trainerEmail={user.email ?? null}
       published={!!trainer.published}
       initial={initial}
       completion={completion}

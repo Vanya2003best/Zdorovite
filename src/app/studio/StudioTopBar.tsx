@@ -1,3 +1,4 @@
+import AccountMenu from "@/components/AccountMenu";
 import NotificationsBell from "@/components/NotificationsBell";
 import {
   getRecentNotifications,
@@ -8,27 +9,28 @@ import StudioPageTitle from "./StudioPageTitle";
 
 /**
  * Top bar for /studio/* pages.
- * - Mobile (lg-): hamburger Menu button (drawer) + section title + bell + avatar.
- * - Desktop (lg+): Menu button is hidden — the persistent <StudioSidebar/> on the
- *   left replaces it. Only the section title + bell + utilities remain.
+ * - Mobile (lg-): hamburger Menu button (drawer) + section title.
+ * - Desktop (lg+): no hamburger — the persistent StudioSidebar replaces it.
+ * Right side on both: NotificationsBell + AccountMenu (avatar dropdown
+ *   with display_name + email + Wyloguj).
  */
 export default async function StudioTopBar({
   trainerId,
   trainerSlug,
   trainerName,
+  email,
   avatarUrl,
 }: {
   trainerId: string;
   trainerSlug: string | null;
   trainerName: string;
+  email: string | null;
   avatarUrl: string | null;
 }) {
   const [recentNotifs, unreadNotifs] = await Promise.all([
     getRecentNotifications(trainerId, 12),
     getUnreadNotificationCount(trainerId),
   ]);
-
-  const initial = (trainerName || "?").charAt(0).toUpperCase();
 
   return (
     <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-5 sticky top-0 z-30 gap-3">
@@ -46,17 +48,7 @@ export default async function StudioTopBar({
           initialUnreadCount={unreadNotifs}
           messagesLink="/studio/messages"
         />
-        {/* Avatar only on mobile (sidebar shows it on desktop). */}
-        <div className="lg:hidden">
-          {avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={avatarUrl} alt="" className="w-9 h-9 rounded-[11px] object-cover" />
-          ) : (
-            <span className="w-9 h-9 rounded-[11px] bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-700 inline-flex items-center justify-center font-semibold text-sm">
-              {initial}
-            </span>
-          )}
-        </div>
+        <AccountMenu displayName={trainerName} email={email} avatarUrl={avatarUrl} />
       </div>
     </header>
   );

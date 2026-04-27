@@ -12,47 +12,35 @@ const ExternalIcon = (
 );
 
 /**
- * Permanent left sidebar for /studio/* on lg+. Same content + visual style
- * as the StudioNavMenu drawer (which lives on mobile only).
+ * Permanent left sidebar for /studio/* on lg+. Top is just the NaZdrow!
+ * brand mark — identity / logout moved to the top-bar AccountMenu.
  */
 export default function StudioSidebar({
   trainerId,
   trainerSlug,
-  trainerName,
-  avatarUrl,
   unreadMessages,
 }: {
   trainerId: string;
   trainerSlug: string | null;
-  trainerName: string;
-  avatarUrl: string | null;
   unreadMessages: number;
 }) {
   const pathname = usePathname();
-  const initial = (trainerName || "?").charAt(0).toUpperCase();
 
   return (
     <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-[280px] bg-white border-r border-slate-200 flex-col z-40">
-      {/* Top: brand + identity */}
-      <div className="px-4 py-4 border-b border-slate-100 flex items-center gap-3">
-        {avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover" />
-        ) : (
-          <span className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-700 inline-flex items-center justify-center font-semibold">
-            {initial}
-          </span>
-        )}
-        <div className="flex-1 min-w-0">
-          <div className="text-[14px] font-semibold truncate">{trainerName}</div>
-          <div className="text-[11px] text-emerald-700 font-semibold uppercase tracking-[0.06em]">
-            NaZdrow! Studio
-          </div>
-        </div>
-      </div>
+      {/* Brand mark — no "Studio" suffix per user direction */}
+      <Link
+        href="/studio"
+        className="px-4 h-14 flex items-center gap-2.5 border-b border-slate-100 shrink-0"
+      >
+        <span className="w-8 h-8 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 inline-flex items-center justify-center text-white font-bold text-sm shadow-[0_10px_30px_rgba(16,185,129,0.18)]">
+          N
+        </span>
+        <span className="font-bold text-[16px] tracking-[-0.01em]">NaZdrow!</span>
+      </Link>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-2">
+      <nav className="flex-1 overflow-y-auto py-2 scrollbar-hide">
         {STUDIO_NAV.map((item) => {
           const active = item.match(pathname);
           const cls = `flex items-start gap-3 mx-2 my-0.5 px-3 py-2.5 rounded-[10px] transition ${
@@ -94,9 +82,9 @@ export default function StudioSidebar({
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="border-t border-slate-100 py-2">
-        {trainerSlug && (
+      {/* Footer — public profile shortcut. Wyloguj moved to AccountMenu in top bar. */}
+      {trainerSlug && (
+        <div className="border-t border-slate-100 py-2">
           <Link
             href={`/trainers/${trainerSlug}`}
             target="_blank"
@@ -108,22 +96,8 @@ export default function StudioSidebar({
             <span className="flex-1 text-[13px] font-medium">Strona publiczna</span>
             {ExternalIcon}
           </Link>
-        )}
-        <form action="/auth/sign-out" method="post" className="block">
-          <button
-            type="submit"
-            className="w-full flex items-center gap-3 mx-2 px-3 py-2.5 rounded-[10px] text-slate-700 hover:bg-slate-50 transition text-left"
-            style={{ width: "calc(100% - 16px)" }}
-          >
-            <span className="w-7 h-7 rounded-[8px] bg-slate-100 text-slate-700 inline-flex items-center justify-center shrink-0">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
-              </svg>
-            </span>
-            <span className="flex-1 text-[13px] font-medium">Wyloguj</span>
-          </button>
-        </form>
-      </div>
+        </div>
+      )}
     </aside>
   );
 }

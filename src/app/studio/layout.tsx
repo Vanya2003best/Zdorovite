@@ -40,8 +40,6 @@ export default async function StudioLayout({
       <StudioSidebar
         trainerId={user.id}
         trainerSlug={trainer?.slug ?? null}
-        trainerName={profile.display_name}
-        avatarUrl={profile.avatar_url}
         unreadMessages={unreadMessages}
       />
 
@@ -51,6 +49,7 @@ export default async function StudioLayout({
             trainerId={user.id}
             trainerSlug={trainer?.slug ?? null}
             trainerName={profile.display_name}
+            email={user.email ?? null}
             avatarUrl={profile.avatar_url}
           />
         </StudioTopBarSlot>

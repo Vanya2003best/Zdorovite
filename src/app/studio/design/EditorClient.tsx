@@ -14,6 +14,7 @@ import ImageUpload from "./ImageUpload";
 import { templates } from "@/data/templates";
 import StudioNavMenu from "../StudioNavMenu";
 import NotificationsBell from "@/components/NotificationsBell";
+import AccountMenu from "@/components/AccountMenu";
 import type { Notification } from "@/lib/db/notifications";
 
 type PreviewService = { id: string; name: string; description: string; price: number; duration: number };
@@ -35,6 +36,7 @@ type Props = {
   slug: string;
   trainerId: string;
   trainerName: string;
+  trainerEmail: string | null;
   published: boolean;
   initial: ProfileCustomization;
   completion: { pct: number; tip: string };
@@ -80,7 +82,7 @@ const SECTION_LABELS: Record<SectionId, string> = {
 };
 
 
-export default function EditorClient({ slug, trainerId, trainerName, published, initial, completion, counts, availabilityByDow, notifications, preview }: Props) {
+export default function EditorClient({ slug, trainerId, trainerName, trainerEmail, published, initial, completion, counts, availabilityByDow, notifications, preview }: Props) {
   const [template, setTemplate] = useState<TemplateName>(initial.template);
   const [accentColor, setAccentColor] = useState(initial.accentColor);
   const [sections, setSections] = useState(initial.sections);
@@ -197,6 +199,7 @@ export default function EditorClient({ slug, trainerId, trainerName, published, 
             initialUnreadCount={notifications.unread}
             messagesLink="/studio/messages"
           />
+          <AccountMenu displayName={trainerName} email={trainerEmail} avatarUrl={preview.avatarUrl} />
         </div>
       </header>
 
