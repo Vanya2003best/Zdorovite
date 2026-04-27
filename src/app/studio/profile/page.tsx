@@ -36,14 +36,16 @@ export default async function StudioProfile() {
 
   if (!trainer) {
     return (
-      <div className="rounded-2xl border-2 border-dashed border-slate-300 py-16 text-center">
-        <p className="text-slate-500">Najpierw dokończ rejestrację jako trener.</p>
-        <Link
-          href="/register/trainer"
-          className="inline-flex mt-4 h-10 items-center px-5 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-black transition"
-        >
-          Stań się trenerem →
-        </Link>
+      <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10">
+        <div className="rounded-2xl border-2 border-dashed border-slate-300 py-16 text-center">
+          <p className="text-slate-500">Najpierw dokończ rejestrację jako trener.</p>
+          <Link
+            href="/register/trainer"
+            className="inline-flex mt-4 h-10 items-center px-5 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-black transition"
+          >
+            Stań się trenerem →
+          </Link>
+        </div>
       </div>
     );
   }
@@ -67,7 +69,7 @@ export default async function StudioProfile() {
     .order("position", { ascending: true });
 
   return (
-    <div className="grid gap-5">
+    <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10 grid gap-5">
       {/* Top control bar */}
       <header className="flex flex-wrap items-center justify-between gap-3 mb-2">
         <div>

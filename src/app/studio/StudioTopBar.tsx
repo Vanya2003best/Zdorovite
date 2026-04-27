@@ -1,17 +1,11 @@
 import Link from "next/link";
-import { headers } from "next/headers";
 import NotificationsBell from "@/components/NotificationsBell";
 import {
   getRecentNotifications,
   getUnreadNotificationCount,
 } from "@/lib/db/notifications";
 import StudioNavMenu from "./StudioNavMenu";
-import { STUDIO_NAV } from "./nav-items";
-
-function titleFor(pathname: string): string {
-  for (const s of STUDIO_NAV) if (s.match(pathname)) return s.label;
-  return "Studio";
-}
+import StudioPageTitle from "./StudioPageTitle";
 
 /**
  * Top bar for /studio/* pages.
@@ -30,10 +24,6 @@ export default async function StudioTopBar({
   trainerName: string;
   avatarUrl: string | null;
 }) {
-  const h = await headers();
-  const pathname = h.get("x-pathname") ?? "";
-  const title = titleFor(pathname);
-
   const [recentNotifs, unreadNotifs] = await Promise.all([
     getRecentNotifications(trainerId, 12),
     getUnreadNotificationCount(trainerId),
@@ -47,9 +37,7 @@ export default async function StudioTopBar({
         <div className="lg:hidden">
           <StudioNavMenu trainerSlug={trainerSlug} trainerName={trainerName} avatarUrl={avatarUrl} />
         </div>
-        <strong className="text-[14px] sm:text-[15px] font-semibold tracking-[-0.01em] truncate">
-          {title}
-        </strong>
+        <StudioPageTitle />
       </div>
 
       <div className="flex items-center gap-2 shrink-0">

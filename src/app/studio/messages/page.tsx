@@ -193,7 +193,7 @@ export default async function MessagesPage(props: {
   const responseLabel = "~ 28 min";
 
   return (
-    <div className="-mx-4 -my-6 sm:-mx-8 sm:-my-10 h-[calc(100vh-32px)] sm:h-[calc(100vh-80px)] flex flex-col bg-white border-y sm:border border-slate-200 sm:rounded-2xl overflow-hidden">
+    <div className="h-[calc(100vh-56px-84px)] lg:h-[calc(100vh-56px)] flex flex-col bg-white border-b border-slate-200 overflow-hidden">
       {/* Top bar — only on desktop, matches design's slim chat top */}
       <header className="hidden sm:flex h-12 px-5 items-center justify-between border-b border-slate-200 bg-white shrink-0">
         <h1 className="text-[15px] font-semibold tracking-tight">Wiadomości</h1>

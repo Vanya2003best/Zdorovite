@@ -28,7 +28,7 @@ export default async function PackagesDashboard() {
   const list = (packages ?? []) as Pkg[];
 
   return (
-    <div>
+    <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10">
       <header className="mb-6">
         <h2 className="text-xl font-semibold tracking-tight">Pakiety</h2>
         <p className="text-sm text-slate-600 mt-1">

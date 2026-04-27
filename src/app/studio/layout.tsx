@@ -1,4 +1,3 @@
-import { headers } from "next/headers";
 import { requireTrainer } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import StudioMobileTabs from "./StudioMobileTabs";
@@ -19,11 +18,6 @@ export default async function StudioLayout({
   children: React.ReactNode;
 }) {
   const { user, profile } = await requireTrainer("/studio");
-
-  const h = await headers();
-  const pathname = h.get("x-pathname") ?? "";
-  // The editor lays out its own preview + settings grid full-bleed.
-  const fullBleed = pathname.startsWith("/studio/design") || pathname.startsWith("/studio/messages");
 
   const supabase = await createClient();
   const [{ data: trainer }, { count: unreadMessagesCount }] = await Promise.all([
@@ -59,13 +53,7 @@ export default async function StudioLayout({
         />
 
         <main className="flex-1 pb-24 lg:pb-8">
-          {fullBleed ? (
-            children
-          ) : (
-            <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10">
-              {children}
-            </div>
-          )}
+          {children}
         </main>
       </div>
 

@@ -93,7 +93,7 @@ export default async function StudioHome() {
   const upcomingList = (upcoming ?? []) as unknown as RecentBooking[];
 
   return (
-    <div>
+    <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10">
       <header className="mb-8">
         <p className="text-[13px] uppercase tracking-[0.08em] text-emerald-700 font-medium">
           {greeting()} 👋

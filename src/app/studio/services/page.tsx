@@ -25,7 +25,7 @@ export default async function ServicesDashboard() {
   const list = (services ?? []) as Service[];
 
   return (
-    <div>
+    <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10">
       <header className="mb-6">
         <h2 className="text-xl font-semibold tracking-tight">Usługi</h2>
         <p className="text-sm text-slate-600 mt-1">

@@ -60,7 +60,7 @@ export default async function TrainerBookingsPage() {
     .reduce((sum, b) => sum + b.price, 0);
 
   return (
-    <div>
+    <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10">
       {/* Stats strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">
         <Stat label="Oczekuje" value={pending.length} tone="amber" />
