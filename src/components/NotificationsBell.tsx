@@ -39,10 +39,14 @@ export default function NotificationsBell({
   myId,
   initialNotifications,
   initialUnreadCount,
+  /** Where the dropdown's footer "Zobacz wszystkie wiadomości →" link goes.
+   *  Defaults to /account/messages; trainer studio passes /studio/messages. */
+  messagesLink = "/account/messages",
 }: {
   myId: string;
   initialNotifications: Notification[];
   initialUnreadCount: number;
+  messagesLink?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[]>(initialNotifications);
@@ -210,7 +214,7 @@ export default function NotificationsBell({
 
           <div className="px-4 py-2.5 border-t border-slate-100 bg-slate-50">
             <Link
-              href="/account/messages"
+              href={messagesLink}
               onClick={() => setOpen(false)}
               className="text-[12px] text-slate-600 hover:text-slate-900 transition"
             >

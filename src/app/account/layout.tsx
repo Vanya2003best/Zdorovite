@@ -7,7 +7,7 @@ import {
   getUnreadNotificationCount,
 } from "@/lib/db/notifications";
 import MessagesBadge from "./MessagesBadge";
-import NotificationsBell from "./NotificationsBell";
+import NotificationsBell from "@/components/NotificationsBell";
 
 type NavItem = {
   href: string;
