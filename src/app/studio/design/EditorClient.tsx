@@ -79,15 +79,6 @@ const SECTION_LABELS: Record<SectionId, string> = {
   reviews: "Opinie",
 };
 
-const TEMPLATE_LABEL: Record<TemplateName, string> = {
-  minimal: "Minimal", sport: "Sport", premium: "Premium", cozy: "Cozy",
-  luxury: "Luxury", studio: "Studio", cinematic: "Cinematic", signature: "Signature",
-};
-
-const ACCENT_LABEL_BY_HEX: Record<string, string> = {
-  "#10b981": "Emerald", "#14b8a6": "Teal", "#0ea5e9": "Sky", "#6366f1": "Indigo",
-  "#ec4899": "Pink", "#f97316": "Orange", "#f59e0b": "Amber",
-};
 
 export default function EditorClient({ slug, trainerId, trainerName, published, initial, completion, counts, availabilityByDow, notifications, preview }: Props) {
   const [template, setTemplate] = useState<TemplateName>(initial.template);
@@ -144,8 +135,6 @@ export default function EditorClient({ slug, trainerId, trainerName, published, 
     setSections((prev) => prev.map((s) => (s.id === id ? { ...s, visible: !s.visible } : s)));
   };
 
-  const accentLabel = ACCENT_LABEL_BY_HEX[accentColor.toLowerCase()] ?? "Custom";
-  const templateLabel = TEMPLATE_LABEL[template];
 
   return (
     <div className="flex flex-col bg-slate-100 min-h-[calc(100vh-56px-84px)] lg:min-h-[calc(100vh-56px)]">
@@ -365,28 +354,7 @@ export default function EditorClient({ slug, trainerId, trainerName, published, 
             backgroundSize: "24px 24px",
           }}
         >
-          <div className="flex items-center justify-between px-7 pt-6 pb-5">
-            <div className="text-[13px] text-slate-600">
-              Podgląd · <strong className="text-slate-900">{templateLabel} · {accentLabel}</strong>
-            </div>
-            <Link
-              href={`/trainers/${slug}`}
-              target="_blank"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-[12px] text-slate-700 hover:border-slate-400 transition"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6M10 14L21 3" /></svg>
-              Otwórz w nowej karcie
-            </Link>
-          </div>
-
-          <span className="absolute top-6 right-7 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-[11px] text-slate-700 font-medium shadow-[0_1px_3px_rgba(2,6,23,.04)] hidden">
-            <span className="relative w-1.5 h-1.5 rounded-full bg-emerald-500">
-              <span className="absolute inset-0 rounded-full bg-emerald-500/40 animate-ping" />
-            </span>
-            Live preview
-          </span>
-
-          <div className="px-4 sm:px-7 pb-10">
+          <div className="px-4 sm:px-7 pt-6 pb-10">
             <div
               className="mx-auto bg-white rounded-[20px] overflow-hidden shadow-[0_32px_64px_-32px_rgba(2,6,23,0.2),0_0_0_1px_#e2e8f0] transition-[max-width] duration-300"
               style={{ maxWidth: viewport === "desktop" ? 880 : 390 }}
