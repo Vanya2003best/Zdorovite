@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { requireClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getFavoriteTrainersBrief } from "@/lib/db/favorites";
+import { getSpecLabel } from "@/data/specializations";
 
 // ----- Mock data: features without backend tables yet. See
 // project_account_dashboard_followups memory for the migration list. -----
@@ -72,6 +74,7 @@ type BookingRow = {
 export default async function AccountDashboardPage() {
   const { user, profile } = await requireClient("/account");
   const supabase = await createClient();
+  const favorites = await getFavoriteTrainersBrief(user.id);
 
   const now = new Date();
   const yearStart = new Date(now.getFullYear(), 0, 1);
@@ -537,14 +540,52 @@ export default async function AccountDashboardPage() {
           </span>
         </Link>
 
-        {/* Favorites — TODO: needs favorites table */}
+        {/* Favorites */}
         <div className="bg-white border border-slate-200 rounded-[14px] p-4">
-          <div className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold mb-3">
-            Ulubieni trenerzy
+          <div className="flex justify-between items-baseline mb-3">
+            <div className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">
+              Ulubieni trenerzy{favorites.length > 0 ? ` · ${favorites.length}` : ""}
+            </div>
+            {favorites.length > 0 && (
+              <Link href="/trainers?fav=1" className="text-[11.5px] text-emerald-700 font-medium">
+                Wszyscy →
+              </Link>
+            )}
           </div>
-          <p className="text-xs text-slate-500">
-            Nie masz jeszcze ulubionych trenerów. Dodawaj ich z profilu — wkrótce.
-          </p>
+          {favorites.length === 0 ? (
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Klikaj serce na profilu trenera, by dodać go tutaj.{" "}
+              <Link href="/trainers" className="text-emerald-700 font-medium">
+                Znajdź trenera →
+              </Link>
+            </p>
+          ) : (
+            <div className="grid">
+              {favorites.slice(0, 4).map((f) => (
+                <Link
+                  key={f.slug}
+                  href={`/trainers/${f.slug}`}
+                  className="flex gap-2.5 items-center py-2 border-b border-slate-100 last:border-b-0 hover:opacity-90 transition"
+                >
+                  {f.avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={f.avatar} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
+                  ) : (
+                    <span className="w-9 h-9 rounded-full bg-emerald-50 text-emerald-700 inline-flex items-center justify-center text-xs font-semibold shrink-0">
+                      {(f.name || "?").charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[12.5px] font-semibold truncate">{f.name || "Trener"}</div>
+                    <div className="text-[11px] text-slate-500 truncate">
+                      ★ {f.rating.toFixed(1)}
+                      {f.mainSpec ? ` · ${getSpecLabel(f.mainSpec as never)}` : ""}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Paszport zdrowia — TODO: needs health_passport table */}

@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { getTrainerBySlug } from "@/lib/db/trainers";
 import { getAvailableSlots } from "@/lib/db/availability";
+import { isFavorite as queryIsFavorite } from "@/lib/db/favorites";
 import { warsawDateOffset } from "@/lib/time";
 import { createClient } from "@/lib/supabase/server";
 import type { Trainer, Service } from "@/types";
@@ -19,6 +20,7 @@ import BookingSidebar from "./BookingSidebar";
 import EditableText from "@/components/EditableText";
 import EditModeBar from "./EditModeBar";
 import EditProfileFab from "./EditProfileFab";
+import FavoriteButton from "./FavoriteButton";
 import InlineServicesEditor from "./InlineServicesEditor";
 import InlinePackagesEditor from "./InlinePackagesEditor";
 import CinematicProfile from "./CinematicProfile";
@@ -29,23 +31,21 @@ import { SectionId } from "@/types";
    ================================================================ */
 async function PremiumProfile({
   trainer,
+  trainerDbId,
   editMode,
   isOwner,
   published,
+  initialIsFavorite,
+  needsLoginToFavorite,
 }: {
   trainer: Trainer;
+  trainerDbId: string | undefined;
   editMode: boolean;
   isOwner: boolean;
   published: boolean;
+  initialIsFavorite: boolean;
+  needsLoginToFavorite: boolean;
 }) {
-  // Data for the interactive booking sidebar
-  const supabase = await createClient();
-  const { data: row } = await supabase
-    .from("trainers")
-    .select("id")
-    .eq("slug", trainer.id)
-    .single();
-  const trainerDbId = row?.id as string | undefined;
   const initialDate = warsawDateOffset(0);
   const initialSlots = trainerDbId && !editMode ? await getAvailableSlots(trainerDbId, initialDate) : [];
   const servicesWithIds = trainer.services.filter((s): s is Service & { id: string } => !!s.id);
@@ -86,7 +86,7 @@ async function PremiumProfile({
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/35" />
-          {/* Mobile floating buttons */}
+          {/* Floating buttons — visible on mobile, also pinned top-right on desktop for the heart. */}
           <div className="absolute top-4 left-3.5 right-3.5 flex justify-between sm:hidden">
             <Link href="/trainers" className="w-10 h-10 rounded-full bg-white/92 backdrop-blur-md flex items-center justify-center text-slate-900">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M15 18l-6-6 6-6" /></svg>
@@ -95,11 +95,27 @@ async function PremiumProfile({
               <button className="w-10 h-10 rounded-full bg-white/92 backdrop-blur-md flex items-center justify-center text-slate-900">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" /></svg>
               </button>
-              <button className="w-10 h-10 rounded-full bg-white/92 backdrop-blur-md flex items-center justify-center text-slate-900">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 000-7.78z" /></svg>
-              </button>
+              {!isOwner && (
+                <FavoriteButton
+                  slug={trainer.id}
+                  initialIsFavorite={initialIsFavorite}
+                  needsLogin={needsLoginToFavorite}
+                />
+              )}
             </div>
           </div>
+          {/* Desktop heart — top-right of cover */}
+          {!isOwner && (
+            <div className="hidden sm:block absolute top-5 right-5">
+              <FavoriteButton
+                slug={trainer.id}
+                initialIsFavorite={initialIsFavorite}
+                needsLogin={needsLoginToFavorite}
+                className="w-11 h-11 rounded-full bg-white/92 backdrop-blur-md flex items-center justify-center text-slate-900 shadow-[0_4px_14px_rgba(2,6,23,0.06)] hover:bg-white transition disabled:opacity-70"
+                size={18}
+              />
+            </div>
+          )}
         </div>
 
         {/* Hero card — glass, overlapping cover */}
@@ -461,14 +477,20 @@ async function PremiumProfile({
    ================================================================ */
 async function TemplateProfile({
   trainer,
+  trainerDbId,
   editMode,
   isOwner,
   published,
+  initialIsFavorite,
+  needsLoginToFavorite,
 }: {
   trainer: Trainer;
+  trainerDbId: string | undefined;
   editMode: boolean;
   isOwner: boolean;
   published: boolean;
+  initialIsFavorite: boolean;
+  needsLoginToFavorite: boolean;
 }) {
   const c = trainer.customization;
   const s = templates[c.template];
@@ -477,15 +499,6 @@ async function TemplateProfile({
   const isCozy = s.name === "cozy";
 
   const servicesWithIds = trainer.services.filter((svc): svc is Service & { id: string } => !!svc.id);
-
-  // Booking sidebar data (mirrors PremiumProfile)
-  const supabase = await createClient();
-  const { data: row } = await supabase
-    .from("trainers")
-    .select("id")
-    .eq("slug", trainer.id)
-    .single();
-  const trainerDbId = row?.id as string | undefined;
   const initialDate = warsawDateOffset(0);
   const initialSlots = trainerDbId && !editMode ? await getAvailableSlots(trainerDbId, initialDate) : [];
 
@@ -559,6 +572,17 @@ async function TemplateProfile({
             </>
           )}
           {isCozy && <div className="absolute bottom-[-1px] left-0 right-0 h-8 bg-[#fdf6ec] rounded-t-[32px]" />}
+          {!isOwner && (
+            <div className="absolute top-4 right-4">
+              <FavoriteButton
+                slug={trainer.id}
+                initialIsFavorite={initialIsFavorite}
+                needsLogin={needsLoginToFavorite}
+                className="w-10 h-10 rounded-full bg-white/92 backdrop-blur-md flex items-center justify-center text-slate-900 shadow-[0_4px_14px_rgba(2,6,23,0.06)] hover:bg-white transition disabled:opacity-70"
+                size={16}
+              />
+            </div>
+          )}
         </div>
 
         {/* Two-column layout: main content + booking sidebar (desktop). On mobile single column,
@@ -647,30 +671,67 @@ export default async function TrainerProfilePage(props: PageProps<"/trainers/[id
   const trainer = await getTrainerBySlug(id);
   if (!trainer) notFound();
 
-  // Owner detection (drives the floating "Edit profile" button + edit-mode unlock).
-  // No redirect here — Studio preview embeds this URL via iframe and we can't break that.
-  let isOwner = false;
-  let editMode = false;
-  let published = true;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (user) {
-    const { data: t } = await supabase
-      .from("trainers")
-      .select("id, published")
-      .eq("slug", id)
-      .eq("id", user.id)
-      .maybeSingle();
-    if (t) {
-      isOwner = true;
-      published = t.published;
-      editMode = wantsEdit;
-    }
+
+  // Resolve slug → DB uuid once for: owner detection, BookingSidebar, message link,
+  // and the FavoriteButton seed.
+  const { data: trainerRow } = await supabase
+    .from("trainers")
+    .select("id, published")
+    .eq("slug", id)
+    .maybeSingle();
+  const trainerDbId = trainerRow?.id as string | undefined;
+
+  let isOwner = false;
+  let editMode = false;
+  let published = trainerRow?.published ?? true;
+  if (user && trainerDbId === user.id) {
+    isOwner = true;
+    editMode = wantsEdit;
   }
 
-  if (trainer.customization.template === "premium")
-    return <PremiumProfile trainer={trainer} editMode={editMode} isOwner={isOwner} published={published} />;
-  if (trainer.customization.template === "cinematic")
-    return <CinematicProfile trainer={trainer} editMode={editMode} isOwner={isOwner} published={published} />;
-  return <TemplateProfile trainer={trainer} editMode={editMode} isOwner={isOwner} published={published} />;
+  // Initial favorite state (for the heart button SSR).
+  let initialIsFavorite = false;
+  const needsLoginToFavorite = !user;
+  if (user && !isOwner && trainerDbId) {
+    initialIsFavorite = await queryIsFavorite(user.id, trainerDbId);
+  }
+
+  if (trainer.customization.template === "premium") {
+    return (
+      <PremiumProfile
+        trainer={trainer}
+        trainerDbId={trainerDbId}
+        editMode={editMode}
+        isOwner={isOwner}
+        published={published}
+        initialIsFavorite={initialIsFavorite}
+        needsLoginToFavorite={needsLoginToFavorite}
+      />
+    );
+  }
+  if (trainer.customization.template === "cinematic") {
+    return (
+      <CinematicProfile
+        trainer={trainer}
+        editMode={editMode}
+        isOwner={isOwner}
+        published={published}
+        initialIsFavorite={initialIsFavorite}
+        needsLoginToFavorite={needsLoginToFavorite}
+      />
+    );
+  }
+  return (
+    <TemplateProfile
+      trainer={trainer}
+      trainerDbId={trainerDbId}
+      editMode={editMode}
+      isOwner={isOwner}
+      published={published}
+      initialIsFavorite={initialIsFavorite}
+      needsLoginToFavorite={needsLoginToFavorite}
+    />
+  );
 }

@@ -3,6 +3,7 @@ import type { Trainer } from "@/types";
 import { getSpecLabel } from "@/data/specializations";
 import EditModeBar from "./EditModeBar";
 import EditProfileFab from "./EditProfileFab";
+import FavoriteButton from "./FavoriteButton";
 
 // Cinematic = full-bleed dark hero · 148px display type · numbered chapter sections · bento reel.
 // Designed pixel-close to designs/14-profile-cinematic-desktop.html.
@@ -18,11 +19,15 @@ export default function CinematicProfile({
   editMode,
   isOwner,
   published,
+  initialIsFavorite,
+  needsLoginToFavorite,
 }: {
   trainer: Trainer;
   editMode: boolean;
   isOwner: boolean;
   published: boolean;
+  initialIsFavorite: boolean;
+  needsLoginToFavorite: boolean;
 }) {
   const heroBg = trainer.customization.coverImage || trainer.gallery[0] || FALLBACK_HERO;
   const fullbleed = trainer.gallery[1] || trainer.gallery[0] || FALLBACK_FULLBLEED;
@@ -68,6 +73,15 @@ export default function CinematicProfile({
               <span className="w-1.5 h-1.5 rounded-full bg-[#d4ff00] shadow-[0_0_10px_#d4ff00]" />
               Dostępna · {trainer.location}
             </span>
+            {!isOwner && (
+              <FavoriteButton
+                slug={trainer.id}
+                initialIsFavorite={initialIsFavorite}
+                needsLogin={needsLoginToFavorite}
+                className="w-10 h-10 rounded-full bg-white/10 border border-white/15 backdrop-blur-md text-white inline-flex items-center justify-center hover:bg-white/20 transition disabled:opacity-70"
+                size={16}
+              />
+            )}
             <Link href={`/trainers/${trainer.id}/book`} className="inline-flex items-center gap-2 h-10 px-4 rounded-full bg-[#d4ff00] text-[#0a0a0c] text-[13px] font-semibold hover:brightness-110 transition">
               Umów sesję →
             </Link>

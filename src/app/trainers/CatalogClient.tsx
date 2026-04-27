@@ -7,13 +7,6 @@ import { specializations } from "@/data/specializations";
 import TrainerCard from "@/components/TrainerCard";
 import EmptyState from "@/components/states/EmptyState";
 
-const mobileBottomTabs = [
-  { label: "Główna", href: "/", active: false, path: <path d="M3 12L12 3l9 9M5 10v10h14V10" /> },
-  { label: "Szukaj", href: "/trainers", active: true, path: <><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></> },
-  { label: "Zapisane", href: "#", active: false, path: <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 000-7.78z" /> },
-  { label: "Profil", href: "#", active: false, path: <><circle cx="12" cy="8" r="4" /><path d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2" /></> },
-];
-
 // Strip diacritics so "ja" matches "Jaś", "lukasz" matches "Łukasz", etc.
 function normalize(s: string) {
   return s
@@ -23,7 +16,21 @@ function normalize(s: string) {
     .toLowerCase();
 }
 
-export default function CatalogClient({ trainers }: { trainers: Trainer[] }) {
+type Props = {
+  trainers: Trainer[];
+  isLoggedIn: boolean;
+  favActive: boolean;
+};
+
+export default function CatalogClient({ trainers, isLoggedIn, favActive }: Props) {
+  // "Zapisane" mobile bottom tab now points at the favorites filter.
+  const favHref = isLoggedIn ? "/trainers?fav=1" : "/login?next=/trainers?fav=1";
+  const mobileBottomTabs = [
+    { label: "Główna", href: "/", active: false, path: <path d="M3 12L12 3l9 9M5 10v10h14V10" /> },
+    { label: "Szukaj", href: "/trainers", active: !favActive, path: <><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></> },
+    { label: "Zapisane", href: favHref, active: favActive, path: <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 000-7.78z" /> },
+    { label: "Profil", href: isLoggedIn ? "/account" : "/login", active: false, path: <><circle cx="12" cy="8" r="4" /><path d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2" /></> },
+  ];
   const [filters, setFilters] = useState<Specialization[]>([]);
   const [query, setQuery] = useState("");
 
@@ -53,10 +60,12 @@ export default function CatalogClient({ trainers }: { trainers: Trainer[] }) {
           </nav>
 
           <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
-            Trenerzy personalni w Polsce
+            {favActive ? "Twoi ulubieni trenerzy" : "Trenerzy personalni w Polsce"}
           </h1>
           <p className="text-[15px] text-slate-600 mt-2 mb-6">
-            {trainers.length} zweryfikowanych ekspertów w 42 miastach. Dopasuj filtry poniżej.
+            {favActive
+              ? `${trainers.length} ${trainers.length === 1 ? "trener" : trainers.length < 5 ? "trenerów" : "trenerów"} w Twoich ulubionych.`
+              : `${trainers.length} zweryfikowanych ekspertów w 42 miastach. Dopasuj filtry poniżej.`}
           </p>
 
           <div className="hidden sm:grid grid-cols-[1.2fr_1fr_1fr_auto] gap-2 bg-white border border-slate-200 rounded-2xl p-1.5 shadow-sm max-w-[960px]">
@@ -97,6 +106,21 @@ export default function CatalogClient({ trainers }: { trainers: Trainer[] }) {
 
       <section className="sticky top-16 z-40 bg-white/92 backdrop-blur-lg border-b border-slate-200">
         <div className="mx-auto max-w-[1200px] px-4 sm:px-6 py-3.5 flex items-center gap-2 overflow-x-auto scrollbar-hide">
+          {/* Favorites pill — server-side filter via ?fav=1 */}
+          <Link
+            href={favActive ? "/trainers" : favHref}
+            className={`shrink-0 inline-flex items-center gap-1.5 h-[30px] px-3 rounded-full text-[13px] font-medium border transition ${
+              favActive
+                ? "bg-emerald-500 text-white border-emerald-500"
+                : "bg-white text-slate-700 border-slate-200 hover:border-slate-400"
+            }`}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill={favActive ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+              <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 000-7.78z" />
+            </svg>
+            Ulubieni
+          </Link>
+          <div className="w-px h-6 bg-slate-200 shrink-0" />
           {specializations.map((spec) => {
             const active = filters.includes(spec.id);
             return (
@@ -238,17 +262,32 @@ export default function CatalogClient({ trainers }: { trainers: Trainer[] }) {
           <div>
             {filtered.length === 0 ? (
               <div className="rounded-2xl border-2 border-dashed border-slate-300">
-                <EmptyState
-                  icon={
-                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>
-                  }
-                  title="Nic nie pasuje do filtrów"
-                  description="Spróbuj rozszerzyć obszar wyszukiwania lub zdjąć część filtrów. Sprawdź też tryb online."
-                  actions={[
-                    { label: "Wyczyść filtry", onClick: () => { setFilters([]); setQuery(""); } },
-                    { label: "Tryb online", href: "/trainers", primary: true },
-                  ]}
-                />
+                {favActive ? (
+                  <EmptyState
+                    icon={
+                      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 000-7.78z" />
+                      </svg>
+                    }
+                    title="Nie masz jeszcze ulubionych"
+                    description="Klikaj serce na profilu trenera, by zapisać go tutaj. Wrócisz do nich z dowolnego ekranu."
+                    actions={[
+                      { label: "Zobacz wszystkich", href: "/trainers", primary: true },
+                    ]}
+                  />
+                ) : (
+                  <EmptyState
+                    icon={
+                      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>
+                    }
+                    title="Nic nie pasuje do filtrów"
+                    description="Spróbuj rozszerzyć obszar wyszukiwania lub zdjąć część filtrów. Sprawdź też tryb online."
+                    actions={[
+                      { label: "Wyczyść filtry", onClick: () => { setFilters([]); setQuery(""); } },
+                      { label: "Tryb online", href: "/trainers", primary: true },
+                    ]}
+                  />
+                )}
               </div>
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
