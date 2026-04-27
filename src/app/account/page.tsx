@@ -3,17 +3,12 @@ import { requireClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getFavoriteTrainersBrief } from "@/lib/db/favorites";
 import { getPendingRescheduleForBooking } from "@/lib/db/reschedule";
+import { getGoals, type Goal } from "@/lib/db/goals";
+import { getLatestWeight, getYearStartWeight } from "@/lib/db/weight";
 import { getSpecLabel } from "@/data/specializations";
 import RescheduleDialog from "@/components/RescheduleDialog";
 
-// ----- Mock data: features without backend tables yet. See
-// project_account_dashboard_followups memory for the migration list. -----
-const MOCK_GOALS = [
-  { title: "Powrót do biegania", pct: 62, when: "Cel: czerwiec 2026", note: "5 km bez bólu" },
-  { title: "Schudnąć do 78 kg", pct: 78, when: "83,8 kg → 78 kg", note: "−6,2 kg z −8 kg" },
-  { title: "Pull-up bez gumy", pct: 30, when: "Cel: wrzesień", note: "2 powtórzenia z 6" },
-];
-
+// ----- Mock data still pending its own migration (see project_account_dashboard_followups). -----
 const MOCK_HEALTH = {
   note: "ACL prawego kolana, 9 mies. po op. Cel: czerwiec — bieganie.",
   metrics: [
@@ -30,7 +25,26 @@ const MOCK_RECO = {
   cta: "Zobacz Zofię Nowak →",
 };
 
-const MOCK_HERO_WEIGHT = "−6,2 kg";
+function fmtKg(kg: number): string {
+  return `${kg.toFixed(1).replace(".", ",")} kg`;
+}
+
+function fmtDelta(delta: number): string {
+  if (Math.abs(delta) < 0.05) return "±0 kg";
+  const sign = delta < 0 ? "−" : "+";
+  return `${sign}${Math.abs(delta).toFixed(1).replace(".", ",")} kg`;
+}
+
+function fmtTargetDate(iso: string): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  const months = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień"];
+  return `Cel: ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
+function goalNote(g: Goal): string {
+  const unit = g.unit ? ` ${g.unit}` : "";
+  return `${g.startValue}${unit} → ${g.targetValue}${unit}`;
+}
 
 const PL_DAY_SHORT = ["Nie", "Pon", "Wt", "Śr", "Czw", "Pią", "Sob"];
 const PL_DAY_LONG = ["Pn", "Wt", "Śr", "Cz", "Pt", "So", "Nd"];
@@ -77,7 +91,19 @@ type BookingRow = {
 export default async function AccountDashboardPage() {
   const { user, profile } = await requireClient("/account");
   const supabase = await createClient();
-  const favorites = await getFavoriteTrainersBrief(user.id);
+  const [favorites, goals, latestWeight, yearStartWeight] = await Promise.all([
+    getFavoriteTrainersBrief(user.id),
+    getGoals(user.id),
+    getLatestWeight(user.id),
+    getYearStartWeight(user.id),
+  ]);
+
+  const weightDelta =
+    latestWeight && yearStartWeight && latestWeight.recordedAt !== yearStartWeight.recordedAt
+      ? latestWeight.weightKg - yearStartWeight.weightKg
+      : null;
+  const heroWeight = weightDelta !== null ? fmtDelta(weightDelta) : latestWeight ? fmtKg(latestWeight.weightKg) : "—";
+  const heroTopGoal = goals[0] ?? null;
 
   const now = new Date();
   const yearStart = new Date(now.getFullYear(), 0, 1);
@@ -202,12 +228,18 @@ export default async function AccountDashboardPage() {
             <div className="text-[10px] lg:text-[11px] opacity-70 uppercase tracking-wider mt-0.5">Sesji 2026</div>
           </div>
           <div>
-            <div className="text-[18px] lg:text-[28px] font-bold tracking-[-0.02em]">{MOCK_HERO_WEIGHT}</div>
-            <div className="text-[10px] lg:text-[11px] opacity-70 uppercase tracking-wider mt-0.5">Od stycznia</div>
+            <div className="text-[18px] lg:text-[28px] font-bold tracking-[-0.02em]">{heroWeight}</div>
+            <div className="text-[10px] lg:text-[11px] opacity-70 uppercase tracking-wider mt-0.5">
+              {weightDelta !== null ? "Od stycznia" : latestWeight ? "Aktualna waga" : "Brak pomiarów"}
+            </div>
           </div>
           <div>
-            <div className="text-[18px] lg:text-[28px] font-bold tracking-[-0.02em]">62%</div>
-            <div className="text-[10px] lg:text-[11px] opacity-70 uppercase tracking-wider mt-0.5">Cel biegania</div>
+            <div className="text-[18px] lg:text-[28px] font-bold tracking-[-0.02em]">
+              {heroTopGoal ? `${Math.round(heroTopGoal.pct * 100)}%` : "—"}
+            </div>
+            <div className="text-[10px] lg:text-[11px] opacity-70 uppercase tracking-wider mt-0.5">
+              {heroTopGoal ? heroTopGoal.title.slice(0, 24) : "Brak celów"}
+            </div>
           </div>
         </div>
       </div>
@@ -388,26 +420,38 @@ export default async function AccountDashboardPage() {
           <section className="bg-white border border-slate-200 rounded-[14px] p-5">
             <div className="flex justify-between items-baseline mb-3.5">
               <h2 className="text-[15px] font-semibold tracking-[-0.01em] m-0">Cele</h2>
-              <Link href="#" className="text-xs text-emerald-700 font-medium">Edytuj</Link>
+              <Link href="/account/progress" className="text-xs text-emerald-700 font-medium">Edytuj</Link>
             </div>
-            <div className="grid gap-2">
-              {/* TODO: needs goals table */}
-              {MOCK_GOALS.map((g) => (
-                <div key={g.title} className="p-3.5 border border-slate-200 rounded-xl">
-                  <div className="flex justify-between mb-2">
-                    <span className="text-[13px] font-semibold">{g.title}</span>
-                    <span className="text-xs text-emerald-700 font-semibold">{g.pct}%</span>
-                  </div>
-                  <div className="h-1.5 bg-slate-100 rounded overflow-hidden mb-1.5">
-                    <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-500" style={{ width: `${g.pct}%` }} />
-                  </div>
-                  <div className="text-[11px] text-slate-500 flex justify-between">
-                    <span>{g.when}</span>
-                    <span>{g.note}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {goals.length === 0 ? (
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Nie masz jeszcze celów. Dodaj pierwszy w{" "}
+                <Link href="/account/progress" className="text-emerald-700 font-medium">
+                  Postępach
+                </Link>
+                , żeby śledzić postęp.
+              </p>
+            ) : (
+              <div className="grid gap-2">
+                {goals.slice(0, 3).map((g) => {
+                  const pct = Math.round(g.pct * 100);
+                  return (
+                    <div key={g.id} className="p-3.5 border border-slate-200 rounded-xl">
+                      <div className="flex justify-between mb-2">
+                        <span className="text-[13px] font-semibold truncate pr-2">{g.title}</span>
+                        <span className="text-xs text-emerald-700 font-semibold shrink-0">{pct}%</span>
+                      </div>
+                      <div className="h-1.5 bg-slate-100 rounded overflow-hidden mb-1.5">
+                        <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-500" style={{ width: `${pct}%` }} />
+                      </div>
+                      <div className="text-[11px] text-slate-500 flex justify-between gap-2">
+                        <span className="truncate">{g.targetDate ? fmtTargetDate(g.targetDate) : g.note ?? ""}</span>
+                        <span className="shrink-0">{goalNote(g)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           {/* Chart */}
