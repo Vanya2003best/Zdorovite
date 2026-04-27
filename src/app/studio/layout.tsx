@@ -1,13 +1,14 @@
 import { requireTrainer } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import StudioSidebar from "./StudioSidebar";
 import StudioMobileTabs from "./StudioMobileTabs";
-import StudioMobileTopBar from "./StudioMobileTopBar";
+import StudioTopBar from "./StudioTopBar";
 
 /**
- * Studio = trainer-only ecosystem. Discord-style sidebar on desktop,
- * top bar (greeting + bell) + bottom tabs on mobile. Replaces the public
- * Header on /studio/* routes.
+ * Studio = trainer-only ecosystem. Single top bar with a Menu drawer
+ * (StudioNavMenu) replaces the old persistent left sidebar — every section
+ * lives behind the menu now. Mobile keeps the bottom tab bar for
+ * thumb-reachable shortcuts. The /studio/design editor mounts its own
+ * fullscreen shell on top of this.
  */
 export default async function StudioLayout({
   children,
@@ -32,28 +33,19 @@ export default async function StudioLayout({
   const unreadMessages = unreadMessagesCount ?? 0;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
-      <StudioSidebar
-        displayName={profile.display_name}
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <StudioTopBar
+        trainerId={user.id}
+        trainerSlug={trainer?.slug ?? null}
+        trainerName={profile.display_name}
         avatarUrl={profile.avatar_url}
-        slug={trainer?.slug ?? null}
-        published={trainer?.published ?? false}
       />
 
-      <div className="flex-1 min-w-0 sm:ml-[240px] flex flex-col">
-        <StudioMobileTopBar
-          trainerId={user.id}
-          displayName={profile.display_name}
-          avatarUrl={profile.avatar_url}
-          slug={trainer?.slug ?? null}
-          published={trainer?.published ?? false}
-        />
-        <main className="flex-1 pb-24 sm:pb-8">
-          <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10">
-            {children}
-          </div>
-        </main>
-      </div>
+      <main className="flex-1 pb-24 sm:pb-8">
+        <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10">
+          {children}
+        </div>
+      </main>
 
       <StudioMobileTabs myId={user.id} unreadMessages={unreadMessages} />
     </div>
