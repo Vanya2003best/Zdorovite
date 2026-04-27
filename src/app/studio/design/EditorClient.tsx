@@ -10,7 +10,6 @@ import InlineServicesEditor from "@/app/trainers/[id]/InlineServicesEditor";
 import InlinePackagesEditor from "@/app/trainers/[id]/InlinePackagesEditor";
 import ImageUpload from "./ImageUpload";
 import { templates } from "@/data/templates";
-import StudioNavMenu from "../StudioNavMenu";
 
 type PreviewService = { id: string; name: string; description: string; price: number; duration: number };
 type PreviewPackage = { id: string; name: string; description: string; items: string[]; price: number; period?: string; featured: boolean };
@@ -141,28 +140,15 @@ export default function EditorClient({ slug, trainerName, published, initial, co
   const templateLabel = TEMPLATE_LABEL[template];
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-100 flex flex-col overflow-hidden">
-      {/* ===== TOP BAR — 56px. Brand+breadcrumb replaced with a single
-          menu button → drawer with all studio sections (Pulpit, Rezerwacje,
-          Wiadomości, Usługi, Pakiety, Dostępność, Strona publiczna, Wyloguj).
-          The editor IS the trainer's home; everything else lives behind the menu. */}
-      <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-5 shrink-0 gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <StudioNavMenu
-            trainerSlug={slug}
-            trainerName={trainerName}
-            avatarUrl={preview.avatarUrl}
-          />
-          <div className="hidden md:flex items-center gap-1.5 text-[13px] text-slate-500 min-w-0">
-            <strong className="text-slate-900 font-semibold tracking-[-0.01em] truncate">Mój profil</strong>
-          </div>
-          <span className="hidden lg:inline-flex items-center gap-1.5 text-[12px] text-slate-500 shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            Zapisano · {savedAgo}
-          </span>
-        </div>
-        <div className="flex items-center gap-2.5">
-          {/* Viewport toggle — slate-100 pill, 9px radius, 3px padding */}
+    <div className="flex flex-col bg-slate-100 min-h-[calc(100vh-56px-84px)] lg:min-h-[calc(100vh-56px)]">
+      {/* ===== EDITOR ACTION BAR — saved-status + viewport toggle + publish.
+          Brand/menu chrome lives in the layout's StudioSidebar/TopBar. */}
+      <div className="bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-5 py-2.5 gap-3 shrink-0">
+        <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-500">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          Zapisano · {savedAgo}
+        </span>
+        <div className="flex items-center gap-2">
           <div className="hidden sm:inline-flex bg-slate-100 rounded-[9px] p-[3px] gap-[2px]">
             {(["desktop", "mobile"] as const).map((v) => (
               <button
@@ -184,31 +170,30 @@ export default function EditorClient({ slug, trainerName, published, initial, co
           <Link
             href={`/trainers/${slug}`}
             target="_blank"
-            className="inline-flex items-center gap-2 h-10 px-4 rounded-lg text-[14px] font-medium text-slate-800 border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition"
+            className="hidden md:inline-flex items-center gap-1.5 h-9 px-3 rounded-[10px] text-[13px] font-medium text-slate-800 border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /></svg>
-            Podgląd publiczny
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /></svg>
+            Podgląd
           </Link>
           <button
             type="button"
             disabled={pubPending}
             onClick={() => startPubTransition(async () => { await togglePublished(); })}
-            className={`inline-flex items-center gap-2 h-10 px-4 rounded-lg text-[14px] font-medium transition disabled:opacity-60 ${
-              published
-                ? "bg-slate-900 text-white hover:bg-black"
-                : "bg-slate-900 text-white hover:bg-black"
-            }`}
+            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-[10px] text-[13px] font-semibold transition disabled:opacity-60 bg-slate-900 text-white hover:bg-black"
           >
-            {pubPending ? "..." : published ? "Cofnij publikację" : "Opublikuj zmiany"}
+            {pubPending ? "..." : published ? "Cofnij publikację" : "Opublikuj"}
           </button>
         </div>
-      </header>
+      </div>
 
-      {/* ===== LAYOUT ===== */}
-      <div className="grid grid-cols-1 sm:grid-cols-[360px_1fr] flex-1 min-h-0">
+      {/* ===== LAYOUT — preview LEFT, settings RIGHT (per user request) ===== */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] flex-1 min-h-0">
 
-        {/* ===== LEFT PANEL ===== */}
-        <aside className="bg-white border-r border-slate-200 overflow-y-auto">
+        {/* The settings aside is below in DOM order; CSS grid + lg:order
+            classes flip them visually so preview renders LEFT on lg+. */}
+
+        {/* ===== SETTINGS PANEL (visually on the right via lg:order-2) ===== */}
+        <aside className="bg-white lg:border-l lg:border-slate-200 border-b lg:border-b-0 border-slate-200 overflow-y-auto lg:order-2 max-h-[calc(100vh-56px-56px-84px)] lg:max-h-none">
           {/* Completion card — margin: 16px 20px 0 20px */}
           <div className="mt-4 mx-5 p-3.5 rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white">
             <div className="flex justify-between items-baseline">
@@ -340,9 +325,9 @@ export default function EditorClient({ slug, trainerName, published, initial, co
 
         </aside>
 
-        {/* ===== RIGHT CANVAS ===== */}
+        {/* ===== PREVIEW CANVAS — visually LEFT (lg:order-1) ===== */}
         <section
-          className="relative overflow-y-auto"
+          className="relative overflow-y-auto lg:order-1"
           style={{
             backgroundColor: "#f8fafc",
             backgroundImage: "radial-gradient(circle at 15px 15px, #e2e8f0 1px, transparent 1px)",

@@ -6,28 +6,18 @@ import {
   getUnreadNotificationCount,
 } from "@/lib/db/notifications";
 import StudioNavMenu from "./StudioNavMenu";
-
-const SECTION_TITLE: Array<{ match: (p: string) => boolean; title: string }> = [
-  { match: (p) => p === "/studio",                     title: "Pulpit" },
-  { match: (p) => p.startsWith("/studio/design"),       title: "Mój profil" },
-  { match: (p) => p.startsWith("/studio/profile"),      title: "Mój profil" },
-  { match: (p) => p.startsWith("/studio/bookings"),     title: "Rezerwacje" },
-  { match: (p) => p.startsWith("/studio/messages"),     title: "Wiadomości" },
-  { match: (p) => p.startsWith("/studio/services"),     title: "Usługi" },
-  { match: (p) => p.startsWith("/studio/packages"),     title: "Pakiety" },
-  { match: (p) => p.startsWith("/studio/availability"), title: "Dostępność" },
-];
+import { STUDIO_NAV } from "./nav-items";
 
 function titleFor(pathname: string): string {
-  for (const s of SECTION_TITLE) if (s.match(pathname)) return s.title;
+  for (const s of STUDIO_NAV) if (s.match(pathname)) return s.label;
   return "Studio";
 }
 
 /**
- * Single top bar for every /studio/* page (sidebar replaced).
- * Layout: hamburger Menu (opens drawer with all sections) + section title + bell + avatar.
- * The editor at /studio/design overrides this by mounting its own fullscreen
- * shell (so this top bar is hidden behind it — by design).
+ * Top bar for /studio/* pages.
+ * - Mobile (lg-): hamburger Menu button (drawer) + section title + bell + avatar.
+ * - Desktop (lg+): Menu button is hidden — the persistent <StudioSidebar/> on the
+ *   left replaces it. Only the section title + bell + utilities remain.
  */
 export default async function StudioTopBar({
   trainerId,
@@ -52,9 +42,11 @@ export default async function StudioTopBar({
   const initial = (trainerName || "?").charAt(0).toUpperCase();
 
   return (
-    <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-5 sticky top-0 z-40">
+    <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-5 sticky top-0 z-30 gap-3">
       <div className="flex items-center gap-3 min-w-0">
-        <StudioNavMenu trainerSlug={trainerSlug} trainerName={trainerName} avatarUrl={avatarUrl} />
+        <div className="lg:hidden">
+          <StudioNavMenu trainerSlug={trainerSlug} trainerName={trainerName} avatarUrl={avatarUrl} />
+        </div>
         <strong className="text-[14px] sm:text-[15px] font-semibold tracking-[-0.01em] truncate">
           {title}
         </strong>
@@ -80,14 +72,17 @@ export default async function StudioTopBar({
             Strona publiczna
           </Link>
         )}
-        {avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatarUrl} alt="" className="w-9 h-9 rounded-[11px] object-cover" />
-        ) : (
-          <span className="w-9 h-9 rounded-[11px] bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-700 inline-flex items-center justify-center font-semibold text-sm">
-            {initial}
-          </span>
-        )}
+        {/* Avatar only on mobile (sidebar shows it on desktop). */}
+        <div className="lg:hidden">
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={avatarUrl} alt="" className="w-9 h-9 rounded-[11px] object-cover" />
+          ) : (
+            <span className="w-9 h-9 rounded-[11px] bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-700 inline-flex items-center justify-center font-semibold text-sm">
+              {initial}
+            </span>
+          )}
+        </div>
       </div>
     </header>
   );

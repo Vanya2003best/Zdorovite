@@ -1,14 +1,17 @@
+import { headers } from "next/headers";
 import { requireTrainer } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import StudioMobileTabs from "./StudioMobileTabs";
+import StudioSidebar from "./StudioSidebar";
 import StudioTopBar from "./StudioTopBar";
 
 /**
- * Studio = trainer-only ecosystem. Single top bar with a Menu drawer
- * (StudioNavMenu) replaces the old persistent left sidebar — every section
- * lives behind the menu now. Mobile keeps the bottom tab bar for
- * thumb-reachable shortcuts. The /studio/design editor mounts its own
- * fullscreen shell on top of this.
+ * Studio = trainer-only ecosystem.
+ * - Desktop (lg+): permanent left sidebar (StudioSidebar) with all sections.
+ * - Mobile (<lg): top bar with hamburger Menu drawer (StudioNavMenu) +
+ *   bottom tabs for thumb-reach.
+ * - Editor (/studio/design) renders inside the same chrome but lays its
+ *   preview + settings panel below in its own grid.
  */
 export default async function StudioLayout({
   children,
@@ -16,6 +19,11 @@ export default async function StudioLayout({
   children: React.ReactNode;
 }) {
   const { user, profile } = await requireTrainer("/studio");
+
+  const h = await headers();
+  const pathname = h.get("x-pathname") ?? "";
+  // The editor lays out its own preview + settings grid full-bleed.
+  const fullBleed = pathname.startsWith("/studio/design") || pathname.startsWith("/studio/messages");
 
   const supabase = await createClient();
   const [{ data: trainer }, { count: unreadMessagesCount }] = await Promise.all([
@@ -33,19 +41,33 @@ export default async function StudioLayout({
   const unreadMessages = unreadMessagesCount ?? 0;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      <StudioTopBar
+    <div className="min-h-screen bg-slate-50 flex flex-col lg:block">
+      <StudioSidebar
         trainerId={user.id}
         trainerSlug={trainer?.slug ?? null}
         trainerName={profile.display_name}
         avatarUrl={profile.avatar_url}
+        unreadMessages={unreadMessages}
       />
 
-      <main className="flex-1 pb-24 sm:pb-8">
-        <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10">
-          {children}
-        </div>
-      </main>
+      <div className="lg:ml-[280px] flex flex-col min-h-screen">
+        <StudioTopBar
+          trainerId={user.id}
+          trainerSlug={trainer?.slug ?? null}
+          trainerName={profile.display_name}
+          avatarUrl={profile.avatar_url}
+        />
+
+        <main className="flex-1 pb-24 lg:pb-8">
+          {fullBleed ? (
+            children
+          ) : (
+            <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10">
+              {children}
+            </div>
+          )}
+        </main>
+      </div>
 
       <StudioMobileTabs myId={user.id} unreadMessages={unreadMessages} />
     </div>
