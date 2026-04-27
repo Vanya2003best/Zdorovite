@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import RescheduleCard from "@/components/RescheduleCard";
 import { sendMessage } from "./actions";
 import type { ConversationMessage } from "./page";
 
@@ -96,10 +97,24 @@ export default function MessagesClient({
             read_at: string | null;
           };
           if (m.from_id !== other.id) return;
+          // We don't have the joined reschedule data on a realtime payload —
+          // for proposal/response messages, append a stub and rely on the
+          // router.refresh below to re-fetch with the join.
           setMessages((prev) =>
             prev.some((x) => x.id === m.id)
               ? prev
-              : [...prev, { id: m.id, fromMe: false, text: m.text, createdAt: m.created_at, readAt: m.read_at }],
+              : [
+                  ...prev,
+                  {
+                    id: m.id,
+                    fromMe: false,
+                    text: m.text,
+                    createdAt: m.created_at,
+                    readAt: m.read_at,
+                    messageType: "text",
+                    reschedule: null,
+                  },
+                ],
           );
           setOtherTyping(false);
           router.refresh();
@@ -168,6 +183,8 @@ export default function MessagesClient({
       text: v,
       createdAt: new Date().toISOString(),
       readAt: null,
+      messageType: "text",
+      reschedule: null,
     };
     setMessages((prev) => [...prev, optimistic]);
     startTransition(async () => {
@@ -268,6 +285,44 @@ export default function MessagesClient({
             const isLastInGroup =
               !next || next.fromMe !== m.fromMe || new Date(next.createdAt).getTime() - new Date(m.createdAt).getTime() >= 5 * 60 * 1000;
             const isPending = m.id.startsWith("tmp-");
+
+            // Reschedule proposal — render as a booking-card with accept/decline.
+            if (m.messageType === "reschedule_proposal" && m.reschedule) {
+              return (
+                <div key={m.id}>
+                  {showDay && (
+                    <div className="text-center text-[10.5px] text-slate-400 my-3 uppercase tracking-wider font-semibold">
+                      {fmtDaySep(m.createdAt)}
+                    </div>
+                  )}
+                  <RescheduleCard
+                    request={m.reschedule}
+                    isRequester={m.fromMe}
+                    side={m.fromMe ? "me" : "them"}
+                  />
+                </div>
+              );
+            }
+
+            // Reschedule response — center-aligned status pill.
+            if (m.messageType === "reschedule_response") {
+              return (
+                <div key={m.id}>
+                  {showDay && (
+                    <div className="text-center text-[10.5px] text-slate-400 my-3 uppercase tracking-wider font-semibold">
+                      {fmtDaySep(m.createdAt)}
+                    </div>
+                  )}
+                  <div className="flex justify-center my-2">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-[11px] text-slate-600 font-medium">
+                      {m.text}
+                      <span className="text-slate-400">· {fmtTime(m.createdAt)}</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <div key={m.id}>
                 {showDay && (

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import EmptyState from "@/components/states/EmptyState";
+import { getRescheduleRequestsByIds, type RescheduleRequest } from "@/lib/db/reschedule";
 import MessagesClient from "./MessagesClient";
 import ClientContextPanel from "./ClientContextPanel";
 import ThreadList from "./ThreadList";
@@ -27,12 +28,16 @@ export type Thread = {
   isClient: boolean;
 };
 
+export type MessageType = "text" | "reschedule_proposal" | "reschedule_response";
+
 export type ConversationMessage = {
   id: string;
   fromMe: boolean;
   text: string;
   createdAt: string;
   readAt: string | null;
+  messageType: MessageType;
+  reschedule: RescheduleRequest | null;
 };
 
 export default async function MessagesPage(props: {
@@ -121,16 +126,29 @@ export default async function MessagesPage(props: {
   if (withId) {
     const { data: conv } = await supabase
       .from("messages")
-      .select("id, from_id, to_id, text, created_at, read_at")
+      .select("id, from_id, to_id, text, created_at, read_at, message_type, reschedule_request_id")
       .or(`and(from_id.eq.${me},to_id.eq.${withId}),and(from_id.eq.${withId},to_id.eq.${me})`)
       .order("created_at", { ascending: true })
       .limit(500);
-    conversation = (conv ?? []).map((m) => ({
+    type ConvRow = {
+      id: string; from_id: string; to_id: string; text: string;
+      created_at: string; read_at: string | null;
+      message_type: string | null; reschedule_request_id: string | null;
+    };
+    const rows = (conv ?? []) as ConvRow[];
+
+    const reqIds = Array.from(new Set(rows.map((m) => m.reschedule_request_id).filter((x): x is string => !!x)));
+    const reqs = await getRescheduleRequestsByIds(reqIds);
+    const reqById = new Map(reqs.map((r) => [r.id, r]));
+
+    conversation = rows.map((m) => ({
       id: m.id,
       fromMe: m.from_id === me,
       text: m.text,
       createdAt: m.created_at,
       readAt: m.read_at,
+      messageType: (m.message_type ?? "text") as MessageType,
+      reschedule: m.reschedule_request_id ? reqById.get(m.reschedule_request_id) ?? null : null,
     }));
 
     const existing = threadsMap.get(withId);

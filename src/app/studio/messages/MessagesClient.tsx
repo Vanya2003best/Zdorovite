@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import RescheduleCard from "@/components/RescheduleCard";
 import { sendMessage } from "./actions";
 import type { ConversationMessage } from "./page";
 
@@ -67,10 +68,23 @@ export default function MessagesClient({
             read_at: string | null;
           };
           if (m.from_id !== other.id) return;
+          // We don't get the joined reschedule data from a realtime payload — add a stub
+          // and let router.refresh below re-fetch with the full join.
           setMessages((prev) =>
             prev.some((x) => x.id === m.id)
               ? prev
-              : [...prev, { id: m.id, fromMe: false, text: m.text, createdAt: m.created_at, readAt: m.read_at }],
+              : [
+                  ...prev,
+                  {
+                    id: m.id,
+                    fromMe: false,
+                    text: m.text,
+                    createdAt: m.created_at,
+                    readAt: m.read_at,
+                    messageType: "text",
+                    reschedule: null,
+                  },
+                ],
           );
           setOtherTyping(false);
           router.refresh();
@@ -139,6 +153,8 @@ export default function MessagesClient({
       text: value,
       createdAt: new Date().toISOString(),
       readAt: null,
+      messageType: "text",
+      reschedule: null,
     };
     setMessages((prev) => [...prev, optimistic]);
     startTransition(async () => {
@@ -209,6 +225,36 @@ export default function MessagesClient({
             const isLastInGroup =
               !next || next.fromMe !== m.fromMe || new Date(next.createdAt).getTime() - new Date(m.createdAt).getTime() >= 5 * 60 * 1000;
             const isPending = m.id.startsWith("tmp-");
+
+            if (m.messageType === "reschedule_proposal" && m.reschedule) {
+              return (
+                <div key={m.id}>
+                  {showDaySep && <DaySeparator iso={m.createdAt} />}
+                  <RescheduleCard
+                    request={m.reschedule}
+                    isRequester={m.fromMe}
+                    side={m.fromMe ? "me" : "them"}
+                  />
+                </div>
+              );
+            }
+
+            if (m.messageType === "reschedule_response") {
+              return (
+                <div key={m.id}>
+                  {showDaySep && <DaySeparator iso={m.createdAt} />}
+                  <div className="flex justify-center my-2">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-[11px] text-slate-600 font-medium">
+                      {m.text}
+                      <span className="text-slate-400">
+                        · {new Date(m.createdAt).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <div key={m.id}>
                 {showDaySep && <DaySeparator iso={m.createdAt} />}
