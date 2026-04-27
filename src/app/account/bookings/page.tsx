@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireClient } from "@/lib/auth";
+import { getPendingRescheduleMap, type RescheduleRequest } from "@/lib/db/reschedule";
+import RescheduleDialog from "@/components/RescheduleDialog";
 import { cancelMyBooking } from "./actions";
 
 type SP = Promise<{ booked?: string; tab?: string }>;
 
 type BookingRow = {
   id: string;
+  trainer_id: string;
   start_time: string;
   end_time: string;
   status: string;
@@ -44,7 +47,7 @@ export default async function BookingsPage(props: { searchParams: SP }) {
   const { data, error } = await supabase
     .from("bookings")
     .select(`
-      id, start_time, end_time, status, price, note,
+      id, trainer_id, start_time, end_time, status, price, note,
       service:services ( name, duration ),
       package:packages ( name ),
       trainer:trainers (
@@ -66,6 +69,10 @@ export default async function BookingsPage(props: { searchParams: SP }) {
 
   const visible = showHistory ? past : upcoming;
   const nextId = upcoming[0]?.id;
+
+  // Pending reschedule requests for upcoming bookings — drives the "czeka na zmianę" badge
+  // and hides the "Przenieś" button (one open request at a time).
+  const pendingResMap = await getPendingRescheduleMap(upcoming.map((b) => b.id));
 
   return (
     <div className="mx-auto max-w-[860px] px-4 sm:px-6 py-5 sm:py-8">
@@ -141,7 +148,13 @@ export default async function BookingsPage(props: { searchParams: SP }) {
       ) : (
         <div className="grid gap-2.5">
           {visible.map((b) => (
-            <SessionCard key={b.id} booking={b} isPast={showHistory} isNext={b.id === nextId} />
+            <SessionCard
+              key={b.id}
+              booking={b}
+              isPast={showHistory}
+              isNext={b.id === nextId}
+              pendingReschedule={pendingResMap.get(b.id) ?? null}
+            />
           ))}
         </div>
       )}
@@ -153,10 +166,12 @@ function SessionCard({
   booking: b,
   isPast,
   isNext,
+  pendingReschedule,
 }: {
   booking: BookingRow;
   isPast: boolean;
   isNext: boolean;
+  pendingReschedule: RescheduleRequest | null;
 }) {
   const d = new Date(b.start_time);
   const trainerName = b.trainer?.profile?.display_name ?? "Trener";
@@ -216,13 +231,29 @@ function SessionCard({
         </div>
 
         {!isPast && !cancelled ? (
-          <div className="mt-2 flex gap-1.5">
+          <div className="mt-2 flex gap-1.5 flex-wrap">
             <Link
-              href="/account/messages"
+              href={`/account/messages?with=${b.trainer_id}`}
               className="px-2.5 py-1 rounded-[7px] text-[11px] font-medium bg-slate-900 text-white hover:bg-black transition"
             >
               Otwórz
             </Link>
+            {pendingReschedule ? (
+              <Link
+                href={`/account/messages?with=${b.trainer_id}`}
+                className="px-2.5 py-1 rounded-[7px] text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200"
+              >
+                Czeka na zmianę
+              </Link>
+            ) : (
+              <RescheduleDialog
+                bookingId={b.id}
+                trainerId={b.trainer_id}
+                currentStartIso={b.start_time}
+                durationMin={b.service?.duration ?? 60}
+                triggerLabel="Przenieś"
+              />
+            )}
             <form action={cancelMyBooking}>
               <input type="hidden" name="booking_id" value={b.id} />
               <button

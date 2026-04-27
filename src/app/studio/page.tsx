@@ -39,6 +39,22 @@ export default async function StudioHome() {
     .eq("trainer_id", user.id)
     .eq("status", "pending");
 
+  // Pending reschedule requests where I'm the OTHER party (i.e. proposed by the client).
+  // Done in two steps: count proposals where requested_by != me but the booking is mine.
+  // Postgrest can't filter on a joined column, so we pull pending request booking_ids and intersect.
+  const { data: myBookingIds } = await supabase
+    .from("bookings")
+    .select("id")
+    .eq("trainer_id", user.id);
+  const bookingIdSet = new Set((myBookingIds ?? []).map((r) => r.id as string));
+  const { data: pendingResRows } = await supabase
+    .from("reschedule_requests")
+    .select("booking_id, requested_by")
+    .eq("status", "pending");
+  const pendingReschedulesNeedingMe = (pendingResRows ?? []).filter(
+    (r) => bookingIdSet.has(r.booking_id as string) && r.requested_by !== user.id,
+  ).length;
+
   const { count: todayCount } = await supabase
     .from("bookings")
     .select("id", { count: "exact", head: true })
@@ -103,6 +119,16 @@ export default async function StudioHome() {
         <Stat label="Sesje w tym tygodniu" value={weekCount ?? 0} tone="slate" />
         <Stat label="Zarobek tygodnia" value={`${weekEarnings} zł`} tone="slate" />
       </section>
+
+      {pendingReschedulesNeedingMe > 0 && (
+        <Link
+          href="/studio/messages"
+          className="block mb-8 px-5 py-3.5 rounded-[12px] border border-amber-200 bg-amber-50 text-amber-900 hover:border-amber-400 transition"
+        >
+          <strong className="font-semibold">{pendingReschedulesNeedingMe}</strong>{" "}
+          {pendingReschedulesNeedingMe === 1 ? "klient czeka" : "klientów czeka"} na Twoją odpowiedź w sprawie zmiany terminu →
+        </Link>
+      )}
 
       <section className="mb-10">
         <div className="flex items-center justify-between mb-4">

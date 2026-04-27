@@ -2,7 +2,9 @@ import Link from "next/link";
 import { requireClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getFavoriteTrainersBrief } from "@/lib/db/favorites";
+import { getPendingRescheduleForBooking } from "@/lib/db/reschedule";
 import { getSpecLabel } from "@/data/specializations";
+import RescheduleDialog from "@/components/RescheduleDialog";
 
 // ----- Mock data: features without backend tables yet. See
 // project_account_dashboard_followups memory for the migration list. -----
@@ -56,6 +58,7 @@ function fmtRelative(iso: string) {
 
 type BookingRow = {
   id: string;
+  trainer_id: string;
   start_time: string;
   end_time: string;
   status: string;
@@ -86,7 +89,7 @@ export default async function AccountDashboardPage() {
   const { data: yearBookingsRaw } = await supabase
     .from("bookings")
     .select(`
-      id, start_time, end_time, status, price, created_at, package_id,
+      id, trainer_id, start_time, end_time, status, price, created_at, package_id,
       service:services ( name, duration ),
       package:packages ( name ),
       trainer:trainers!trainer_id (
@@ -135,6 +138,7 @@ export default async function AccountDashboardPage() {
     .slice(0, 4);
   const next = upcoming[0];
   const otherUpcoming = upcoming.slice(1, 4);
+  const nextPendingReschedule = next ? await getPendingRescheduleForBooking(next.id) : null;
 
   // Activity feed — last 4 events derived from bookings
   const activity = [...yearBookings]
@@ -275,9 +279,26 @@ export default async function AccountDashboardPage() {
                     </div>
                   </div>
                 </div>
-                <div className="flex gap-1.5 shrink-0">
+                <div className="flex gap-1.5 shrink-0 flex-wrap justify-end">
+                  {nextPendingReschedule ? (
+                    <Link
+                      href={`/account/messages?with=${next.trainer_id}`}
+                      className="px-3 py-2 rounded-lg text-[12.5px] font-medium bg-amber-50 text-amber-800 border border-amber-200"
+                    >
+                      Czeka na zmianę
+                    </Link>
+                  ) : (
+                    <RescheduleDialog
+                      bookingId={next.id}
+                      trainerId={next.trainer_id}
+                      currentStartIso={next.start_time}
+                      durationMin={next.service?.duration ?? 60}
+                      triggerLabel="Przenieś"
+                      triggerClassName="px-3 py-2 rounded-lg text-[12.5px] font-medium bg-white text-slate-700 border border-slate-200 hover:border-slate-400 transition"
+                    />
+                  )}
                   <Link
-                    href="/account/messages"
+                    href={`/account/messages?with=${next.trainer_id}`}
                     className="px-3.5 py-2 rounded-lg text-[12.5px] font-medium bg-slate-900 text-white hover:bg-black transition"
                   >
                     Otwórz czat

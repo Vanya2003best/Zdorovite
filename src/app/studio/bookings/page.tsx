@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getPendingRescheduleMap, type RescheduleRequest } from "@/lib/db/reschedule";
+import RescheduleDialog from "@/components/RescheduleDialog";
 import {
   cancelAsTrainer,
   confirmBooking,
@@ -10,6 +12,7 @@ import {
 
 type BookingRow = {
   id: string;
+  client_id: string;
   start_time: string;
   end_time: string;
   status: string;
@@ -28,7 +31,7 @@ export default async function TrainerBookingsPage() {
   const { data, error } = await supabase
     .from("bookings")
     .select(`
-      id, start_time, end_time, status, price, note,
+      id, client_id, start_time, end_time, status, price, note,
       service:services ( name, duration ),
       client:profiles!client_id ( display_name, avatar_url )
     `)
@@ -37,6 +40,10 @@ export default async function TrainerBookingsPage() {
 
   if (error) throw error;
   const bookings = (data ?? []) as unknown as BookingRow[];
+
+  // Pending reschedule requests across all bookings.
+  const pendingResMap = await getPendingRescheduleMap(bookings.map((b) => b.id));
+  const trainerId = user.id;
 
   const now = new Date();
   const pending = bookings.filter((b) => b.status === "pending");
@@ -68,7 +75,13 @@ export default async function TrainerBookingsPage() {
           </h2>
           <div className="grid gap-3">
             {pending.map((b) => (
-              <TrainerBookingCard key={b.id} booking={b} view="pending" />
+              <TrainerBookingCard
+                key={b.id}
+                booking={b}
+                view="pending"
+                trainerId={trainerId}
+                pendingReschedule={pendingResMap.get(b.id) ?? null}
+              />
             ))}
           </div>
         </section>
@@ -81,7 +94,13 @@ export default async function TrainerBookingsPage() {
           </h2>
           <div className="grid gap-3">
             {upcoming.map((b) => (
-              <TrainerBookingCard key={b.id} booking={b} view="upcoming" />
+              <TrainerBookingCard
+                key={b.id}
+                booking={b}
+                view="upcoming"
+                trainerId={trainerId}
+                pendingReschedule={pendingResMap.get(b.id) ?? null}
+              />
             ))}
           </div>
         </section>
@@ -94,7 +113,13 @@ export default async function TrainerBookingsPage() {
           </h2>
           <div className="grid gap-3">
             {past.slice(0, 50).map((b) => (
-              <TrainerBookingCard key={b.id} booking={b} view="past" />
+              <TrainerBookingCard
+                key={b.id}
+                booking={b}
+                view="past"
+                trainerId={trainerId}
+                pendingReschedule={null}
+              />
             ))}
           </div>
         </section>
@@ -136,9 +161,13 @@ function Stat({
 function TrainerBookingCard({
   booking: b,
   view,
+  trainerId,
+  pendingReschedule,
 }: {
   booking: BookingRow;
   view: "pending" | "upcoming" | "past";
+  trainerId: string;
+  pendingReschedule: RescheduleRequest | null;
 }) {
   const date = new Date(b.start_time);
   const dateStr = date.toLocaleDateString("pl-PL", {
@@ -198,12 +227,31 @@ function TrainerBookingCard({
           )}
 
           {view === "upcoming" && !isCancelled && (
-            <form action={cancelAsTrainer}>
-              <input type="hidden" name="booking_id" value={b.id} />
-              <button className="h-9 px-3.5 rounded-lg border border-slate-200 text-[13px] font-medium text-slate-700 hover:border-red-400 hover:text-red-600 transition">
-                Anuluj
-              </button>
-            </form>
+            <>
+              {pendingReschedule ? (
+                <Link
+                  href={`/studio/messages?with=${b.client_id}`}
+                  className="h-9 inline-flex items-center px-3.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-[13px] font-medium"
+                >
+                  Czeka na zmianę
+                </Link>
+              ) : (
+                <RescheduleDialog
+                  bookingId={b.id}
+                  trainerId={trainerId}
+                  currentStartIso={b.start_time}
+                  durationMin={b.service?.duration ?? 60}
+                  triggerLabel="Przenieś"
+                  triggerClassName="h-9 px-3.5 rounded-lg border border-slate-200 text-[13px] font-medium text-slate-700 hover:border-slate-400 transition inline-flex items-center"
+                />
+              )}
+              <form action={cancelAsTrainer}>
+                <input type="hidden" name="booking_id" value={b.id} />
+                <button className="h-9 px-3.5 rounded-lg border border-slate-200 text-[13px] font-medium text-slate-700 hover:border-red-400 hover:text-red-600 transition">
+                  Anuluj
+                </button>
+              </form>
+            </>
           )}
 
           {view === "past" && hasStarted && !isCancelled && !isCompleted && (
