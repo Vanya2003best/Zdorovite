@@ -2,7 +2,12 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import {
+  getRecentNotifications,
+  getUnreadNotificationCount,
+} from "@/lib/db/notifications";
 import MessagesBadge from "./MessagesBadge";
+import NotificationsBell from "./NotificationsBell";
 
 type NavItem = {
   href: string;
@@ -68,14 +73,22 @@ export default async function AccountLayout({ children }: { children: React.Reac
   // then keeps itself in sync via Supabase realtime (INSERT/UPDATE on messages).
   let unreadMessages = 0;
   const myId = cu?.user.id;
+  let recentNotifs: Awaited<ReturnType<typeof getRecentNotifications>> = [];
+  let unreadNotifs = 0;
   if (myId) {
     const supabase = await createClient();
-    const { count } = await supabase
-      .from("messages")
-      .select("id", { count: "exact", head: true })
-      .eq("to_id", myId)
-      .is("read_at", null);
+    const [{ count }, notifs, unreadN] = await Promise.all([
+      supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .eq("to_id", myId)
+        .is("read_at", null),
+      getRecentNotifications(myId, 12),
+      getUnreadNotificationCount(myId),
+    ]);
     unreadMessages = count ?? 0;
+    recentNotifs = notifs;
+    unreadNotifs = unreadN;
   }
 
   return (
@@ -132,21 +145,14 @@ export default async function AccountLayout({ children }: { children: React.Reac
             Szukaj trenera, sesji…
           </div>
 
-          {/* Notifications — for now the bell mirrors unread messages
-              (no separate notifications table yet). */}
-          <Link
-            href="/account/messages"
-            aria-label="Powiadomienia"
-            className="relative w-9 h-9 rounded-[11px] md:rounded-[9px] bg-slate-100 md:bg-white md:border md:border-slate-200 inline-flex items-center justify-center text-slate-700 md:hover:border-slate-400 transition"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 01-3.46 0" />
-            </svg>
-            {myId && (
-              <MessagesBadge initialCount={unreadMessages} myId={myId} variant="dot" />
-            )}
-          </Link>
+          {/* Notifications */}
+          {myId && (
+            <NotificationsBell
+              myId={myId}
+              initialNotifications={recentNotifs}
+              initialUnreadCount={unreadNotifs}
+            />
+          )}
 
           {/* Avatar — pill on desktop, square on mobile */}
           <Link

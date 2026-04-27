@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getPendingRescheduleMap, type RescheduleRequest } from "@/lib/db/reschedule";
 import RescheduleDialog from "@/components/RescheduleDialog";
+import CancelWithReasonButton from "./CancelWithReasonButton";
 import {
   cancelAsTrainer,
   confirmBooking,
@@ -245,12 +246,7 @@ function TrainerBookingCard({
                   triggerClassName="h-9 px-3.5 rounded-lg border border-slate-200 text-[13px] font-medium text-slate-700 hover:border-slate-400 transition inline-flex items-center"
                 />
               )}
-              <form action={cancelAsTrainer}>
-                <input type="hidden" name="booking_id" value={b.id} />
-                <button className="h-9 px-3.5 rounded-lg border border-slate-200 text-[13px] font-medium text-slate-700 hover:border-red-400 hover:text-red-600 transition">
-                  Anuluj
-                </button>
-              </form>
+              <CancelWithReasonButton bookingId={b.id} />
             </>
           )}
 

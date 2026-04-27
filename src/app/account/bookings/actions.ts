@@ -2,6 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { notify } from "@/lib/server/notify";
+
+function fmtWhen(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString("pl-PL", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export async function cancelMyBooking(formData: FormData): Promise<void> {
   const bookingId = String(formData.get("booking_id") ?? "");
@@ -13,7 +25,7 @@ export async function cancelMyBooking(formData: FormData): Promise<void> {
 
   const { data: booking } = await supabase
     .from("bookings")
-    .select("client_id, start_time, status")
+    .select("client_id, trainer_id, start_time, status")
     .eq("id", bookingId)
     .single();
 
@@ -28,4 +40,20 @@ export async function cancelMyBooking(formData: FormData): Promise<void> {
     .eq("id", bookingId);
 
   revalidatePath("/account/bookings");
+  revalidatePath("/account");
+  revalidatePath("/studio/bookings");
+
+  // Tell the trainer.
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("display_name")
+    .eq("id", user.id)
+    .maybeSingle();
+  await notify.bookingCancelled({
+    to: booking.trainer_id,
+    actorName: profile?.display_name ?? "Klient",
+    whenLabel: fmtWhen(booking.start_time),
+    bookingId,
+    link: "/studio/bookings",
+  });
 }

@@ -2,8 +2,32 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { notify } from "@/lib/server/notify";
 
 export type ActionResult = { ok: true } | { error: string };
+
+/** Format an ISO timestamp as Polish-locale "Pią 17 IV · 15:30" for notification bodies. */
+function fmtWhen(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString("pl-PL", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+async function nameFor(supabase: Awaited<ReturnType<typeof createClient>>, userId: string): Promise<string> {
+  const { data } = await supabase.from("profiles").select("display_name").eq("id", userId).maybeSingle();
+  return data?.display_name ?? "Użytkownik";
+}
+
+/** Pick the chat thread link for a notification recipient, given who they are. */
+function chatLinkFor(recipientId: string, otherId: string, recipientIsTrainer: boolean): string {
+  const base = recipientIsTrainer ? "/studio/messages" : "/account/messages";
+  return `${base}?with=${otherId}`;
+}
 
 /**
  * Helper — turn the new proposed_start (a Warsaw-local "YYYY-MM-DDTHH:mm" string
@@ -113,6 +137,16 @@ export async function requestReschedule(input: {
     return { error: msgErr.message };
   }
 
+  const fromName = await nameFor(supabase, user.id);
+  const recipientIsTrainer = otherId === booking.trainer_id;
+  await notify.reschedulePropose({
+    to: otherId,
+    fromName,
+    proposedLabel: fmtWhen(proposedStart),
+    rescheduleId: created.id,
+    link: chatLinkFor(otherId, user.id, recipientIsTrainer),
+  });
+
   await paths(bookingId);
   return { ok: true };
 }
@@ -203,6 +237,17 @@ export async function acceptReschedule(requestId: string): Promise<ActionResult>
     reschedule_request_id: req.id,
   });
 
+  // 4. Notification to the requester.
+  const otherName = await nameFor(supabase, user.id);
+  const requesterIsTrainer = req.requested_by === booking.trainer_id;
+  await notify.rescheduleAccepted({
+    to: req.requested_by,
+    otherName,
+    proposedLabel: fmtWhen(req.proposed_start),
+    rescheduleId: req.id,
+    link: chatLinkFor(req.requested_by, user.id, requesterIsTrainer),
+  });
+
   await paths(req.booking_id);
   return { ok: true };
 }
@@ -248,6 +293,15 @@ export async function declineReschedule(requestId: string): Promise<ActionResult
       text: "✗ Propozycja zmiany terminu odrzucona",
       message_type: "reschedule_response",
       reschedule_request_id: req.id,
+    });
+
+    const otherName = await nameFor(supabase, user.id);
+    const requesterIsTrainer = req.requested_by === booking.trainer_id;
+    await notify.rescheduleDeclined({
+      to: req.requested_by,
+      otherName,
+      rescheduleId: req.id,
+      link: chatLinkFor(req.requested_by, user.id, requesterIsTrainer),
     });
   }
 

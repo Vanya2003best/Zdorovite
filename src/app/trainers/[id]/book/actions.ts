@@ -3,6 +3,17 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { notify } from "@/lib/server/notify";
+
+function fmtWhen(iso: string): string {
+  return new Date(iso).toLocaleString("pl-PL", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export type BookingState =
   | { error: string }
@@ -73,5 +84,20 @@ export async function createBooking(
 
   revalidatePath(`/trainers/${trainerSlug}`);
   revalidatePath("/account/bookings");
+  revalidatePath("/studio/bookings");
+
+  // Notify the trainer about the new booking.
+  const { data: clientProfile } = await supabase
+    .from("profiles")
+    .select("display_name")
+    .eq("id", user!.id)
+    .maybeSingle();
+  await notify.bookingRequested({
+    trainerId: trainer.id,
+    clientName: clientProfile?.display_name ?? "Klient",
+    whenLabel: fmtWhen(startDate.toISOString()),
+    bookingId: booking!.id,
+  });
+
   redirect(`/trainers/${trainerSlug}/book/success?id=${booking!.id}`);
 }
