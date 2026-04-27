@@ -153,11 +153,9 @@ export default async function StudioHome() {
       <section>
         <h2 className="text-lg font-semibold tracking-tight mb-4">Szybkie akcje</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <QuickLink href="/studio/profile"      icon="👤" label="Edytuj mój profil" />
-          <QuickLink href="/studio/services"     icon="⚡" label="Dodaj usługę" />
-          <QuickLink href="/studio/packages"     icon="📦" label="Stwórz pakiet" />
-          <QuickLink href="/studio/availability" icon="🕒" label="Ustaw godziny pracy" />
-          <QuickLink href="/studio/design"       icon="🎨" label="Zmień wygląd profilu" />
+          <QuickLink href="/studio/design"       icon="🎨" label="Edytuj profil" />
+          <QuickLink href="/studio/bookings"     icon="📅" label="Rezerwacje" />
+          <QuickLink href="/studio/messages"     icon="💬" label="Wiadomości" />
           {trainer?.slug && (
             <QuickLink href={`/trainers/${trainer.slug}`} icon="🌐" label="Strona publiczna" external />
           )}

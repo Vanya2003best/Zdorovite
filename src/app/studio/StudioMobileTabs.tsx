@@ -26,18 +26,11 @@ const ChatIcon = (
     <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
   </svg>
 );
-const BoltIcon = (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" />
-  </svg>
-);
-
 const TABS = [
   { href: "/studio",          label: "Pulpit",     match: (p: string) => p === "/studio",           icon: HomeIcon, hasUnread: false },
   { href: "/studio/bookings", label: "Rezerwacje", match: (p: string) => p.startsWith("/studio/bookings"), icon: CalIcon,  hasUnread: false },
-  { href: "/studio/design",   label: "Edytor",     match: (p: string) => p.startsWith("/studio/design") || p.startsWith("/studio/profile"), icon: PaintIcon, hasUnread: false },
+  { href: "/studio/design",   label: "Profil",     match: (p: string) => p.startsWith("/studio/design") || p.startsWith("/studio/profile"), icon: PaintIcon, hasUnread: false },
   { href: "/studio/messages", label: "Czat",       match: (p: string) => p.startsWith("/studio/messages"), icon: ChatIcon, hasUnread: true },
-  { href: "/studio/services", label: "Oferta",     match: (p: string) => p.startsWith("/studio/services") || p.startsWith("/studio/packages") || p.startsWith("/studio/availability"), icon: BoltIcon, hasUnread: false },
 ];
 
 export default function StudioMobileTabs({
@@ -51,7 +44,7 @@ export default function StudioMobileTabs({
   return (
     <nav
       aria-label="Nawigacja Studio"
-      className="sm:hidden fixed bottom-0 left-0 right-0 z-50 h-[84px] grid grid-cols-5 pt-1.5 pb-[18px] bg-white/[0.94] backdrop-blur-xl border-t border-slate-200"
+      className="sm:hidden fixed bottom-0 left-0 right-0 z-50 h-[84px] grid grid-cols-4 pt-1.5 pb-[18px] bg-white/[0.94] backdrop-blur-xl border-t border-slate-200"
     >
       {TABS.map((t) => {
         const active = t.match(pathname);

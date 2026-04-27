@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { ProfileCustomization, SectionId, TemplateName } from "@/types";
 import EditorClient from "./EditorClient";
+import type { DayRule } from "@/app/studio/availability/page";
 
 const SECTION_IDS: SectionId[] = ["about", "services", "packages", "gallery", "certifications", "reviews"];
 
@@ -80,6 +81,7 @@ export default async function DesignDashboard() {
     { count: certificationsCountRaw },
     { data: services },
     { data: packages },
+    { data: availabilityRules },
   ] = await Promise.all([
     supabase.from("services").select("id", { count: "exact", head: true }).eq("trainer_id", user.id),
     supabase.from("packages").select("id", { count: "exact", head: true }).eq("trainer_id", user.id),
@@ -89,7 +91,18 @@ export default async function DesignDashboard() {
     supabase.from("certifications").select("id", { count: "exact", head: true }).eq("trainer_id", user.id),
     supabase.from("services").select("id, name, description, price, duration, position").eq("trainer_id", user.id).order("position"),
     supabase.from("packages").select("id, name, description, items, price, period, featured, position").eq("trainer_id", user.id).order("position"),
+    supabase.from("availability_rules").select("day_of_week, start_time, end_time").eq("trainer_id", user.id),
   ]);
+
+  const availabilityByDow: Record<number, DayRule | null> = {
+    0: null, 1: null, 2: null, 3: null, 4: null, 5: null, 6: null,
+  };
+  (availabilityRules ?? []).forEach((r) => {
+    availabilityByDow[r.day_of_week] = {
+      start: String(r.start_time).slice(0, 5),
+      end: String(r.end_time).slice(0, 5),
+    };
+  });
 
   const galleryCount = galleryCountRaw ?? 0;
   const certificationsCount = certificationsCountRaw ?? 0;
@@ -139,6 +152,7 @@ export default async function DesignDashboard() {
       initial={initial}
       completion={completion}
       counts={counts}
+      availabilityByDow={availabilityByDow}
       preview={{
         avatarUrl: profile?.avatar_url ?? null,
         coverImage: trainer.cover_image ?? null,

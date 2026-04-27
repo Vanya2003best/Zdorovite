@@ -8,6 +8,8 @@ import { togglePublished } from "@/app/trainers/[id]/edit-actions";
 import EditableText from "@/components/EditableText";
 import InlineServicesEditor from "@/app/trainers/[id]/InlineServicesEditor";
 import InlinePackagesEditor from "@/app/trainers/[id]/InlinePackagesEditor";
+import AvailabilityEditor from "@/app/studio/availability/AvailabilityEditor";
+import type { DayRule } from "@/app/studio/availability/page";
 import ImageUpload from "./ImageUpload";
 import { templates } from "@/data/templates";
 
@@ -33,6 +35,7 @@ type Props = {
   initial: ProfileCustomization;
   completion: { pct: number; tip: string };
   counts: Partial<Record<SectionId, number>>;
+  availabilityByDow: Record<number, DayRule | null>;
   preview: PreviewData;
 };
 
@@ -81,7 +84,7 @@ const ACCENT_LABEL_BY_HEX: Record<string, string> = {
   "#ec4899": "Pink", "#f97316": "Orange", "#f59e0b": "Amber",
 };
 
-export default function EditorClient({ slug, trainerName, published, initial, completion, counts, preview }: Props) {
+export default function EditorClient({ slug, trainerName, published, initial, completion, counts, availabilityByDow, preview }: Props) {
   const [template, setTemplate] = useState<TemplateName>(initial.template);
   const [accentColor, setAccentColor] = useState(initial.accentColor);
   const [sections, setSections] = useState(initial.sections);
@@ -321,6 +324,12 @@ export default function EditorClient({ slug, trainerName, published, initial, co
                 );
               })}
             </ul>
+          </div>
+
+          {/* Godziny pracy — moved here from the standalone /studio/availability page. */}
+          <div className="px-5 pt-5 pb-6">
+            <h3 className="text-[11px] uppercase tracking-[0.08em] font-semibold text-slate-500 mb-3">Godziny pracy</h3>
+            <AvailabilityEditor initialByDow={availabilityByDow} />
           </div>
 
         </aside>

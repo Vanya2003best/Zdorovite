@@ -91,27 +91,6 @@ export const STUDIO_NAV: StudioNavItem[] = [
     hasUnreadBadge: true,
   },
   {
-    href: "/studio/services",
-    label: "Usługi",
-    description: "Pojedyncze sesje",
-    icon: BoltIcon,
-    match: (p) => p.startsWith("/studio/services"),
-  },
-  {
-    href: "/studio/packages",
-    label: "Pakiety",
-    description: "Programy długoterminowe",
-    icon: PackageIcon,
-    match: (p) => p.startsWith("/studio/packages"),
-  },
-  {
-    href: "/studio/availability",
-    label: "Dostępność",
-    description: "Godziny pracy",
-    icon: ClockIcon,
-    match: (p) => p.startsWith("/studio/availability"),
-  },
-  {
     href: "#",
     label: "Opinie",
     description: "Wkrótce",
