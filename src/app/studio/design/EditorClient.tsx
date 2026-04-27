@@ -10,6 +10,7 @@ import InlineServicesEditor from "@/app/trainers/[id]/InlineServicesEditor";
 import InlinePackagesEditor from "@/app/trainers/[id]/InlinePackagesEditor";
 import ImageUpload from "./ImageUpload";
 import { templates } from "@/data/templates";
+import StudioNavMenu from "../StudioNavMenu";
 
 type PreviewService = { id: string; name: string; description: string; price: number; duration: number };
 type PreviewPackage = { id: string; name: string; description: string; items: string[]; price: number; period?: string; featured: boolean };
@@ -141,19 +142,21 @@ export default function EditorClient({ slug, trainerName, published, initial, co
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-100 flex flex-col overflow-hidden">
-      {/* ===== TOP BAR — 56px ===== */}
-      <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-5 shrink-0">
-        <div className="flex items-center gap-5 min-w-0">
-          <Link href="/studio" className="inline-flex items-center gap-2 shrink-0" title="Wróć do Studio">
-            <span className="w-7 h-7 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 inline-flex items-center justify-center text-white font-bold text-sm shadow-[0_10px_30px_rgba(16,185,129,0.18)]">N</span>
-            <span className="font-bold tracking-tight text-[15px] hidden sm:inline">NaZdrow!</span>
-          </Link>
-          <div className="hidden sm:flex items-center gap-1.5 text-[13px] text-slate-500 min-w-0">
-            <span>Edytor profilu</span>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6" /></svg>
-            <strong className="text-slate-900 font-semibold truncate">{trainerName}</strong>
+      {/* ===== TOP BAR — 56px. Brand+breadcrumb replaced with a single
+          menu button → drawer with all studio sections (Pulpit, Rezerwacje,
+          Wiadomości, Usługi, Pakiety, Dostępność, Strona publiczna, Wyloguj).
+          The editor IS the trainer's home; everything else lives behind the menu. */}
+      <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-5 shrink-0 gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <StudioNavMenu
+            trainerSlug={slug}
+            trainerName={trainerName}
+            avatarUrl={preview.avatarUrl}
+          />
+          <div className="hidden md:flex items-center gap-1.5 text-[13px] text-slate-500 min-w-0">
+            <strong className="text-slate-900 font-semibold tracking-[-0.01em] truncate">Mój profil</strong>
           </div>
-          <span className="hidden md:inline-flex items-center gap-1.5 text-[12px] text-slate-500 shrink-0">
+          <span className="hidden lg:inline-flex items-center gap-1.5 text-[12px] text-slate-500 shrink-0">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             Zapisano · {savedAgo}
           </span>
