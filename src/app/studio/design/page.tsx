@@ -2,6 +2,10 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { ProfileCustomization, SectionId, TemplateName } from "@/types";
+import {
+  getRecentNotifications,
+  getUnreadNotificationCount,
+} from "@/lib/db/notifications";
 import EditorClient from "./EditorClient";
 import type { DayRule } from "@/app/studio/availability/page";
 
@@ -104,6 +108,12 @@ export default async function DesignDashboard() {
     };
   });
 
+  // Notifications for the editor's own top bar (the layout's TopBar is hidden on /studio/design).
+  const [recentNotifs, unreadNotifs] = await Promise.all([
+    getRecentNotifications(user.id, 12),
+    getUnreadNotificationCount(user.id),
+  ]);
+
   const galleryCount = galleryCountRaw ?? 0;
   const certificationsCount = certificationsCountRaw ?? 0;
 
@@ -147,12 +157,14 @@ export default async function DesignDashboard() {
   return (
     <EditorClient
       slug={trainer.slug}
+      trainerId={user.id}
       trainerName={profile?.display_name ?? "Twój profil"}
       published={!!trainer.published}
       initial={initial}
       completion={completion}
       counts={counts}
       availabilityByDow={availabilityByDow}
+      notifications={{ recent: recentNotifs, unread: unreadNotifs }}
       preview={{
         avatarUrl: profile?.avatar_url ?? null,
         coverImage: trainer.cover_image ?? null,

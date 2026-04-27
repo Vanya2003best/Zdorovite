@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import StudioMobileTabs from "./StudioMobileTabs";
 import StudioSidebar from "./StudioSidebar";
 import StudioTopBar from "./StudioTopBar";
+import StudioTopBarSlot from "./StudioTopBarSlot";
 
 /**
  * Studio = trainer-only ecosystem.
@@ -45,12 +46,14 @@ export default async function StudioLayout({
       />
 
       <div className="lg:ml-[280px] flex flex-col min-h-screen">
-        <StudioTopBar
-          trainerId={user.id}
-          trainerSlug={trainer?.slug ?? null}
-          trainerName={profile.display_name}
-          avatarUrl={profile.avatar_url}
-        />
+        <StudioTopBarSlot>
+          <StudioTopBar
+            trainerId={user.id}
+            trainerSlug={trainer?.slug ?? null}
+            trainerName={profile.display_name}
+            avatarUrl={profile.avatar_url}
+          />
+        </StudioTopBarSlot>
 
         <main className="flex-1 pb-24 lg:pb-8">
           {children}

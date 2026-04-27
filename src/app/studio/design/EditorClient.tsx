@@ -12,6 +12,9 @@ import AvailabilityEditor from "@/app/studio/availability/AvailabilityEditor";
 import type { DayRule } from "@/app/studio/availability/page";
 import ImageUpload from "./ImageUpload";
 import { templates } from "@/data/templates";
+import StudioNavMenu from "../StudioNavMenu";
+import NotificationsBell from "@/components/NotificationsBell";
+import type { Notification } from "@/lib/db/notifications";
 
 type PreviewService = { id: string; name: string; description: string; price: number; duration: number };
 type PreviewPackage = { id: string; name: string; description: string; items: string[]; price: number; period?: string; featured: boolean };
@@ -30,12 +33,14 @@ type PreviewData = {
 
 type Props = {
   slug: string;
+  trainerId: string;
   trainerName: string;
   published: boolean;
   initial: ProfileCustomization;
   completion: { pct: number; tip: string };
   counts: Partial<Record<SectionId, number>>;
   availabilityByDow: Record<number, DayRule | null>;
+  notifications: { recent: Notification[]; unread: number };
   preview: PreviewData;
 };
 
@@ -84,7 +89,7 @@ const ACCENT_LABEL_BY_HEX: Record<string, string> = {
   "#ec4899": "Pink", "#f97316": "Orange", "#f59e0b": "Amber",
 };
 
-export default function EditorClient({ slug, trainerName, published, initial, completion, counts, availabilityByDow, preview }: Props) {
+export default function EditorClient({ slug, trainerId, trainerName, published, initial, completion, counts, availabilityByDow, notifications, preview }: Props) {
   const [template, setTemplate] = useState<TemplateName>(initial.template);
   const [accentColor, setAccentColor] = useState(initial.accentColor);
   const [sections, setSections] = useState(initial.sections);
@@ -144,14 +149,25 @@ export default function EditorClient({ slug, trainerName, published, initial, co
 
   return (
     <div className="flex flex-col bg-slate-100 min-h-[calc(100vh-56px-84px)] lg:min-h-[calc(100vh-56px)]">
-      {/* ===== EDITOR ACTION BAR — saved-status + viewport toggle + publish.
-          Brand/menu chrome lives in the layout's StudioSidebar/TopBar. */}
-      <div className="bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-5 py-2.5 gap-3 shrink-0">
-        <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-500">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-          Zapisano · {savedAgo}
-        </span>
-        <div className="flex items-center gap-2">
+      {/* ===== EDITOR TOP BAR — replaces the layout's StudioTopBar on /studio/design.
+          Same h-14 chrome as everywhere else, but the right side carries
+          editor-specific actions (viewport toggle / Podgląd / Opublikuj)
+          alongside the notification bell. The layout's TopBar is hidden
+          on this route via StudioTopBarSlot. */}
+      <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-5 sticky top-0 z-30 gap-3 shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="lg:hidden">
+            <StudioNavMenu trainerSlug={slug} trainerName={trainerName} avatarUrl={preview.avatarUrl} />
+          </div>
+          <strong className="text-[14px] sm:text-[15px] font-semibold tracking-[-0.01em] truncate">
+            Mój profil
+          </strong>
+          <span className="hidden md:inline-flex items-center gap-1.5 text-[12px] text-slate-500 shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            Zapisano · {savedAgo}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
           <div className="hidden sm:inline-flex bg-slate-100 rounded-[9px] p-[3px] gap-[2px]">
             {(["desktop", "mobile"] as const).map((v) => (
               <button
@@ -186,8 +202,14 @@ export default function EditorClient({ slug, trainerName, published, initial, co
           >
             {pubPending ? "..." : published ? "Cofnij publikację" : "Opublikuj"}
           </button>
+          <NotificationsBell
+            myId={trainerId}
+            initialNotifications={notifications.recent}
+            initialUnreadCount={notifications.unread}
+            messagesLink="/studio/messages"
+          />
         </div>
-      </div>
+      </header>
 
       {/* ===== LAYOUT — preview LEFT, settings RIGHT (per user request) ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] flex-1 min-h-0">
