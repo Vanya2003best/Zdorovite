@@ -137,13 +137,13 @@ export default function EditorClient({ slug, trainerId, trainerName, published, 
 
 
   return (
-    <div className="flex flex-col bg-slate-100 min-h-[calc(100vh-56px-84px)] lg:min-h-[calc(100vh-56px)]">
+    <div className="flex flex-col bg-slate-100 h-[calc(100vh-96px)] lg:h-[calc(100vh-32px)] overflow-hidden">
       {/* ===== EDITOR TOP BAR — replaces the layout's StudioTopBar on /studio/design.
           Same h-14 chrome as everywhere else, but the right side carries
           editor-specific actions (viewport toggle / Podgląd / Opublikuj)
           alongside the notification bell. The layout's TopBar is hidden
           on this route via StudioTopBarSlot. */}
-      <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-5 sticky top-0 z-30 gap-3 shrink-0">
+      <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-5 z-30 gap-3 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <div className="lg:hidden">
             <StudioNavMenu trainerSlug={slug} trainerName={trainerName} avatarUrl={preview.avatarUrl} />
@@ -201,13 +201,13 @@ export default function EditorClient({ slug, trainerId, trainerName, published, 
       </header>
 
       {/* ===== LAYOUT — preview LEFT, settings RIGHT (per user request) ===== */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] flex-1 min-h-0">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] flex-1 min-h-0 overflow-hidden">
 
         {/* The settings aside is below in DOM order; CSS grid + lg:order
             classes flip them visually so preview renders LEFT on lg+. */}
 
         {/* ===== SETTINGS PANEL (visually on the right via lg:order-2) ===== */}
-        <aside className="bg-white lg:border-l lg:border-slate-200 border-b lg:border-b-0 border-slate-200 overflow-y-auto lg:order-2 max-h-[calc(100vh-56px-56px-84px)] lg:max-h-none">
+        <aside className="bg-white lg:border-l lg:border-slate-200 border-b lg:border-b-0 border-slate-200 overflow-y-auto lg:order-2 min-h-0">
           {/* Completion card — margin: 16px 20px 0 20px */}
           <div className="mt-4 mx-5 p-3.5 rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white">
             <div className="flex justify-between items-baseline">
