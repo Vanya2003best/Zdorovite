@@ -207,7 +207,7 @@ export default function EditorClient({ slug, trainerId, trainerName, published, 
             classes flip them visually so preview renders LEFT on lg+. */}
 
         {/* ===== SETTINGS PANEL (visually on the right via lg:order-2) ===== */}
-        <aside className="bg-white lg:border-l lg:border-slate-200 border-b lg:border-b-0 border-slate-200 overflow-y-auto lg:order-2 min-h-0">
+        <aside className="scrollbar-hide bg-white lg:border-l lg:border-slate-200 border-b lg:border-b-0 border-slate-200 overflow-y-auto lg:order-2 min-h-0">
           {/* Completion card — margin: 16px 20px 0 20px */}
           <div className="mt-4 mx-5 p-3.5 rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white">
             <div className="flex justify-between items-baseline">
@@ -347,7 +347,7 @@ export default function EditorClient({ slug, trainerId, trainerName, published, 
 
         {/* ===== PREVIEW CANVAS — visually LEFT (lg:order-1) ===== */}
         <section
-          className="relative overflow-y-auto lg:order-1"
+          className="scrollbar-hide relative overflow-y-auto lg:order-1"
           style={{
             backgroundColor: "#f8fafc",
             backgroundImage: "radial-gradient(circle at 15px 15px, #e2e8f0 1px, transparent 1px)",
