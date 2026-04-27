@@ -189,19 +189,8 @@ export default async function MessagesPage(props: {
     }
   }
 
-  // Average response time (placeholder until we track it): show "~ 28 min" style hint
-  const responseLabel = "~ 28 min";
-
   return (
     <div className="h-[calc(100vh-56px-84px)] lg:h-[calc(100vh-56px)] flex flex-col bg-white border-b border-slate-200 overflow-hidden">
-      {/* Top bar — only on desktop, matches design's slim chat top */}
-      <header className="hidden sm:flex h-12 px-5 items-center justify-between border-b border-slate-200 bg-white shrink-0">
-        <h1 className="text-[15px] font-semibold tracking-tight">Wiadomości</h1>
-        <span className="text-[12px] text-slate-500">
-          Czas odpowiedzi: <strong className="text-emerald-700">{responseLabel}</strong>
-        </span>
-      </header>
-
       <div className="grid sm:grid-cols-[320px_1fr] lg:grid-cols-[320px_1fr_320px] flex-1 min-h-0 overflow-hidden">
         {/* LEFT: thread list */}
         <ThreadList

@@ -26,12 +26,9 @@ export default async function ServicesDashboard() {
 
   return (
     <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10">
-      <header className="mb-6">
-        <h2 className="text-xl font-semibold tracking-tight">Usługi</h2>
-        <p className="text-sm text-slate-600 mt-1">
-          Pojedyncze sesje, które klienci mogą rezerwować. {list.length} {list.length === 1 ? "usługa" : "usług"}.
-        </p>
-      </header>
+      <p className="text-sm text-slate-600 mb-6">
+        Pojedyncze sesje, które klienci mogą rezerwować. {list.length} {list.length === 1 ? "usługa" : "usług"}.
+      </p>
 
       {/* Add new service */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 mb-6">

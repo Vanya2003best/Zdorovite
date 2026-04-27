@@ -24,12 +24,9 @@ export default async function AvailabilityDashboard() {
 
   return (
     <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10">
-      <header className="mb-6">
-        <h2 className="text-xl font-semibold tracking-tight">Godziny pracy</h2>
-        <p className="text-sm text-slate-600 mt-1">
-          Ustaw swoje godziny pracy dla każdego dnia tygodnia. Klienci zobaczą tylko te dni i godziny podczas rezerwacji.
-        </p>
-      </header>
+      <p className="text-sm text-slate-600 mb-6">
+        Ustaw swoje godziny pracy dla każdego dnia tygodnia. Klienci zobaczą tylko te dni i godziny podczas rezerwacji.
+      </p>
 
       <AvailabilityEditor initialByDow={byDow} />
     </div>

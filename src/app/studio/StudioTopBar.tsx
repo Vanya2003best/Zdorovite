@@ -1,4 +1,3 @@
-import Link from "next/link";
 import NotificationsBell from "@/components/NotificationsBell";
 import {
   getRecentNotifications,
@@ -47,19 +46,6 @@ export default async function StudioTopBar({
           initialUnreadCount={unreadNotifs}
           messagesLink="/studio/messages"
         />
-        {trainerSlug && (
-          <Link
-            href={`/trainers/${trainerSlug}`}
-            target="_blank"
-            aria-label="Strona publiczna"
-            className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 rounded-[10px] border border-slate-200 bg-white text-[13px] font-medium text-slate-700 hover:border-slate-400 transition"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
-            </svg>
-            Strona publiczna
-          </Link>
-        )}
         {/* Avatar only on mobile (sidebar shows it on desktop). */}
         <div className="lg:hidden">
           {avatarUrl ? (

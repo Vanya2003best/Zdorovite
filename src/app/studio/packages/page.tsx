@@ -29,12 +29,9 @@ export default async function PackagesDashboard() {
 
   return (
     <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10">
-      <header className="mb-6">
-        <h2 className="text-xl font-semibold tracking-tight">Pakiety</h2>
-        <p className="text-sm text-slate-600 mt-1">
-          Pakiety długoterminowe z serii sesji i dodatków. {list.length} {list.length === 1 ? "pakiet" : "pakietów"}. Tylko jeden pakiet może być wyróżniony jako &ldquo;Popularne&rdquo;.
-        </p>
-      </header>
+      <p className="text-sm text-slate-600 mb-6">
+        Pakiety długoterminowe z serii sesji i dodatków. {list.length} {list.length === 1 ? "pakiet" : "pakietów"}. Tylko jeden pakiet może być wyróżniony jako &ldquo;Popularne&rdquo;.
+      </p>
 
       {/* Add new package */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 mb-6">
