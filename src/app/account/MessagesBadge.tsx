@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type Props = {
@@ -23,6 +23,11 @@ type Props = {
  */
 export default function MessagesBadge({ initialCount, myId, variant }: Props) {
   const [count, setCount] = useState(initialCount);
+  // Unique per-instance id so multiple <MessagesBadge/> on the same page
+  // (e.g. desktop sidebar + mobile tab bar both subscribe) get distinct
+  // channels — Supabase realtime rejects adding `.on()` callbacks to a
+  // channel that's already been subscribed by another caller.
+  const instanceId = useId();
 
   // Re-sync when SSR initialCount changes (e.g. after navigation that revalidated).
   useEffect(() => {
@@ -32,7 +37,7 @@ export default function MessagesBadge({ initialCount, myId, variant }: Props) {
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
-      .channel(`unread:${myId}`)
+      .channel(`unread:${myId}:${instanceId}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages", filter: `to_id=eq.${myId}` },
@@ -54,7 +59,7 @@ export default function MessagesBadge({ initialCount, myId, variant }: Props) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [myId]);
+  }, [myId, instanceId]);
 
   if (count <= 0) return null;
 
