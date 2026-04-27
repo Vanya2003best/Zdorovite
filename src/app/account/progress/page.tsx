@@ -3,18 +3,10 @@ import { requireClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getGoals } from "@/lib/db/goals";
 import { getLatestWeight, getWeightLog, getYearStartWeight, type WeightPoint } from "@/lib/db/weight";
+import { getHealth } from "@/lib/db/health";
 import GoalsEditor from "./GoalsEditor";
 import WeightLogger from "./WeightLogger";
-
-// Health passport remains mock until its own migration lands. See project_account_dashboard_followups.
-const MOCK_HEALTH = {
-  note: "ACL prawego kolana, 9 mies. po op. Cel: czerwiec — bieganie.",
-  metrics: [
-    ["Wzrost", "182 cm"],
-    ["FMS", "14 / 21"],
-    ["Tętno spocz.", "62 bpm"],
-  ] as const,
-};
+import HealthEditor from "./HealthEditor";
 
 const PL_MONTH_SHORT = ["Sty", "Lut", "Mar", "Kwi", "Maj", "Cze", "Lip", "Sie", "Wrz", "Paź", "Lis", "Gru"];
 
@@ -108,11 +100,12 @@ export default async function ProgressPage() {
   const { user } = await requireClient("/account/progress");
   const supabase = await createClient();
 
-  const [goals, weightLog, latestWeight, yearStartWeight, rawActivity] = await Promise.all([
+  const [goals, weightLog, latestWeight, yearStartWeight, health, rawActivity] = await Promise.all([
     getGoals(user.id),
     getWeightLog(user.id, 60),
     getLatestWeight(user.id),
     getYearStartWeight(user.id),
+    getHealth(user.id),
     supabase
       .from("bookings")
       .select(`
@@ -220,28 +213,9 @@ export default async function ProgressPage() {
           <GoalsEditor initialGoals={goals} />
         </section>
 
-        {/* Paszport zdrowia — still mock until client_health migration. */}
+        {/* Paszport zdrowia — real, with editor */}
         <section className="bg-white border border-slate-200 rounded-[16px] p-4 md:p-5">
-          <div className="flex justify-between items-baseline mb-3">
-            <h2 className="text-[14px] font-semibold tracking-[-0.01em] m-0">Paszport zdrowia</h2>
-            <Link href="#" className="text-[11.5px] text-emerald-700 font-medium">Edytuj</Link>
-          </div>
-          <p className="text-xs text-slate-700 leading-relaxed mb-3">{MOCK_HEALTH.note}</p>
-          <div className="grid grid-cols-2 gap-1.5">
-            {/* Latest weight slot pulled from the real log; the rest stay mock. */}
-            <div className="px-2 py-1.5 bg-slate-50 rounded-[7px]">
-              <div className="text-[11px] text-slate-500">Waga</div>
-              <div className="text-xs font-semibold text-slate-900 mt-0.5">
-                {latestWeight ? fmtKg(latestWeight.weightKg) : "—"}
-              </div>
-            </div>
-            {MOCK_HEALTH.metrics.map(([label, value]) => (
-              <div key={label} className="px-2 py-1.5 bg-slate-50 rounded-[7px]">
-                <div className="text-[11px] text-slate-500">{label}</div>
-                <div className="text-xs font-semibold text-slate-900 mt-0.5">{value}</div>
-              </div>
-            ))}
-          </div>
+          <HealthEditor initial={health} latestWeightKg={latestWeight ? latestWeight.weightKg : null} />
         </section>
 
         {/* Ostatnia aktywność */}

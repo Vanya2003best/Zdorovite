@@ -29,6 +29,14 @@ function parseItems(raw: string): string[] {
     .slice(0, 15);
 }
 
+function parseSessionsTotal(raw: FormDataEntryValue | null): number | null {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+  const n = Number(s);
+  if (!Number.isFinite(n) || n <= 0 || n > 200) return null;
+  return Math.round(n);
+}
+
 export async function createPackage(formData: FormData): Promise<void> {
   const ctx = await trainerContext();
   if (!ctx) return;
@@ -39,6 +47,7 @@ export async function createPackage(formData: FormData): Promise<void> {
   const price = Math.max(0, Math.min(100000, Number(formData.get("price") ?? 0)));
   const period = String(formData.get("period") ?? "").trim() || null;
   const featured = formData.get("featured") === "on";
+  const sessionsTotal = parseSessionsTotal(formData.get("sessions_total"));
 
   if (!name || price <= 0 || items.length === 0) return;
 
@@ -66,6 +75,7 @@ export async function createPackage(formData: FormData): Promise<void> {
     price,
     period,
     featured,
+    sessions_total: sessionsTotal,
     position: nextPos,
   });
 
@@ -84,6 +94,7 @@ export async function updatePackage(formData: FormData): Promise<void> {
   const price = Math.max(0, Math.min(100000, Number(formData.get("price") ?? 0)));
   const period = String(formData.get("period") ?? "").trim() || null;
   const featured = formData.get("featured") === "on";
+  const sessionsTotal = parseSessionsTotal(formData.get("sessions_total"));
 
   if (!name || price <= 0 || items.length === 0) return;
 
@@ -97,7 +108,7 @@ export async function updatePackage(formData: FormData): Promise<void> {
 
   await ctx.supabase
     .from("packages")
-    .update({ name, description, items, price, period, featured })
+    .update({ name, description, items, price, period, featured, sessions_total: sessionsTotal })
     .eq("id", id)
     .eq("trainer_id", ctx.trainerId);
 

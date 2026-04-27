@@ -11,6 +11,7 @@ type Pkg = {
   period: string | null;
   featured: boolean;
   position: number;
+  sessions_total: number | null;
 };
 
 export default async function PackagesDashboard() {
@@ -20,7 +21,7 @@ export default async function PackagesDashboard() {
 
   const { data: packages } = await supabase
     .from("packages")
-    .select("id, name, description, items, price, period, featured, position")
+    .select("id, name, description, items, price, period, featured, position, sessions_total")
     .eq("trainer_id", user.id)
     .order("position", { ascending: true });
 
@@ -65,7 +66,7 @@ export default async function PackagesDashboard() {
               className="px-3.5 py-2.5 rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 text-sm leading-relaxed font-mono"
             />
           </label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <label className="grid gap-1">
               <span className="text-[12px] text-slate-500">Cena (zł)</span>
               <input
@@ -80,7 +81,20 @@ export default async function PackagesDashboard() {
               />
             </label>
             <label className="grid gap-1">
-              <span className="text-[12px] text-slate-500">Okres (np. &ldquo;miesiąc&rdquo;, &ldquo;3 miesiące&rdquo;, opcjonalnie)</span>
+              <span className="text-[12px] text-slate-500">Liczba sesji</span>
+              <input
+                name="sessions_total"
+                type="number"
+                min={1}
+                max={200}
+                step={1}
+                placeholder="8"
+                className="h-11 px-3.5 rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 text-sm"
+              />
+              <span className="text-[11px] text-slate-400">Pokaże klientowi pasek &ldquo;X / Y sesji&rdquo;.</span>
+            </label>
+            <label className="grid gap-1">
+              <span className="text-[12px] text-slate-500">Okres (opcjonalnie)</span>
               <input
                 name="period"
                 type="text"
@@ -160,7 +174,7 @@ export default async function PackagesDashboard() {
                     className="px-3.5 py-2.5 rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 text-sm leading-relaxed font-mono"
                   />
                 </label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <label className="grid gap-1">
                     <span className="text-[12px] text-slate-500">Cena (zł)</span>
                     <input
@@ -171,6 +185,19 @@ export default async function PackagesDashboard() {
                       step={50}
                       required
                       defaultValue={pkg.price}
+                      className="h-11 px-3.5 rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 text-sm"
+                    />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="text-[12px] text-slate-500">Liczba sesji</span>
+                    <input
+                      name="sessions_total"
+                      type="number"
+                      min={1}
+                      max={200}
+                      step={1}
+                      defaultValue={pkg.sessions_total ?? ""}
+                      placeholder="—"
                       className="h-11 px-3.5 rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 text-sm"
                     />
                   </label>

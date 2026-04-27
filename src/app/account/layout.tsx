@@ -136,14 +136,19 @@ export default async function AccountLayout({ children }: { children: React.Reac
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Search — desktop only */}
-          <div className="hidden lg:flex items-center gap-2 bg-slate-100 rounded-[9px] px-3 py-1.5 min-w-[280px] text-[13px] text-slate-500">
+          {/* Search — desktop only. Real text-search/autocomplete is a follow-up;
+              for now this is an honest jump into the catalog where filters live. */}
+          <Link
+            href="/trainers"
+            aria-label="Szukaj trenera"
+            className="hidden lg:flex items-center gap-2 bg-slate-100 hover:bg-slate-200 rounded-[9px] px-3 py-1.5 min-w-[280px] text-[13px] text-slate-500 transition"
+          >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8" />
               <path d="M21 21l-4.35-4.35" />
             </svg>
-            Szukaj trenera, sesji…
-          </div>
+            Szukaj trenera w katalogu
+          </Link>
 
           {/* Notifications */}
           {myId && (
