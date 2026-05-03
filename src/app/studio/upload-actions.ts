@@ -137,12 +137,13 @@ export async function setProfileAvatarFocal(
   focal: string,
 ): Promise<{ ok: true } | { error: string }> {
   const trimmed = String(focal).trim().slice(0, 32);
-  // Loose validation — accept "<n>% <n>%", "center", "top", or empty (= reset)
+  // Accept "<n>% <n>%" (with optional decimals — EditableImage emits one
+  // decimal place via toFixed(1)), single keywords (center / top / left /
+  // etc.), or empty string (= reset to default).
   if (
     trimmed !== "" &&
-    trimmed !== "center" &&
     !/^[a-z]+$/i.test(trimmed) &&
-    !/^\d{1,3}%\s+\d{1,3}%$/.test(trimmed)
+    !/^\d{1,3}(?:\.\d+)?%\s+\d{1,3}(?:\.\d+)?%$/.test(trimmed)
   ) {
     return { error: "Nieprawidłowy format pozycji obrazka." };
   }
