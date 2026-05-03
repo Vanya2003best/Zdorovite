@@ -20,10 +20,12 @@ export default function StudioNavMenu({
   trainerSlug,
   trainerName,
   avatarUrl,
+  avatarFocal,
 }: {
   trainerSlug: string | null;
   trainerName: string;
   avatarUrl: string | null;
+  avatarFocal?: string | null;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -69,7 +71,12 @@ export default function StudioNavMenu({
           <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-3">
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover" />
+              <img
+                src={avatarUrl}
+                alt=""
+                className="w-10 h-10 rounded-full object-cover"
+                style={{ objectPosition: avatarFocal || "center" }}
+              />
             ) : (
               <span className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-700 inline-flex items-center justify-center font-semibold">
                 {initial}

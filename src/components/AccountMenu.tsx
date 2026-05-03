@@ -80,10 +80,15 @@ export default function AccountMenu({
   displayName,
   email,
   avatarUrl,
+  avatarFocal,
 }: {
   displayName: string;
   email: string | null;
   avatarUrl: string | null;
+  /** CSS object-position for the avatar (e.g. "30% 45%"). Falls back to
+   *  "center" when null/undefined. Comes from profiles.avatar_focal —
+   *  set via drag-pan on /studio/profile. */
+  avatarFocal?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -117,7 +122,12 @@ export default function AccountMenu({
       >
         {avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+          <img
+            src={avatarUrl}
+            alt=""
+            className="w-full h-full object-cover"
+            style={{ objectPosition: avatarFocal || "center" }}
+          />
         ) : (
           <span className="w-full h-full bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-700 inline-flex items-center justify-center font-semibold text-sm">
             {initial}
@@ -131,7 +141,12 @@ export default function AccountMenu({
           <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-3">
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover" />
+              <img
+                src={avatarUrl}
+                alt=""
+                className="w-10 h-10 rounded-full object-cover"
+                style={{ objectPosition: avatarFocal || "center" }}
+              />
             ) : (
               <span className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-700 inline-flex items-center justify-center font-semibold">
                 {initial}

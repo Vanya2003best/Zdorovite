@@ -20,12 +20,14 @@ export default async function StudioTopBar({
   trainerName,
   email,
   avatarUrl,
+  avatarFocal,
 }: {
   trainerId: string;
   trainerSlug: string | null;
   trainerName: string;
   email: string | null;
   avatarUrl: string | null;
+  avatarFocal: string | null;
 }) {
   const [recentNotifs, unreadNotifs] = await Promise.all([
     getRecentNotifications(trainerId, 12),
@@ -48,7 +50,12 @@ export default async function StudioTopBar({
           initialUnreadCount={unreadNotifs}
           messagesLink="/studio/messages"
         />
-        <AccountMenu displayName={trainerName} email={email} avatarUrl={avatarUrl} />
+        <AccountMenu
+          displayName={trainerName}
+          email={email}
+          avatarUrl={avatarUrl}
+          avatarFocal={avatarFocal}
+        />
       </div>
     </header>
   );

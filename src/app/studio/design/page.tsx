@@ -63,11 +63,23 @@ export default async function DesignDashboard(props: PageProps<"/studio/design">
   const sp = await props.searchParams;
   const pageId = typeof sp?.page === "string" ? sp.page : undefined;
 
-  const { data: profile } = await supabase
+  // Try with avatar_focal (migration 020) — fall back to without on 42703.
+  let profile: { display_name: string | null; avatar_url: string | null; avatar_focal?: string | null } | null = null;
+  const profileFull = await supabase
     .from("profiles")
-    .select("display_name, avatar_url")
+    .select("display_name, avatar_url, avatar_focal")
     .eq("id", user.id)
     .single();
+  if (profileFull.error?.code === "42703") {
+    const { data } = await supabase
+      .from("profiles")
+      .select("display_name, avatar_url")
+      .eq("id", user.id)
+      .single();
+    profile = data ? { ...data, avatar_focal: null } : null;
+  } else {
+    profile = profileFull.data;
+  }
 
   const { data: trainer } = await supabase
     .from("trainers")
@@ -241,6 +253,7 @@ export default async function DesignDashboard(props: PageProps<"/studio/design">
       trainerName={profile?.display_name ?? "Twój profil"}
       trainerEmail={user.email ?? null}
       avatarUrl={profile?.avatar_url ?? null}
+      avatarFocal={profile?.avatar_focal ?? null}
       published={!!trainer.published}
       initial={initial}
       completion={completion}

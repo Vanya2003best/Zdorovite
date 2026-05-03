@@ -8,6 +8,10 @@ export type Profile = {
   id: string;
   display_name: string;
   avatar_url: string | null;
+  /** CSS object-position for the avatar (e.g. "30% 45%"). Set via drag-pan
+   *  on /studio/profile. Null = default centering. Lives behind migration
+   *  020; absent column → falls back to null and centering. */
+  avatar_focal: string | null;
   role: UserRole;
   is_trainer: boolean; // legacy mirror, kept while migrating
 };
@@ -29,18 +33,34 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  // Preferred: role column from migration 004
-  const { data: withRole, error: roleErr } = await supabase
+  // Preferred: role column from migration 004 + avatar_focal from migration 020
+  const withFocal = await supabase
     .from("profiles")
-    .select("id, display_name, avatar_url, role, is_trainer")
+    .select("id, display_name, avatar_url, avatar_focal, role, is_trainer")
     .eq("id", user.id)
     .maybeSingle();
 
-  if (!roleErr && withRole) {
-    return { user, profile: withRole as Profile };
+  if (!withFocal.error && withFocal.data) {
+    return { user, profile: withFocal.data as Profile };
   }
 
-  // Fallback: legacy schema (no role column yet) — synthesize role from is_trainer
+  // Fallback when migration 020 isn't applied (avatar_focal column missing):
+  // retry without it. We still try the `role` column from migration 004.
+  if (withFocal.error?.code === "42703") {
+    const { data: withRole, error: roleErr } = await supabase
+      .from("profiles")
+      .select("id, display_name, avatar_url, role, is_trainer")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (!roleErr && withRole) {
+      return {
+        user,
+        profile: { ...withRole, avatar_focal: null } as Profile,
+      };
+    }
+  }
+
+  // Final fallback: legacy schema (no role column yet) — synthesize role from is_trainer
   const { data: legacy } = await supabase
     .from("profiles")
     .select("id, display_name, avatar_url, is_trainer")
@@ -53,6 +73,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       id: legacy.id,
       display_name: legacy.display_name,
       avatar_url: legacy.avatar_url,
+      avatar_focal: null,
       role: legacy.is_trainer ? "trainer" : "client",
       is_trainer: legacy.is_trainer ?? false,
     },

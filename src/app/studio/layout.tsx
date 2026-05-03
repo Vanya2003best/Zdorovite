@@ -60,6 +60,7 @@ export default async function StudioLayout({
             trainerName={profile.display_name}
             email={user.email ?? null}
             avatarUrl={profile.avatar_url}
+            avatarFocal={profile.avatar_focal}
           />
         </StudioTopBarSlot>
 

@@ -67,6 +67,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
   const displayName = cu?.profile.display_name ?? cu?.user.email ?? "Konto";
   const firstName = displayName.split(" ")[0] || "Konto";
   const avatarUrl = cu?.profile.avatar_url ?? null;
+  const avatarFocal = cu?.profile.avatar_focal ?? null;
   const initial = displayName.charAt(0).toUpperCase();
 
   // Initial unread count — used as the SSR seed for <MessagesBadge/>, which
@@ -166,7 +167,12 @@ export default async function AccountLayout({ children }: { children: React.Reac
           >
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={avatarUrl} alt="" className="w-9 h-9 md:w-7 md:h-7 rounded-[11px] md:rounded-full object-cover" />
+              <img
+                src={avatarUrl}
+                alt=""
+                className="w-9 h-9 md:w-7 md:h-7 rounded-[11px] md:rounded-full object-cover"
+                style={{ objectPosition: avatarFocal || "center" }}
+              />
             ) : (
               <span className="w-9 h-9 md:w-7 md:h-7 rounded-[11px] md:rounded-full bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-700 inline-flex items-center justify-center text-sm md:text-xs font-semibold">
                 {initial}

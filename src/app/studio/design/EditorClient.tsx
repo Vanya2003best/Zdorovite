@@ -24,6 +24,7 @@ type Props = {
   trainerName: string;
   trainerEmail: string | null;
   avatarUrl: string | null;
+  avatarFocal: string | null;
   published: boolean;
   initial: ProfileCustomization;
   completion: { pct: number; tip: string };
@@ -89,7 +90,7 @@ const SECTION_LABELS: Record<SectionId, string> = {
 };
 
 
-export default function EditorClient({ slug, trainerId, trainerName, trainerEmail, avatarUrl, published, initial, completion, counts, availabilityByDow, notifications, previewSlot, historyDepth, redoDepth, hasCinematicCopy, pageId, pages }: Props) {
+export default function EditorClient({ slug, trainerId, trainerName, trainerEmail, avatarUrl, avatarFocal, published, initial, completion, counts, availabilityByDow, notifications, previewSlot, historyDepth, redoDepth, hasCinematicCopy, pageId, pages }: Props) {
   const router = useRouter();
   const [template, setTemplate] = useState<TemplateName>(initial.template);
   const [sections, setSections] = useState(initial.sections);
@@ -534,7 +535,7 @@ export default function EditorClient({ slug, trainerId, trainerName, trainerEmai
       <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-5 z-30 gap-3 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <div className="lg:hidden">
-            <StudioNavMenu trainerSlug={slug} trainerName={trainerName} avatarUrl={avatarUrl} />
+            <StudioNavMenu trainerSlug={slug} trainerName={trainerName} avatarUrl={avatarUrl} avatarFocal={avatarFocal} />
           </div>
           <strong className="text-[14px] sm:text-[15px] font-semibold tracking-[-0.01em] truncate">
             Mój profil
@@ -648,7 +649,12 @@ export default function EditorClient({ slug, trainerId, trainerName, trainerEmai
             initialUnreadCount={notifications.unread}
             messagesLink="/studio/messages"
           />
-          <AccountMenu displayName={trainerName} email={trainerEmail} avatarUrl={avatarUrl} />
+          <AccountMenu
+            displayName={trainerName}
+            email={trainerEmail}
+            avatarUrl={avatarUrl}
+            avatarFocal={avatarFocal}
+          />
         </div>
       </header>
 
