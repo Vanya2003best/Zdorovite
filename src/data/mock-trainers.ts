@@ -119,7 +119,7 @@ export const trainers: Trainer[] = [
       },
     ],
     customization: {
-      template: "minimal",
+      template: "premium",
       accentColor: "#10b981",
       sections: defaultSections,
       serviceLayout: "cards",
@@ -214,7 +214,7 @@ export const trainers: Trainer[] = [
       },
     ],
     customization: {
-      template: "sport",
+      template: "premium",
       accentColor: "#3b82f6",
       sections: defaultSections,
       serviceLayout: "cards",
@@ -404,7 +404,7 @@ export const trainers: Trainer[] = [
       },
     ],
     customization: {
-      template: "sport",
+      template: "cozy",
       accentColor: "#ef4444",
       sections: defaultSections,
       serviceLayout: "list",

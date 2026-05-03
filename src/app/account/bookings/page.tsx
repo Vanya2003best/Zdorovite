@@ -15,6 +15,11 @@ type BookingRow = {
   status: string;
   price: number;
   note: string | null;
+  // Snapshot fields — written at booking creation, survive deletion of
+  // the source service/package. Prefer over the joined relations.
+  service_name: string | null;
+  service_duration: number | null;
+  package_name: string | null;
   service: { name: string; duration: number } | null;
   package: { name: string } | null;
   trainer: {
@@ -48,6 +53,7 @@ export default async function BookingsPage(props: { searchParams: SP }) {
     .from("bookings")
     .select(`
       id, trainer_id, start_time, end_time, status, price, note,
+      service_name, service_duration, package_name,
       service:services ( name, duration ),
       package:packages ( name ),
       trainer:trainers (
@@ -175,9 +181,11 @@ function SessionCard({
 }) {
   const d = new Date(b.start_time);
   const trainerName = b.trainer?.profile?.display_name ?? "Trener";
-  const what = b.package?.name
-    ? `${b.package.name}`
-    : b.service?.name ?? "Sesja";
+  // Snapshot fields are written at booking creation (migration 018) and
+  // survive deletion of the source service/package. Prefer them; fall
+  // back to the JOIN for legacy rows that pre-date the migration.
+  const what = b.package_name ?? b.package?.name
+    ?? b.service_name ?? b.service?.name ?? "Sesja";
   const completed = b.status === "completed";
   const cancelled = b.status === "cancelled";
 

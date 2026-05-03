@@ -27,7 +27,7 @@ export default function StudioSidebar({
   const pathname = usePathname();
 
   return (
-    <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-[280px] bg-white border-r border-slate-200 flex-col z-40">
+    <aside data-studio-sidebar className="hidden lg:flex fixed left-0 top-0 bottom-0 w-[280px] bg-white border-r border-slate-200 flex-col z-40">
       {/* Brand mark — no "Studio" suffix per user direction */}
       <Link
         href="/studio"

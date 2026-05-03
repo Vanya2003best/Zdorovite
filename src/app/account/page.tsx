@@ -64,6 +64,12 @@ type BookingRow = {
   price: number;
   created_at: string;
   package_id: string | null;
+  // Snapshot fields written at booking creation (migration 018) — survive
+  // deletion of the source service/package. Prefer these for display; the
+  // joined relations remain for fields not in the snapshot (e.g.
+  // packages.sessions_total used for progress math).
+  service_name: string | null;
+  package_name: string | null;
   service: { name: string; duration: number } | null;
   package: { name: string; sessions_total: number | null } | null;
   trainer: {
@@ -103,6 +109,7 @@ export default async function AccountDashboardPage() {
     .from("bookings")
     .select(`
       id, trainer_id, start_time, end_time, status, price, created_at, package_id,
+      service_name, package_name,
       service:services ( name, duration ),
       package:packages ( name, sessions_total ),
       trainer:trainers!trainer_id (
@@ -199,7 +206,7 @@ export default async function AccountDashboardPage() {
     createdAt: b.created_at,
     status: b.status,
     trainerName: b.trainer?.profile?.display_name ?? "Trener",
-    what: b.service?.name ?? b.package?.name ?? "Sesja",
+    what: b.service_name ?? b.package_name ?? b.service?.name ?? b.package?.name ?? "Sesja",
   }));
 
   const activity: ActivityItem[] = [...bookingActivity, ...incomingMsgs]
@@ -383,7 +390,7 @@ export default async function AccountDashboardPage() {
                           {PL_DAY_LONG[(d.getDay() + 6) % 7]} {d.getDate()} {PL_MONTH_SHORT[d.getMonth()]} · {fmtTime(b.start_time)}
                         </div>
                         <div className="text-slate-500 mt-0.5">
-                          {b.trainer?.profile?.display_name ?? "Trener"} · {b.service?.name ?? b.package?.name ?? "Sesja"}
+                          {b.trainer?.profile?.display_name ?? "Trener"} · {b.service_name ?? b.package_name ?? b.service?.name ?? b.package?.name ?? "Sesja"}
                         </div>
                       </div>
                     );

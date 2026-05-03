@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { pushDeleteTombstone } from "@/lib/db/page-customization";
 
 async function ctx() {
   const supabase = await createClient();
@@ -32,7 +33,19 @@ export async function updateServiceField(
   const c = await ctx();
   if (!c) return { error: "Nie zalogowano." };
 
-  let patch: Record<string, string | number> = {};
+  // Snapshot row BEFORE update so undo can restore. We only capture the
+  // fields that this action could mutate (the patched columns + the
+  // is_placeholder side-effect) — that's enough to revert and keeps the
+  // tombstone payload small.
+  const { data: before } = await c.supabase
+    .from("services")
+    .select("name, description, duration, price, is_placeholder")
+    .eq("id", serviceId)
+    .eq("trainer_id", c.trainerId)
+    .maybeSingle();
+  if (!before) return { error: "Usługa nie istnieje." };
+
+  let patch: Record<string, string | number | boolean> = {};
   if (field === "name") {
     const v = value.trim();
     if (!v) return { error: "Nazwa nie może być pusta." };
@@ -51,6 +64,9 @@ export async function updateServiceField(
     if (!Number.isFinite(n) || n <= 0 || n > 10000) return { error: "Cena > 0, max 10 000 zł." };
     patch = { price: Math.round(n) };
   }
+  // Any edit to a placeholder row promotes it to real content — clears the
+  // faded styling and counts toward the publish-gate threshold.
+  patch.is_placeholder = false;
 
   const { error } = await c.supabase
     .from("services")
@@ -58,6 +74,16 @@ export async function updateServiceField(
     .eq("id", serviceId)
     .eq("trainer_id", c.trainerId);
   if (error) return { error: error.message };
+
+  // `after` is the patch we just wrote, but we only have a partial — fill in
+  // unchanged fields from `before` so undo and redo both leave the row in a
+  // consistent state regardless of which way the trainer toggles.
+  await pushDeleteTombstone(c.trainerId, {
+    kind: "serviceUpdated",
+    id: serviceId,
+    before: before as Record<string, unknown>,
+    after: { ...(before as Record<string, unknown>), ...patch },
+  });
 
   bust(c.slug);
   return { ok: true };
@@ -85,10 +111,17 @@ export async function addService(): Promise<{ ok: true; id: string } | { error: 
       price: 100,
       position: nextPos,
     })
-    .select("id")
+    .select("*")
     .single();
 
   if (error || !data) return { error: error?.message ?? "Błąd." };
+
+  // Full row (not just id) so Powtórz can re-insert with all original
+  // columns if the trainer hits Cofnij and changes their mind.
+  await pushDeleteTombstone(c.trainerId, {
+    kind: "serviceCreated",
+    row: data as Record<string, unknown>,
+  });
 
   bust(c.slug);
   return { ok: true, id: data.id };
@@ -99,6 +132,16 @@ export async function removeService(
 ): Promise<{ ok: true } | { error: string }> {
   const c = await ctx();
   if (!c) return { error: "Nie zalogowano." };
+
+  // Capture the full row before delete — undo needs every column to re-insert
+  // it with the same id (so any FK-by-id elsewhere keeps working).
+  const { data: row } = await c.supabase
+    .from("services")
+    .select("*")
+    .eq("id", serviceId)
+    .eq("trainer_id", c.trainerId)
+    .maybeSingle();
+  if (!row) return { error: "Usługa nie istnieje." };
 
   // Cancel bookings first (bookings_check1 requires one of service/package non-null)
   await c.supabase
@@ -113,6 +156,12 @@ export async function removeService(
     .eq("id", serviceId)
     .eq("trainer_id", c.trainerId);
   if (error) return { error: error.message };
+
+  // Tombstone — Cofnij will re-insert this row before applying the snapshot.
+  await pushDeleteTombstone(c.trainerId, {
+    kind: "serviceDeleted",
+    row: row as Record<string, unknown>,
+  });
 
   bust(c.slug);
   return { ok: true };

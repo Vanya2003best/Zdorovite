@@ -42,7 +42,7 @@ export default async function TrainerRegisterPage() {
           <div className="grid gap-3">
             {[
               ["Bez prowizji przez 30 dni", "Plan Free do 3 klientów. Bez karty."],
-              ["7 szablonów profilu", "Od Minimal po Signature — Twój styl, Twój ton."],
+              ["6 szablonów profilu", "Premium i Cozy darmowe, Cinematic / Luxury / Studio / Signature w planie PRO."],
               ["Płatności i rezerwacje", "BLIK, karta, Przelewy24. Pieniądze następnego dnia."],
             ].map(([title, desc]) => (
               <div key={title} className="flex gap-3 items-start text-[13px] leading-[1.45]">

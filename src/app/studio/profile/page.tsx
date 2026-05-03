@@ -1,46 +1,81 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { specializations as ALL_SPECS, getSpecLabel, getSpecIcon } from "@/data/specializations";
-import EditableText from "@/components/EditableText";
-import InlineServicesEditor from "@/app/trainers/[id]/InlineServicesEditor";
-import InlinePackagesEditor from "@/app/trainers/[id]/InlinePackagesEditor";
-import PublishToggle from "./PublishToggle";
+import CertificationsEditor from "./CertificationsEditor";
+import AvatarTile from "./AvatarTile";
+import AiContextForm from "./AiContextForm";
+import type { AiContext } from "./ai-context-actions";
+import type { Certification } from "@/types";
 
-type Pkg = {
-  id: string;
-  name: string;
-  description: string;
-  items: string[];
-  price: number;
-  period?: string;
-  featured?: boolean;
-};
-
+/**
+ * Moje konto — trainer's account-level page. Strictly the things that DON'T
+ * belong on the public profile and aren't editable from /studio/design:
+ *   - identity preview (name + email — read-only)
+ *   - certifications + verification (with PDF/URL upload)
+ *   - settings (publish toggle, links to design + availability)
+ *
+ * Everything visible on the public profile (tagline, about, location, languages,
+ * specializations, services, packages, gallery, cover, avatar, price, experience)
+ * lives in /studio/design — the visual editor with live preview. Edits propagate
+ * to whichever template is active because services/packages/etc. are shared
+ * trainer-data tables.
+ */
 export default async function StudioProfile() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio/profile");
 
-  const { data: profile } = await supabase
+  // Try with avatar_focal (migration 020); fall back gracefully on 42703.
+  let profile: { display_name: string | null; avatar_url: string | null; avatar_focal?: string | null } | null = null;
+  const profileFull = await supabase
     .from("profiles")
-    .select("display_name, avatar_url")
+    .select("display_name, avatar_url, avatar_focal")
     .eq("id", user.id)
     .single();
+  if (profileFull.error?.code === "42703") {
+    const { data } = await supabase
+      .from("profiles")
+      .select("display_name, avatar_url")
+      .eq("id", user.id)
+      .single();
+    profile = data ? { ...data, avatar_focal: null } : null;
+  } else {
+    profile = profileFull.data;
+  }
 
-  const { data: trainer } = await supabase
+  // Try with ai_context first (migration 019); if the column doesn't exist
+  // yet (42703) fall back to just `slug` so the page still loads. The
+  // AiContextForm below tolerates `ai_context: null` and falls through to
+  // empty-field defaults — the page is functional even without the migration.
+  let trainer: { slug: string; ai_context?: Record<string, unknown> | null } | null = null;
+  const trainerFull = await supabase
     .from("trainers")
-    .select("slug, tagline, about, experience, price_from, location, languages, cover_image, rating, review_count, published")
+    .select("slug, ai_context")
     .eq("id", user.id)
     .maybeSingle();
+  if (trainerFull.error?.code === "42703") {
+    const { data } = await supabase
+      .from("trainers")
+      .select("slug")
+      .eq("id", user.id)
+      .maybeSingle();
+    trainer = data ? { slug: data.slug, ai_context: null } : null;
+  } else {
+    trainer = trainerFull.data;
+  }
 
   if (!trainer) {
+    // Logged-in user without a trainers row — the trainer-onboarding flow
+    // for an existing account is /account/become-trainer (just fills in the
+    // trainer-only fields), NOT /register/trainer (which creates a brand
+    // new auth user). Sending an authenticated user to the latter just
+    // confuses them — they'd be asked to enter email + password again.
     return (
       <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10">
         <div className="rounded-2xl border-2 border-dashed border-slate-300 py-16 text-center">
           <p className="text-slate-500">Najpierw dokończ rejestrację jako trener.</p>
           <Link
-            href="/register/trainer"
+            href="/account/become-trainer"
             className="inline-flex mt-4 h-10 items-center px-5 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-black transition"
           >
             Stań się trenerem →
@@ -50,221 +85,87 @@ export default async function StudioProfile() {
     );
   }
 
-  const { data: specs } = await supabase
-    .from("trainer_specializations")
-    .select("specialization_id")
-    .eq("trainer_id", user.id);
-  const mySpecIds = new Set((specs ?? []).map((s) => s.specialization_id));
-
-  const { data: services } = await supabase
-    .from("services")
-    .select("id, name, description, duration, price, position")
+  // certifications — try the full SELECT (new columns from migration 014).
+  // On code 42703 (undefined column = migration not yet applied), retry with
+  // just the original columns so the page still renders. The Editor UI then
+  // only shows text + delete; URL/file controls write to columns that don't
+  // exist yet so they'll error on the user's first save attempt — that's
+  // their cue to apply the migration.
+  let certs: Certification[] = [];
+  const certsFull = await supabase
+    .from("certifications")
+    .select("id, text, verification_url, attachment_url, attachment_filename, position")
     .eq("trainer_id", user.id)
     .order("position", { ascending: true });
+  if (certsFull.error?.code === "42703") {
+    const certsLegacy = await supabase
+      .from("certifications")
+      .select("id, text, position")
+      .eq("trainer_id", user.id)
+      .order("position", { ascending: true });
+    certs = (certsLegacy.data ?? []).map((c: { id: string; text: string; }) => ({
+      id: c.id,
+      text: c.text,
+    }));
+  } else if (certsFull.data) {
+    certs = certsFull.data.map((c: { id: string; text: string; verification_url: string | null; attachment_url: string | null; attachment_filename: string | null; }) => ({
+      id: c.id,
+      text: c.text,
+      verificationUrl: c.verification_url ?? undefined,
+      attachmentUrl: c.attachment_url ?? undefined,
+      attachmentFilename: c.attachment_filename ?? undefined,
+    }));
+  }
 
-  const { data: packages } = await supabase
-    .from("packages")
-    .select("id, name, description, items, price, period, featured, position")
-    .eq("trainer_id", user.id)
-    .order("position", { ascending: true });
+  const aiContext = (trainer.ai_context ?? {}) as AiContext;
 
   return (
     <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10 grid gap-5">
-      {/* Top control bar */}
-      <header className="flex flex-wrap items-center justify-between gap-3 mb-2">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Mój profil</h1>
-          <p className="text-[13px] text-slate-600 mt-1">
-            Edytuj dowolny element, klikając w niego. Zmiany zapisują się automatycznie.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <PublishToggle published={trainer.published} />
-          <Link
-            href="/studio/profile/preview"
-            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-full text-[13px] font-medium text-slate-700 border border-slate-200 bg-white hover:border-slate-400 transition"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
-            Podgląd klienta
-          </Link>
-        </div>
-      </header>
+      {/* Page header is intentionally absent — the studio top-bar already
+          shows "Moje konto · Dane, certyfikaty, ustawienia" via StudioPageTitle,
+          so a duplicate <h1> here just stretches the page. The link to the
+          design editor is moved into the Settings card at the bottom. */}
 
-      {/* Cover + Avatar + Name card */}
+      {/* AI context — fill once, reused by every AI generator on
+          /studio/design (about/services/packages). Sits at the top of the
+          page so a freshly-onboarded trainer sees it first. */}
+      <AiContextForm initial={aiContext} />
+
+      {/* Identity — avatar is account-level (lives in profiles.avatar_url, not
+          trainers row), so it's editable here rather than in /studio/design.
+          Click the avatar tile (or the pencil overlay) to upload. */}
       <Card>
-        <div className="relative h-[160px] sm:h-[200px] -mx-5 sm:-mx-6 -mt-5 sm:-mt-6 bg-gradient-to-br from-emerald-100 via-teal-50 to-emerald-50 rounded-t-2xl border-b border-slate-200 overflow-hidden">
-          {trainer.cover_image && (
-            <img src={trainer.cover_image} alt="" className="absolute inset-0 w-full h-full object-cover" />
-          )}
-          <button
-            type="button"
-            disabled
-            title="Wkrótce: ładowanie zdjęcia okładki (wymaga Supabase Storage)"
-            className="absolute top-4 right-4 inline-flex items-center gap-2 h-9 px-3.5 rounded-full bg-white/90 backdrop-blur-md text-[12px] font-medium text-slate-700 border border-white shadow-sm cursor-not-allowed opacity-90"
-          >
-            ✎ Zmień okładkę
-          </button>
-        </div>
-
-        <div className="flex items-end gap-4 -mt-12 relative">
-          <div className="relative shrink-0">
-            {profile?.avatar_url ? (
-              <img src={profile.avatar_url} alt="" className="w-24 h-24 rounded-2xl object-cover border-4 border-white shadow-md" />
-            ) : (
-              <span className="w-24 h-24 rounded-2xl bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-700 inline-flex items-center justify-center font-semibold text-3xl border-4 border-white shadow-md">
-                {(profile?.display_name ?? "?").charAt(0).toUpperCase()}
-              </span>
-            )}
-            <button
-              type="button"
-              disabled
-              title="Wkrótce: zmiana awatara (wymaga Supabase Storage)"
-              className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-600 inline-flex items-center justify-center text-sm shadow-sm cursor-not-allowed opacity-90"
-            >
-              ✎
-            </button>
-          </div>
-          <div className="flex-1 min-w-0 pb-1">
-            <h2 className="text-2xl font-semibold tracking-tight">{profile?.display_name}</h2>
-            <p className="text-[14px] text-slate-600 mt-1">
-              <EditableText
-                field="tagline"
-                initial={trainer.tagline}
-                multiline
-                maxLength={200}
-                placeholder="Dodaj tagline (jedno zdanie o sobie)"
-              />
-            </p>
-          </div>
-        </div>
-
-        {/* Quick badges */}
-        <div className="flex flex-wrap gap-3 mt-5 text-[13px] text-slate-700 pt-4 border-t border-slate-100">
-          <span className="inline-flex items-center gap-1.5">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="#f59e0b"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
-            <strong className="text-slate-900">{trainer.rating}</strong>
-            <span className="text-slate-500">· {trainer.review_count} opinii</span>
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            📍{" "}
-            <EditableText
-              field="location"
-              initial={trainer.location}
-              maxLength={100}
-              placeholder="Miasto, dzielnica"
-            />
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            🌐 {(trainer.languages ?? []).join(" · ") || <span className="text-slate-400 italic">brak języków</span>}
-          </span>
-        </div>
-      </Card>
-
-      {/* Specializations */}
-      <Card>
-        <CardHeader title="Specjalizacje" hint={`${mySpecIds.size}/10 wybranych`} />
-        <div className="flex flex-wrap gap-2 mt-3">
-          {ALL_SPECS.map((spec) => {
-            const active = mySpecIds.has(spec.id);
-            return (
-              <span
-                key={spec.id}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] border ${
-                  active
-                    ? "bg-emerald-50 border-emerald-300 text-emerald-800 font-medium"
-                    : "bg-white border-slate-200 text-slate-400"
-                }`}
-                title={active ? "Wybrana specjalizacja" : "Nie wybrana"}
-              >
-                <span>{spec.icon}</span>
-                {spec.label}
-              </span>
-            );
-          })}
-        </div>
-        <p className="text-[12px] text-slate-500 mt-3">
-          Edycja przez popover — wkrótce. Tymczasem użyj{" "}
-          <Link href="/account/become-trainer" className="text-emerald-700 hover:underline font-medium">
-            pełnego edytora
-          </Link>.
-        </p>
-      </Card>
-
-      {/* About */}
-      <Card>
-        <CardHeader title="O mnie" />
-        <p className="text-[14px] text-slate-700 leading-[1.65] mt-3">
-          <EditableText
-            field="about"
-            initial={trainer.about}
-            multiline
-            maxLength={3000}
-            placeholder="Opowiedz o sobie, swoim podejściu, doświadczeniu, klientach z którymi pracujesz..."
+        <div className="flex items-center gap-4">
+          <AvatarTile
+            currentUrl={profile?.avatar_url ?? null}
+            currentFocal={profile?.avatar_focal ?? null}
           />
+          <div className="min-w-0">
+            <div className="text-lg font-semibold tracking-tight truncate">
+              {profile?.display_name ?? "Bez nazwy"}
+            </div>
+            <div className="text-[13px] text-slate-500 truncate">{user.email}</div>
+            <div className="text-[11px] text-slate-400 mt-0.5">
+              JPG / PNG / WebP, max 5 MB · przeciągnij zdjęcie aby dopasować kadr
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Certifications — the only piece of content edited here, with verification */}
+      <Card>
+        <CardHeader
+          title="Certyfikaty i dyplomy"
+          hint={`${certs.length} ${certs.length === 1 ? "certyfikat" : "certyfikatów"}`}
+        />
+        <p className="text-[12px] text-slate-500 mt-1 mb-4 leading-[1.55] max-w-[640px]">
+          Dodaj swoje certyfikaty z linkiem do publicznego rejestru wystawcy (np. EREPS, AWF) lub załącz skan dyplomu.
+          Na publicznej stronie obok każdego certyfikatu pojawi się badge weryfikacji, który klient może kliknąć.
         </p>
+        <CertificationsEditor certs={certs} />
       </Card>
 
-      {/* Stats: experience + price */}
-      <Card>
-        <CardHeader title="Cena i doświadczenie" />
-        <div className="grid grid-cols-2 gap-6 mt-3">
-          <div>
-            <div className="text-[12px] uppercase tracking-[0.06em] text-slate-500 font-medium mb-1">
-              Cena od (zł / sesja)
-            </div>
-            <div className="text-2xl font-semibold tracking-tight">
-              <EditableText
-                field="price_from"
-                initial={String(trainer.price_from)}
-                type="number"
-                min={0}
-                max={10000}
-                className="w-24"
-              />
-              {" zł"}
-            </div>
-          </div>
-          <div>
-            <div className="text-[12px] uppercase tracking-[0.06em] text-slate-500 font-medium mb-1">
-              Lata doświadczenia
-            </div>
-            <div className="text-2xl font-semibold tracking-tight">
-              <EditableText
-                field="experience"
-                initial={String(trainer.experience)}
-                type="number"
-                min={0}
-                max={60}
-                className="w-16"
-              />
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Services */}
-      <Card>
-        <CardHeader
-          title="Pojedyncze sesje"
-          hint={`${(services ?? []).length} ${(services ?? []).length === 1 ? "usługa" : "usług"}`}
-        />
-        <div className="mt-4">
-          <InlineServicesEditor services={(services ?? []) as { id: string; name: string; description: string; duration: number; price: number; }[]} />
-        </div>
-      </Card>
-
-      {/* Packages */}
-      <Card>
-        <CardHeader
-          title="Pakiety długoterminowe"
-          hint={`${(packages ?? []).length} ${(packages ?? []).length === 1 ? "pakiet" : "pakietów"}`}
-        />
-        <div className="mt-4">
-          <InlinePackagesEditor packages={(packages ?? []) as Pkg[]} />
-        </div>
-      </Card>
-
-      {/* Settings card */}
+      {/* Settings — links to other studio surfaces */}
       <Card>
         <CardHeader title="Ustawienia" />
         <div className="grid gap-3 mt-3">
@@ -284,8 +185,10 @@ export default async function StudioProfile() {
           </div>
           <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
             <div>
-              <strong className="text-[14px] text-slate-900">Wygląd profilu</strong>
-              <p className="text-[12px] text-slate-500 mt-0.5">Szablon, kolor akcentu, widoczne sekcje</p>
+              <strong className="text-[14px] text-slate-900">Profil publiczny</strong>
+              <p className="text-[12px] text-slate-500 mt-0.5">
+                Szablon, kolory, treść (o mnie, usługi, pakiety, galeria)
+              </p>
             </div>
             <Link href="/studio/design" className="text-[13px] text-emerald-700 hover:underline font-medium">
               Otwórz edytor →

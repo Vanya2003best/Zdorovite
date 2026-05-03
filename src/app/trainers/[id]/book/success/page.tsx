@@ -18,7 +18,7 @@ export default async function BookingSuccessPage(props: {
 
   const { data: booking } = await supabase
     .from("bookings")
-    .select("id, start_time, price, service:services(name, duration), trainer:trainers!inner(id, slug, location, profile:profiles!inner(display_name))")
+    .select("id, start_time, price, service_name, service_duration, service:services(name, duration), trainer:trainers!inner(id, slug, location, profile:profiles!inner(display_name))")
     .eq("id", bookingId)
     .eq("client_id", user.id)
     .maybeSingle();
@@ -54,7 +54,7 @@ export default async function BookingSuccessPage(props: {
       <div className="rounded-xl bg-slate-50 border border-slate-200 p-3.5 text-left grid gap-2 mb-5 max-w-[360px] mx-auto">
         <Row label="Trener" value={trainerName} />
         <Row label="Termin" value={`${dateLabel} · ${timeLabel}`} />
-        <Row label="Usługa" value={service?.name ?? "Sesja"} />
+        <Row label="Usługa" value={(booking as { service_name?: string | null }).service_name ?? service?.name ?? "Sesja"} />
         <Row label="Nr" value={`#${String(booking.id).slice(0, 8).toUpperCase()}`} mono />
       </div>
 

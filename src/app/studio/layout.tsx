@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { requireTrainer } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import StudioMobileTabs from "./StudioMobileTabs";
@@ -19,6 +20,14 @@ export default async function StudioLayout({
   children: React.ReactNode;
 }) {
   const { user, profile } = await requireTrainer("/studio");
+
+  // /studio/design renders its own viewport-filling editor — pb-24/pb-8 on
+  // <main> would leave a slate-50 strip below the editor on lg+ and an unused
+  // pb-24 on mobile. Other studio pages still need the padding to clear the
+  // mobile tab bar / breathe on lg+.
+  const pathname = (await headers()).get("x-pathname") ?? "";
+  const isEditor = pathname.startsWith("/studio/design");
+  const mainPadding = isEditor ? "" : "pb-24 lg:pb-8";
 
   const supabase = await createClient();
   const [{ data: trainer }, { count: unreadMessagesCount }] = await Promise.all([
@@ -43,7 +52,7 @@ export default async function StudioLayout({
         unreadMessages={unreadMessages}
       />
 
-      <div className="lg:ml-[280px] flex flex-col min-h-screen">
+      <div data-studio-content className="lg:ml-[280px] flex flex-col min-h-screen">
         <StudioTopBarSlot>
           <StudioTopBar
             trainerId={user.id}
@@ -54,7 +63,7 @@ export default async function StudioLayout({
           />
         </StudioTopBarSlot>
 
-        <main className="flex-1 pb-24 lg:pb-8">
+        <main className={`flex-1 ${mainPadding}`}>
           {children}
         </main>
       </div>

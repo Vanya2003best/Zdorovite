@@ -15,6 +15,9 @@ type ActivityRow = {
   start_time: string;
   status: string;
   created_at: string;
+  // Snapshot fields preferred over the JOIN (migration 018).
+  service_name: string | null;
+  package_name: string | null;
   service: { name: string } | null;
   package: { name: string } | null;
   trainer: {
@@ -110,6 +113,7 @@ export default async function ProgressPage() {
       .from("bookings")
       .select(`
         id, start_time, status, created_at,
+        service_name, package_name,
         service:services ( name ),
         package:packages ( name ),
         trainer:trainers!trainer_id ( profile:profiles!id ( display_name ) )
@@ -233,7 +237,7 @@ export default async function ProgressPage() {
               {activity.map((a) => {
                 const completed = a.status === "completed";
                 const trainerName = a.trainer?.profile?.display_name ?? "Trener";
-                const what = a.service?.name ?? a.package?.name ?? "Sesja";
+                const what = a.service_name ?? a.package_name ?? a.service?.name ?? a.package?.name ?? "Sesja";
                 return (
                   <div key={a.id} className="flex gap-2.5 py-2.5 border-b border-slate-100 last:border-0">
                     <div

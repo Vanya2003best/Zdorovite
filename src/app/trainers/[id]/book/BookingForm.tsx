@@ -13,6 +13,7 @@ type Props = {
   trainerAvatar: string;
   trainerLocation: string;
   services: (Service & { id: string })[];
+  initialServiceId?: string;
   initialDate: string;
   initialSlots: Slot[];
 };
@@ -42,13 +43,14 @@ export default function BookingForm({
   trainerAvatar,
   trainerLocation,
   services,
+  initialServiceId,
   initialDate,
   initialSlots,
 }: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [date, setDate] = useState(initialDate);
   const [slots, setSlots] = useState<Slot[]>(initialSlots);
-  const [selectedService, setSelectedService] = useState<string>(services[0]?.id ?? "");
+  const [selectedService, setSelectedService] = useState<string>(initialServiceId ?? services[0]?.id ?? "");
   const [selectedSlot, setSelectedSlot] = useState<string>("");
   const [note, setNote] = useState("");
   const [isPendingSlots, startSlotTransition] = useTransition();

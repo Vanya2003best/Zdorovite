@@ -12,8 +12,6 @@ type Props = {
   trainerId: string;
   services: (Service & { id: string })[];
   priceFrom: number;
-  rating: number;
-  reviewCount: number;
   initialDate: string;
   initialSlots: Slot[];
 };
@@ -29,8 +27,6 @@ export default function BookingSidebar({
   trainerId,
   services,
   priceFrom,
-  rating,
-  reviewCount,
   initialDate,
   initialSlots,
 }: Props) {
@@ -60,8 +56,8 @@ export default function BookingSidebar({
 
   if (services.length === 0) {
     return (
-      <aside className="hidden sm:block">
-        <div className="sticky top-[140px] bg-white/88 backdrop-blur-xl border border-white/70 rounded-[20px] p-6 text-center text-sm text-slate-500">
+      <aside className="hidden @[640px]:block">
+        <div className="bg-white/88 backdrop-blur-xl border border-white/70 rounded-[20px] p-6 text-center text-sm text-slate-500">
           Ten trener nie udostępnił jeszcze usług.
         </div>
       </aside>
@@ -69,8 +65,8 @@ export default function BookingSidebar({
   }
 
   return (
-    <aside className="hidden sm:block">
-      <form action={action} className="sticky top-[140px] bg-white/88 backdrop-blur-xl backdrop-saturate-[1.4] border border-white/70 rounded-[20px] shadow-[0_24px_48px_-20px_rgba(2,6,23,0.12)] p-5">
+    <aside className="hidden @[640px]:block">
+      <form action={action} className="bg-white/88 backdrop-blur-xl backdrop-saturate-[1.4] border border-white/70 rounded-[20px] shadow-[0_24px_48px_-20px_rgba(2,6,23,0.12)] p-5">
         <input type="hidden" name="trainer_slug" value={trainerSlug} />
         <input type="hidden" name="service_id" value={serviceId} />
         <input type="hidden" name="start_iso" value={slotIso} />
@@ -180,27 +176,6 @@ export default function BookingSidebar({
           Bezpieczna płatność · anuluj do 24h
         </div>
 
-        <a
-          href={`/account/messages?with=${trainerId}`}
-          className="w-full flex items-center justify-center gap-2 py-2.5 mt-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 bg-white hover:border-slate-400 transition"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></svg>
-          Napisz wiadomość
-        </a>
-
-        {/* Trust signals */}
-        <div className="mt-4 pt-4 border-t border-slate-200 grid grid-cols-2 gap-3">
-          <div>
-            <div className="text-[15px] font-semibold tracking-tight">⚡ &lt;2h</div>
-            <div className="text-[11px] text-slate-500 mt-0.5">Czas odpowiedzi</div>
-          </div>
-          <div>
-            <div className="text-[15px] font-semibold tracking-tight">
-              <span className="text-amber-500">★</span> {rating}
-            </div>
-            <div className="text-[11px] text-slate-500 mt-0.5">{reviewCount} opinii</div>
-          </div>
-        </div>
       </form>
     </aside>
   );

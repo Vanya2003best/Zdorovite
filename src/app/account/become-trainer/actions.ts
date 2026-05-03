@@ -101,6 +101,13 @@ export async function becomeTrainer(
     );
   }
 
+  // Seed placeholder services / packages / gallery so the new trainer
+  // sees a populated profile right away. The function is a no-op if the
+  // trainer already has any data in those tables — only fresh accounts
+  // get the seed. Errors here are non-fatal (account creation already
+  // succeeded; missing placeholders is a degraded state, not a failure).
+  await supabase.rpc("seed_trainer_placeholders", { trainer_id_arg: user.id });
+
   revalidatePath("/studio/bookings");
   revalidatePath(`/trainers/${slug}`);
   revalidatePath("/trainers");

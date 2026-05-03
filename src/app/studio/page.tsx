@@ -7,6 +7,8 @@ type RecentBooking = {
   start_time: string;
   status: string;
   price: number;
+  // Snapshot field preferred over JOIN (migration 018).
+  service_name: string | null;
   service: { name: string } | null;
   client: { display_name: string; avatar_url: string | null } | null;
 };
@@ -82,6 +84,7 @@ export default async function StudioHome() {
     .from("bookings")
     .select(`
       id, start_time, status, price,
+      service_name,
       service:services ( name ),
       client:profiles!client_id ( display_name, avatar_url )
     `)
@@ -224,7 +227,7 @@ function UpcomingRow({ booking: b }: { booking: RecentBooking }) {
           )}
         </div>
         <div className="text-[12px] text-slate-500">
-          {b.service?.name ?? "Sesja"} · {dateStr}, {timeStr}
+          {b.service_name ?? b.service?.name ?? "Sesja"} · {dateStr}, {timeStr}
         </div>
       </div>
       <div className="text-[14px] font-semibold text-slate-900 whitespace-nowrap">

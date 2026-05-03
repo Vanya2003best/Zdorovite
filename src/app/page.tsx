@@ -317,7 +317,7 @@ export default async function Home() {
             <div className="hidden sm:block bg-white/[0.06] border border-white/[0.14] rounded-2xl p-6 backdrop-blur-lg">
               <ul className="space-y-4">
                 {[
-                  { title: "4 szablony profilu", desc: "Minimal, Sport, Premium, Cozy — każdy z kastomizacją." },
+                  { title: "6 szablonów profilu", desc: "Premium i Cozy w darmowym planie, plus 4 szablony PRO." },
                   { title: "0% prowizji przez 3 miesiące", desc: "Dla trenerów dołączających do końca maja." },
                   { title: "Kalendarz i płatności", desc: "Automatyczne rozliczenia i faktury przez system." },
                 ].map((item) => (

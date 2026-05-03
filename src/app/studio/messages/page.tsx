@@ -120,7 +120,7 @@ export default async function MessagesPage(props: {
   let conversation: ConversationMessage[] = [];
   let activeOther: { id: string; name: string; avatar: string | null } | null = null;
   let firstBookingAt: string | null = null;
-  let upcoming: { start_time: string; service?: { name: string | null } | null; package?: { name: string | null } | null } | null = null;
+  let upcoming: { start_time: string; service_name?: string | null; package_name?: string | null; service?: { name: string | null } | null; package?: { name: string | null } | null } | null = null;
   let totalBookings = 0;
 
   if (withId) {
@@ -168,7 +168,7 @@ export default async function MessagesPage(props: {
     const [{ data: bks }, { count }] = await Promise.all([
       supabase
         .from("bookings")
-        .select("start_time, service:services(name), package:packages(name)")
+        .select("start_time, service_name, package_name, service:services(name), package:packages(name)")
         .eq("trainer_id", me)
         .eq("client_id", withId)
         .neq("status", "cancelled")
@@ -184,7 +184,7 @@ export default async function MessagesPage(props: {
     if (bks && bks.length > 0) {
       firstBookingAt = bks[0].start_time;
       upcoming =
-        (bks as unknown as { start_time: string; service: { name: string } | null; package: { name: string } | null }[])
+        (bks as unknown as { start_time: string; service_name: string | null; package_name: string | null; service: { name: string } | null; package: { name: string } | null }[])
           .find((b) => b.start_time >= nowIso) ?? null;
     }
   }

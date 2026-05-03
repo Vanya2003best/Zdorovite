@@ -36,3 +36,44 @@
   0%, 60%, 100% { transform: translateY(0);    opacity: .4; }
   30%           { transform: translateY(-4px); opacity: 1;  }
 }
+
+/* Studio template marquee — infinite horizontal scroll for the specializations
+   strip. Two copies of the content sit side-by-side inside .nz-marquee-track;
+   we slide the track left by exactly 50% of its width over `duration` seconds,
+   then loop. Because the second copy is identical to the first, the seam at
+   -50% is invisible — the loop appears continuous. The wrapper has
+   `prefers-reduced-motion` opt-out so users with motion sensitivity get a
+   static strip instead. */
+@keyframes nz-marquee-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.nz-marquee-track {
+  display: inline-flex;
+  flex-shrink: 0;
+  animation: nz-marquee-scroll 36s linear infinite;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nz-marquee-track { animation: none; }
+}
+
+/* Studio editor fullscreen mode.
+   Set by EditorClient on /studio/design as both `html.studio-fullscreen` class
+   AND `html[data-studio-fullscreen="1"]` attribute (redundancy — see EditorClient).
+   Hides the persistent left sidebar + mobile bottom tabs (rendered in StudioLayout,
+   outside EditorClient's React tree) and zeroes the lg:ml-[280px] offset so the
+   editor canvas fills the entire viewport. !important is needed because Tailwind's
+   `lg:ml-[280px]` and `lg:flex` have media-query specificity that competes with
+   plain class selectors.
+   Cleanup is paired with EditorClient unmount, so navigating away always restores chrome. */
+html.studio-fullscreen [data-studio-sidebar],
+html.studio-fullscreen [data-studio-tabs],
+html[data-studio-fullscreen="1"] [data-studio-sidebar],
+html[data-studio-fullscreen="1"] [data-studio-tabs] {
+  display: none !important;
+}
+html.studio-fullscreen [data-studio-content],
+html[data-studio-fullscreen="1"] [data-studio-content] {
+  margin-left: 0 !important;
+}

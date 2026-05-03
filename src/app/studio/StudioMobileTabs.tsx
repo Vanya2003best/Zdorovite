@@ -43,6 +43,7 @@ export default function StudioMobileTabs({
   const pathname = usePathname();
   return (
     <nav
+      data-studio-tabs
       aria-label="Nawigacja Studio"
       className="sm:hidden fixed bottom-0 left-0 right-0 z-50 h-[84px] grid grid-cols-4 pt-1.5 pb-[18px] bg-white/[0.94] backdrop-blur-xl border-t border-slate-200"
     >

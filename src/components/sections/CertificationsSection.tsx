@@ -9,7 +9,7 @@ export default function CertificationsSection({ certifications, styles: s }: Pro
   if (certifications.length === 0) return null;
 
   return (
-    <section className={`${s.sectionPadding} ${s.sectionBorder}`}>
+    <section id="certifications" data-section-id="certifications" className={`${s.sectionPadding} ${s.sectionBorder} scroll-mt-20`}>
       <div className={s.sectionTitleStyle}>Certyfikaty</div>
       <ul className="space-y-2 list-none p-0 m-0">
         {certifications.map((cert) => (

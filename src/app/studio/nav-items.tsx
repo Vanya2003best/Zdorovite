@@ -73,14 +73,17 @@ export const STUDIO_NAV: StudioNavItem[] = [
     label: "Mój profil",
     description: "Treść + szablon · live preview",
     icon: PaletteIcon,
-    match: (p) => p.startsWith("/studio/design") || p.startsWith("/studio/profile"),
+    // /studio/profile reached via AccountMenu dropdown ("Moje konto") — has its
+    // own top-bar override; intentionally not a sidebar entry to keep the
+    // sidebar focused on profile editing flows.
+    match: (p) => p.startsWith("/studio/design"),
   },
   {
-    href: "/studio/bookings",
-    label: "Rezerwacje",
-    description: "Potwierdzenia, anulacje, przeniesienia",
+    href: "/studio/calendar",
+    label: "Kalendarz",
+    description: "Sesje, rezerwacje, godziny pracy",
     icon: CalIcon,
-    match: (p) => p.startsWith("/studio/bookings"),
+    match: (p) => p.startsWith("/studio/calendar") || p.startsWith("/studio/bookings"),
   },
   {
     href: "/studio/messages",
@@ -91,11 +94,10 @@ export const STUDIO_NAV: StudioNavItem[] = [
     hasUnreadBadge: true,
   },
   {
-    href: "#",
+    href: "/studio/reviews",
     label: "Opinie",
-    description: "Wkrótce",
+    description: "Co mówią klienci",
     icon: StarIcon,
-    match: () => false,
-    soon: true,
+    match: (p) => p.startsWith("/studio/reviews"),
   },
 ];

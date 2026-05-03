@@ -1,9 +1,20 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { uploadAvatar, uploadCover, removeCover, type UploadResult } from "../upload-actions";
+import { useRouter } from "next/navigation";
+import {
+  uploadAvatar,
+  uploadCover,
+  uploadFullbleed,
+  uploadVideoIntro,
+  removeCover,
+  removeFullbleed,
+  removeVideoIntro,
+  type UploadResult,
+} from "../upload-actions";
+import { useEditingPageId } from "@/app/trainers/[id]/EditingPageContext";
 
-type Variant = "avatar" | "cover";
+type Variant = "avatar" | "cover" | "fullbleed" | "video-intro";
 
 export default function ImageUpload({
   variant,
@@ -18,11 +29,32 @@ export default function ImageUpload({
   className?: string;
   removable?: boolean;
 }) {
+  const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const pageId = useEditingPageId();
 
-  const action = variant === "avatar" ? uploadAvatar : uploadCover;
+  // Avatar is account-level (lives in profiles, not in customization), so it
+  // ignores pageId. Cover/fullbleed/video are page-scoped when pageId is set.
+  const action =
+    variant === "avatar"
+      ? (fd: FormData) => uploadAvatar(fd)
+      : variant === "fullbleed"
+        ? (fd: FormData) => uploadFullbleed(fd, pageId)
+        : variant === "video-intro"
+          ? (fd: FormData) => uploadVideoIntro(fd, pageId)
+          : (fd: FormData) => uploadCover(fd, pageId);
+  const removeAction =
+    variant === "fullbleed"
+      ? () => removeFullbleed(pageId)
+      : variant === "video-intro"
+        ? () => removeVideoIntro(pageId)
+        : () => removeCover(pageId);
+  const acceptAttr =
+    variant === "video-intro"
+      ? "video/mp4,video/webm,video/quicktime"
+      : "image/jpeg,image/png,image/webp";
 
   const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -32,8 +64,14 @@ export default function ImageUpload({
     fd.set("file", file);
     startTransition(async () => {
       const res: UploadResult = await action(fd);
-      if ("error" in res) setError(res.error);
-      // success → revalidate happens server-side, page re-renders with new url
+      if ("error" in res) {
+        setError(res.error);
+      } else {
+        // Revalidation invalidates the server cache, but the editor canvas
+        // (a client tree) needs router.refresh() to actually re-fetch and
+        // re-render the new image.
+        router.refresh();
+      }
     });
     // Allow re-uploading the same file
     e.target.value = "";
@@ -43,8 +81,12 @@ export default function ImageUpload({
     if (!removable) return;
     setError(null);
     startTransition(async () => {
-      const res = await removeCover();
-      if ("error" in res) setError(res.error);
+      const res = await removeAction();
+      if ("error" in res) {
+        setError(res.error);
+      } else {
+        router.refresh();
+      }
     });
   };
 
@@ -78,7 +120,7 @@ export default function ImageUpload({
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp"
+        accept={acceptAttr}
         onChange={onPick}
         className="sr-only"
       />

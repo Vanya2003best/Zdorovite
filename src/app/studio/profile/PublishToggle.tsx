@@ -10,7 +10,12 @@ export default function PublishToggle({ published }: { published: boolean }) {
     <button
       type="button"
       disabled={pending}
-      onClick={() => startTransition(async () => { await togglePublished(); })}
+      onClick={() =>
+        startTransition(async () => {
+          const res = await togglePublished();
+          if ("error" in res) alert(res.error);
+        })
+      }
       className={`inline-flex items-center gap-2 h-9 px-3.5 rounded-full text-[13px] font-semibold transition disabled:opacity-60 ${
         published
           ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"

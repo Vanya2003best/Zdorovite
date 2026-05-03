@@ -49,7 +49,7 @@ export async function createBooking(
 
   const { data: service, error: svcErr } = await supabase
     .from("services")
-    .select("id, duration, price")
+    .select("id, name, description, duration, price")
     .eq("id", serviceId)
     .eq("trainer_id", trainer.id)
     .single();
@@ -59,12 +59,20 @@ export async function createBooking(
   const durationMin = service.duration > 0 ? service.duration : 60;
   const endDate = new Date(startDate.getTime() + durationMin * 60_000);
 
+  // Snapshot the service fields onto the booking row so the booking
+  // survives later edits / deletion of the service. Trainer and client
+  // both see the original booked service even after the source row is
+  // gone (see migration 018_booking_snapshot.sql).
   const { data: booking, error: bookErr } = await supabase
     .from("bookings")
     .insert({
       client_id: user.id,
       trainer_id: trainer.id,
       service_id: service.id,
+      service_name: service.name,
+      service_description: service.description,
+      service_duration: service.duration,
+      service_price: service.price,
       start_time: startDate.toISOString(),
       end_time: endDate.toISOString(),
       status: "confirmed", // no payment yet → auto-confirm; switch to 'pending' when Stripe is wired

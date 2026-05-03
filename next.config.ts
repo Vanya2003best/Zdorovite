@@ -15,6 +15,14 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  experimental: {
+    serverActions: {
+      // Default is 1 MB. Raised so the Cinematic intro-video upload (50 MB cap
+      // on the 'videos' Supabase bucket) fits through the Server Action body
+      // parser. 60 MB leaves headroom for multipart overhead.
+      bodySizeLimit: "60mb",
+    },
+  },
 };
 
 export default nextConfig;

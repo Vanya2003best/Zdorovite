@@ -8,11 +8,27 @@ import { STUDIO_NAV } from "./nav-items";
  * underneath — gives the chrome a bit of visual weight instead of a lone word.
  * Reads STUDIO_NAV via usePathname so it always matches the current route.
  */
+/**
+ * Per-pathname overrides for routes that aren't first-class sidebar entries
+ * but still deserve a custom top-bar title. /studio/profile is reached via
+ * the AccountMenu dropdown ("Moje konto") and shows account-level data
+ * (certificates, contact, settings) — distinct from /studio/design where
+ * the trainer edits public profile content + template.
+ */
+const TITLE_OVERRIDES: Array<{ test: (p: string) => boolean; label: string; description: string }> = [
+  {
+    test: (p) => p.startsWith("/studio/profile"),
+    label: "Moje konto",
+    description: "Dane, certyfikaty, ustawienia",
+  },
+];
+
 export default function StudioPageTitle() {
   const pathname = usePathname();
+  const override = TITLE_OVERRIDES.find((o) => o.test(pathname));
   const match = STUDIO_NAV.find((s) => s.match(pathname));
-  const label = match?.label ?? "Studio";
-  const description = match?.description ?? "";
+  const label = override?.label ?? match?.label ?? "Studio";
+  const description = override?.description ?? match?.description ?? "";
   const icon = match?.icon;
 
   return (

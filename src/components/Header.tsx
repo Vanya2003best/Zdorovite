@@ -6,12 +6,21 @@ import AutoHideHeader from "./AutoHideHeader";
 export default async function Header() {
   // Hide the public header in trainer Studio (own sidebar), in iframe
   // previews (?embed=1), and on auth screens (full-bleed split layout).
+  // Also hide on the trainer profile page itself — every template renders
+  // its own branded chrome (e.g. Cinematic's sticky NaZdrow! / Trenerzy /
+  // Kategorie nav). Sub-routes like /trainers/[id]/book still get the site
+  // header because they're not the template-styled page.
   const h = await headers();
   const pathname = h.get("x-pathname") ?? "";
   if (pathname.startsWith("/studio")) return null;
   if (pathname.startsWith("/account")) return null;
   if (pathname === "/login" || pathname.startsWith("/register")) return null;
   if (h.get("x-embed") === "1") return null;
+  // Match /trainers/<slug> exactly OR /trainers/<slug>/<pageSlug> (the
+  // multi-page secondary route). Both render their own template chrome.
+  // Exclude reserved sub-routes (book, gallery) — those keep the site header.
+  if (/^\/trainers\/[^/]+$/.test(pathname)) return null;
+  if (/^\/trainers\/[^/]+\/(?!book(?:\/|$)|gallery(?:\/|$))[^/]+$/.test(pathname)) return null;
 
   const cu = await getCurrentUser();
   const user = cu?.user ?? null;

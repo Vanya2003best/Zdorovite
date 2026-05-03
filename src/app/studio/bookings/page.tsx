@@ -19,6 +19,10 @@ type BookingRow = {
   status: string;
   price: number;
   note: string | null;
+  // Snapshot fields — written at booking creation time (migration 018).
+  // Survive deletion of the source service. Prefer these over `service.*`.
+  service_name: string | null;
+  service_duration: number | null;
   service: { name: string; duration: number } | null;
   client: { display_name: string; avatar_url: string | null } | null;
 };
@@ -33,6 +37,7 @@ export default async function TrainerBookingsPage() {
     .from("bookings")
     .select(`
       id, client_id, start_time, end_time, status, price, note,
+      service_name, service_duration,
       service:services ( name, duration ),
       client:profiles!client_id ( display_name, avatar_url )
     `)
@@ -200,7 +205,7 @@ function TrainerBookingCard({
           <StatusPill status={b.status} />
         </div>
         <div className="text-sm text-slate-700 mt-1">
-          {b.service?.name ?? "Usługa"} · {dateStr}, {timeStr}
+          {b.service_name ?? b.service?.name ?? "Usługa"} · {dateStr}, {timeStr}
         </div>
         {b.note && (
           <div className="text-[13px] text-slate-600 mt-2.5 bg-slate-50 rounded-lg px-3 py-2 italic">

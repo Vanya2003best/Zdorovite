@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { pushDeleteTombstone } from "@/lib/db/page-customization";
 
 async function ctx() {
   const supabase = await createClient();
@@ -32,7 +33,15 @@ export async function updatePackageField(
   const c = await ctx();
   if (!c) return { error: "Nie zalogowano." };
 
-  let patch: Record<string, string | number | null> = {};
+  const { data: before } = await c.supabase
+    .from("packages")
+    .select("name, description, price, period, is_placeholder")
+    .eq("id", packageId)
+    .eq("trainer_id", c.trainerId)
+    .maybeSingle();
+  if (!before) return { error: "Pakiet nie istnieje." };
+
+  let patch: Record<string, string | number | boolean | null> = {};
   if (field === "name") {
     const v = value.trim();
     if (!v) return { error: "Nazwa nie może być pusta." };
@@ -51,6 +60,7 @@ export async function updatePackageField(
     if (v.length > 30) return { error: "Max 30 znaków." };
     patch = { period: v || null };
   }
+  patch.is_placeholder = false;
 
   const { error } = await c.supabase
     .from("packages")
@@ -58,6 +68,13 @@ export async function updatePackageField(
     .eq("id", packageId)
     .eq("trainer_id", c.trainerId);
   if (error) return { error: error.message };
+
+  await pushDeleteTombstone(c.trainerId, {
+    kind: "packageUpdated",
+    id: packageId,
+    before: before as Record<string, unknown>,
+    after: { ...(before as Record<string, unknown>), ...patch },
+  });
 
   bust(c.slug);
   return { ok: true };
@@ -70,14 +87,29 @@ export async function updatePackageItems(
   const c = await ctx();
   if (!c) return { error: "Nie zalogowano." };
 
+  const { data: before } = await c.supabase
+    .from("packages")
+    .select("items, is_placeholder")
+    .eq("id", packageId)
+    .eq("trainer_id", c.trainerId)
+    .maybeSingle();
+  if (!before) return { error: "Pakiet nie istnieje." };
+
   const clean = items.map((s) => String(s).trim()).filter(Boolean).slice(0, 15);
 
   const { error } = await c.supabase
     .from("packages")
-    .update({ items: clean })
+    .update({ items: clean, is_placeholder: false })
     .eq("id", packageId)
     .eq("trainer_id", c.trainerId);
   if (error) return { error: error.message };
+
+  await pushDeleteTombstone(c.trainerId, {
+    kind: "packageUpdated",
+    id: packageId,
+    before: before as Record<string, unknown>,
+    after: { ...(before as Record<string, unknown>), items: clean, is_placeholder: false },
+  });
 
   bust(c.slug);
   return { ok: true };
@@ -112,6 +144,13 @@ export async function togglePackageFeatured(
     .eq("trainer_id", c.trainerId);
   if (error) return { error: error.message };
 
+  await pushDeleteTombstone(c.trainerId, {
+    kind: "packageUpdated",
+    id: packageId,
+    before: { featured: pkg.featured },
+    after: { featured: !pkg.featured },
+  });
+
   bust(c.slug);
   return { ok: true };
 }
@@ -140,10 +179,15 @@ export async function addPackage(): Promise<{ ok: true; id: string } | { error: 
       featured: false,
       position: nextPos,
     })
-    .select("id")
+    .select("*")
     .single();
 
   if (error || !data) return { error: error?.message ?? "Błąd." };
+
+  await pushDeleteTombstone(c.trainerId, {
+    kind: "packageCreated",
+    row: data as Record<string, unknown>,
+  });
 
   bust(c.slug);
   return { ok: true, id: data.id };
@@ -154,6 +198,14 @@ export async function removePackage(
 ): Promise<{ ok: true } | { error: string }> {
   const c = await ctx();
   if (!c) return { error: "Nie zalogowano." };
+
+  const { data: row } = await c.supabase
+    .from("packages")
+    .select("*")
+    .eq("id", packageId)
+    .eq("trainer_id", c.trainerId)
+    .maybeSingle();
+  if (!row) return { error: "Pakiet nie istnieje." };
 
   await c.supabase
     .from("bookings")
@@ -167,6 +219,11 @@ export async function removePackage(
     .eq("id", packageId)
     .eq("trainer_id", c.trainerId);
   if (error) return { error: error.message };
+
+  await pushDeleteTombstone(c.trainerId, {
+    kind: "packageDeleted",
+    row: row as Record<string, unknown>,
+  });
 
   bust(c.slug);
   return { ok: true };

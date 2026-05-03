@@ -6,14 +6,14 @@ import { getAvailableSlots } from "@/lib/db/availability";
 import { warsawDateOffset } from "@/lib/time";
 import BookingForm from "./BookingForm";
 
-type SP = Promise<{ date?: string }>;
+type SP = Promise<{ date?: string; service?: string }>;
 
 export default async function BookPage(props: {
   params: Promise<{ id: string }>;
   searchParams: SP;
 }) {
   const { id } = await props.params;
-  const { date: dateParam } = await props.searchParams;
+  const { date: dateParam, service: serviceParam } = await props.searchParams;
 
   const trainer = await getTrainerBySlug(id);
   if (!trainer) notFound();
@@ -65,6 +65,7 @@ export default async function BookPage(props: {
           trainerAvatar={trainer.avatar}
           trainerLocation={trainer.location}
           services={services}
+          initialServiceId={serviceParam && services.some((s) => s.id === serviceParam) ? serviceParam : undefined}
           initialDate={date}
           initialSlots={initialSlots}
         />

@@ -1,0 +1,586 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import FullCalendar from "@fullcalendar/react";
+import timeGridPlugin from "@fullcalendar/timegrid";
+import dayGridPlugin from "@fullcalendar/daygrid";
+import interactionPlugin from "@fullcalendar/interaction";
+import type { EventClickArg, EventInput } from "@fullcalendar/core";
+import RescheduleDialog from "@/components/RescheduleDialog";
+import {
+  cancelAsTrainer,
+  confirmBooking,
+  markCompleted,
+  markNoShow,
+} from "@/app/studio/bookings/actions";
+import { saveAvailabilityRules } from "@/app/studio/availability/actions";
+import WorkingHoursOverlay from "./WorkingHoursOverlay";
+
+export type WorkingHourRule = { dow: number; start: string; end: string };
+
+export type BookingEvent = {
+  id: string;
+  start: string; // ISO datetime
+  end: string;   // ISO datetime
+  status: "pending" | "paid" | "confirmed" | "completed" | "cancelled" | "no_show";
+  price: number;
+  note: string | null;
+  title: string;        // service or package name
+  clientName: string;
+  clientAvatar: string | null;
+};
+
+const POL_MONTHS_GEN = [
+  "stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca",
+  "lipca", "sierpnia", "września", "października", "listopada", "grudnia",
+];
+const POL_MONTHS_NOM = [
+  "Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec",
+  "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień",
+];
+
+/** Status → background colour (CSS variable applied via class). */
+const STATUS_STYLE: Record<BookingEvent["status"], { bg: string; border: string; text: string; label: string }> = {
+  pending:   { bg: "bg-amber-100",  border: "border-amber-300",  text: "text-amber-900",  label: "Oczekuje" },
+  paid:      { bg: "bg-emerald-100", border: "border-emerald-400", text: "text-emerald-900", label: "Opłacone" },
+  confirmed: { bg: "bg-emerald-100", border: "border-emerald-400", text: "text-emerald-900", label: "Potwierdzone" },
+  completed: { bg: "bg-slate-100",  border: "border-slate-300",  text: "text-slate-700",  label: "Zakończone" },
+  cancelled: { bg: "bg-rose-50",    border: "border-rose-200",   text: "text-rose-700",   label: "Anulowane" },
+  no_show:   { bg: "bg-rose-50",    border: "border-rose-200",   text: "text-rose-700",   label: "Nieobecność" },
+};
+
+type ViewName = "timeGridDay" | "timeGridWeek" | "dayGridMonth";
+
+export default function CalendarClient({
+  rules,
+  bookings,
+  trainerId,
+  pendingRescheduleIds,
+}: {
+  rules: WorkingHourRule[];
+  bookings: BookingEvent[];
+  trainerId: string;
+  pendingRescheduleIds: string[];
+}) {
+  const router = useRouter();
+  const pendingResSet = useMemo(() => new Set(pendingRescheduleIds), [pendingRescheduleIds]);
+  const calRef = useRef<FullCalendar | null>(null);
+  /** Wraps the FullCalendar render so WorkingHoursOverlay can reach into FC's
+   *  DOM via querySelector to find day columns. */
+  const calWrapperRef = useRef<HTMLDivElement | null>(null);
+  /** Local mirror of working-hour rules. Updated optimistically as the user
+   *  drags so the emerald block visually follows their cursor; on pointerup
+   *  we hit saveAvailabilityRules + router.refresh to persist + re-render
+   *  events/headers. Debounced so a fast wiggle doesn't fire a save per pixel. */
+  const [rulesState, setRulesState] = useState(rules);
+  useEffect(() => { setRulesState(rules); }, [rules]);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleRulesChange = useCallback((next: WorkingHourRule[]) => {
+    setRulesState(next);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      await saveAvailabilityRules(next.map((r) => ({ dow: r.dow, start: r.start, end: r.end })));
+      router.refresh();
+    }, 400);
+  }, [router]);
+  // Mobile gets day-view by default; desktop gets week. SSR safe — start with
+  // week and update on mount. Avoids a hydration flash because FullCalendar
+  // mounts client-only anyway.
+  const [view, setView] = useState<ViewName>("timeGridWeek");
+  const [title, setTitle] = useState("");
+  const [selected, setSelected] = useState<BookingEvent | null>(null);
+
+  // Reset html { zoom: 1.1 } (set on >=1500px in globals.css) for the duration
+  // of the calendar page. Same trick as /studio/design — without it 100vh-based
+  // heights render at 110% physical and the page overflows the viewport,
+  // creating an unwanted browser-level scroll. Also lock body overflow so the
+  // page itself never scrolls; trainer scrolls inside the calendar instead.
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const prevZoom = html.style.zoom;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverflow = body.style.overflow;
+    html.style.zoom = "1";
+    html.style.overflow = "clip";
+    body.style.overflow = "clip";
+    return () => {
+      html.style.zoom = prevZoom;
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
+    };
+  }, []);
+
+  // Mobile gets day-view: 7 columns × 16 hours doesn't fit on phone screens.
+  // Listens to viewport changes too — if user rotates or resizes, swap.
+  // Tracks whether the user has manually picked a view; if they have, we stop
+  // auto-switching (otherwise switching to month + rotating phone would yank
+  // them back to day, which is annoying).
+  const userPickedView = useRef(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia("(max-width: 640px)");
+    const apply = () => {
+      if (userPickedView.current) return;
+      const target = mql.matches ? "timeGridDay" : "timeGridWeek";
+      setView(target);
+      calRef.current?.getApi().changeView(target);
+    };
+    apply();
+    mql.addEventListener("change", apply);
+    return () => mql.removeEventListener("change", apply);
+  }, []);
+
+  // FullCalendar events: bookings only. Working-hours emerald wash is drawn
+  // by the WorkingHoursOverlay (drag-editable), NOT as FC background events.
+  const events: EventInput[] = useMemo(() =>
+    bookings.map((b) => ({
+      id: b.id,
+      title: b.clientName,
+      start: b.start,
+      end: b.end,
+      classNames: ["nz-booking", `nz-status-${b.status}`],
+      extendedProps: { booking: b } as { booking: BookingEvent },
+    })),
+  [bookings]);
+
+  const navigate = (dir: "prev" | "next" | "today") => {
+    const api = calRef.current?.getApi();
+    if (!api) return;
+    if (dir === "prev") api.prev();
+    else if (dir === "next") api.next();
+    else api.today();
+    setTitle(formatTitle(api.view.currentStart, api.view.type as ViewName));
+  };
+
+  const changeView = (v: ViewName) => {
+    userPickedView.current = true;
+    setView(v);
+    const api = calRef.current?.getApi();
+    api?.changeView(v);
+    if (api) setTitle(formatTitle(api.view.currentStart, v));
+  };
+
+  const handleEventClick = (arg: EventClickArg) => {
+    const booking = (arg.event.extendedProps as { booking?: BookingEvent }).booking;
+    if (booking) setSelected(booking);
+  };
+
+  return (
+    <div className="mx-auto max-w-[1200px] px-4 sm:px-8 pt-3 pb-8 grid gap-3">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between gap-3 flex-wrap rounded-xl border border-slate-200 bg-white px-3 sm:px-4 py-2.5">
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => navigate("today")}
+            className="h-9 px-3.5 text-[13px] font-medium text-slate-700 rounded-lg border border-slate-200 hover:border-slate-400 hover:bg-slate-50 transition"
+          >
+            Dziś
+          </button>
+          <div className="inline-flex items-center gap-px ml-1">
+            <button
+              type="button"
+              onClick={() => navigate("prev")}
+              aria-label="Poprzedni okres"
+              className="w-9 h-9 inline-flex items-center justify-center rounded-l-lg border border-slate-200 hover:bg-slate-50 transition"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M15 18l-6-6 6-6" /></svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("next")}
+              aria-label="Następny okres"
+              className="w-9 h-9 inline-flex items-center justify-center rounded-r-lg border border-slate-200 border-l-0 hover:bg-slate-50 transition"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M9 18l6-6-6-6" /></svg>
+            </button>
+          </div>
+          <h2 className="text-[14px] sm:text-[15px] font-semibold tracking-tight ml-3 tabular-nums">{title}</h2>
+        </div>
+
+        <div className="inline-flex bg-slate-100 rounded-[9px] p-[3px] gap-[2px]">
+          {([
+            { id: "timeGridDay", label: "Dzień" },
+            { id: "timeGridWeek", label: "Tydzień" },
+            { id: "dayGridMonth", label: "Miesiąc" },
+          ] as const).map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              onClick={() => changeView(v.id)}
+              className={`px-3 py-1.5 text-[12px] font-medium rounded-[7px] transition ${
+                view === v.id ? "bg-white text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.05)]" : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Calendar */}
+      <div
+        ref={calWrapperRef}
+        className="relative rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-[0_8px_28px_-12px_rgba(2,6,23,0.12),0_2px_4px_-2px_rgba(2,6,23,0.06)]"
+      >
+        <FullCalendar
+          ref={calRef}
+          plugins={[timeGridPlugin, dayGridPlugin, interactionPlugin]}
+          initialView="timeGridWeek"
+          headerToolbar={false}
+          firstDay={1} // Monday
+          locale="pl"
+          buttonText={{ today: "Dziś", month: "Mc", week: "Tydz", day: "Dzień" }}
+          allDaySlot={false}
+          // 06:00–23:00 (17 hours). Page is locked, calendar has internal
+          // scroll, so showing the full plausible day window costs nothing.
+          slotMinTime="06:00:00"
+          slotMaxTime="23:00:00"
+          slotDuration="00:30:00"
+          slotLabelInterval="01:00"
+          slotLabelFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
+          nowIndicator
+          dayHeaderFormat={{ weekday: "short", day: "numeric" }}
+          eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
+          // Compact container: ~5-6 hours visible, internal scroll for the rest.
+          // The page is locked (no body scroll), so the trainer scrolls the
+          // calendar itself to see hours outside the visible window.
+          // expandRows + height="auto" together cause runaway layout in some
+          // flex parent contexts (slot labels grow to ~1M px), so we pin a value.
+          height="560px"
+          events={events}
+          eventClick={handleEventClick}
+          datesSet={(arg) => setTitle(formatTitle(arg.view.currentStart, arg.view.type as ViewName))}
+          eventContent={(arg) => {
+            const booking = (arg.event.extendedProps as { booking?: BookingEvent }).booking;
+            if (!booking) return null;
+            const s = STATUS_STYLE[booking.status];
+            return (
+              <div className={`px-1.5 py-1 text-[11px] leading-tight overflow-hidden h-full ${s.bg} ${s.text} border-l-[3px] ${s.border}`}>
+                <div className="font-semibold truncate">{booking.clientName}</div>
+                <div className="opacity-80 truncate">{booking.title}</div>
+                <div className="opacity-60 tabular-nums">
+                  {arg.timeText} · {booking.price} zł
+                </div>
+              </div>
+            );
+          }}
+        />
+        <WorkingHoursOverlay
+          rules={rulesState}
+          fcWrapperRef={calWrapperRef}
+          viewType={view}
+          onChange={handleRulesChange}
+        />
+      </div>
+
+      {/* Status legend */}
+      <div className="flex items-center gap-4 text-[11px] text-slate-500 flex-wrap px-1">
+        <LegendDot bg="bg-emerald-100" border="border-emerald-400" label="Opłacone / Potwierdzone" />
+        <LegendDot bg="bg-amber-100" border="border-amber-300" label="Oczekuje" />
+        <LegendDot bg="bg-slate-100" border="border-slate-300" label="Zakończone" />
+        <LegendDot bg="bg-rose-50" border="border-rose-200" label="Anulowane / Nieobecność" />
+        <span className="inline-flex items-center gap-1.5 ml-auto">
+          <span className="w-3 h-3 rounded" style={{ background: "rgba(16,185,129,0.20)" }} />
+          Godziny pracy <span className="text-slate-400">— kliknij aby edytować</span>
+        </span>
+      </div>
+
+      {/* Selected booking modal */}
+      {selected && (
+        <BookingDetail
+          booking={selected}
+          trainerId={trainerId}
+          hasPendingReschedule={pendingResSet.has(selected.id)}
+          onClose={() => setSelected(null)}
+          onAfterAction={() => {
+            setSelected(null);
+            router.refresh();
+          }}
+        />
+      )}
+
+      {/* FullCalendar appearance overrides — keep them scoped to .nz-* classes
+          we add above. Pulled inline as <style jsx global> to avoid touching
+          globals.css. */}
+      <style jsx global>{`
+        /* Working-hour blocks are rendered by WorkingHoursOverlay (drag-edit
+           overlay) directly into FC's day columns — no FC bg events involved. */
+        .fc {
+          font-family: inherit;
+          --fc-border-color: #e2e8f0;
+          --fc-today-bg-color: rgba(16, 185, 129, 0.07);
+          --fc-page-bg-color: #fafbfc;
+        }
+        /* Hour rows have a clearer slate border; half-hour gridlines drop to
+           a near-invisible dotted stroke so the eye locks onto whole hours. */
+        .fc .fc-timegrid-slot { height: 28px !important; border-color: #f1f5f9 !important; }
+        .fc .fc-timegrid-slot-lane.fc-timegrid-slot-minor { border-top-style: dotted; border-top-color: #f1f5f9 !important; }
+        .fc .fc-timegrid-slot-lane:not(.fc-timegrid-slot-minor) { border-top: 1px solid #e2e8f0 !important; }
+        /* Day-column borders subtly stronger than half-hour borders. */
+        .fc-theme-standard td, .fc-theme-standard th { border-color: #e2e8f0; }
+        /* Day header row sits in a tinted bar so it visually separates from
+           the grid below. */
+        .fc-col-header { background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+        .fc-col-header-cell-cushion {
+          font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+          font-weight: 700; color: #475569; padding: 11px 4px;
+        }
+        .fc-col-header-cell.fc-day-today {
+          background: rgba(16, 185, 129, 0.08);
+        }
+        .fc-col-header-cell.fc-day-today .fc-col-header-cell-cushion {
+          color: #047857;
+        }
+        /* Today's date number gets a small emerald pill for clarity. */
+        .fc-col-header-cell.fc-day-today .fc-col-header-cell-cushion::after {
+          content: ""; display: inline-block; width: 6px; height: 6px;
+          border-radius: 9999px; background: #10b981; margin-left: 6px;
+          vertical-align: middle;
+        }
+        .fc-timegrid-slot-label-cushion {
+          font-size: 11px; color: #64748b; font-variant-numeric: tabular-nums;
+          font-weight: 500;
+        }
+        .fc-timegrid-axis { font-size: 10px; background: #fafbfc; }
+        .fc-timegrid-axis-cushion { padding: 4px 8px; }
+        /* Event styling — strip FC's default chrome on real events so our
+           inner card paints. EXCLUDE .fc-bg-event so working-hours background
+           events keep their wash (.nz-working-hours rule above). */
+        .fc .fc-event:not(.fc-bg-event) { border: none !important; background: transparent !important; padding: 0 !important; }
+        .fc-event-main { padding: 0 !important; }
+        .nz-booking { cursor: pointer; border-radius: 6px; overflow: hidden; }
+        .nz-booking:hover { transform: translateY(-1px); transition: transform .15s; box-shadow: 0 4px 12px -2px rgba(2,6,23,0.15); }
+        /* Now indicator — keep red, slightly thicker for visibility. */
+        .fc-now-indicator-line { border-color: #ef4444 !important; border-width: 2px; }
+        .fc-now-indicator-arrow { border-color: #ef4444 !important; }
+        /* Month view tweaks. */
+        .fc-daygrid-day.fc-day-today { background: rgba(16, 185, 129, 0.07); }
+        .fc-daygrid-day-number { font-size: 12px; color: #475569; padding: 6px 8px; font-weight: 500; }
+        .fc-day-today .fc-daygrid-day-number {
+          color: #047857; font-weight: 700;
+          background: #d1fae5; border-radius: 9999px;
+          width: 24px; height: 24px; padding: 0;
+          display: inline-flex; align-items: center; justify-content: center;
+          margin: 4px 4px 0 auto;
+        }
+        .fc-scrollgrid { border-radius: 0; border: none; }
+      `}</style>
+    </div>
+  );
+}
+
+function LegendDot({ bg, border, label }: { bg: string; border: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`w-3 h-3 rounded border-l-[3px] ${border} ${bg}`} />
+      {label}
+    </span>
+  );
+}
+
+function formatTitle(date: Date, view: ViewName): string {
+  const y = date.getFullYear();
+  const m = date.getMonth();
+  const d = date.getDate();
+  if (view === "dayGridMonth") return `${POL_MONTHS_NOM[m]} ${y}`;
+  if (view === "timeGridDay") {
+    const dow = ["Niedziela", "Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota"][date.getDay()];
+    return `${dow}, ${d} ${POL_MONTHS_GEN[m]} ${y}`;
+  }
+  // Week: show range "27 kwiet – 3 maja 2026"
+  const end = new Date(date);
+  end.setDate(d + 6);
+  const sameMonth = end.getMonth() === m;
+  const sameYear = end.getFullYear() === y;
+  const startStr = sameMonth ? `${d}` : `${d} ${POL_MONTHS_GEN[m]}`;
+  const endStr = `${end.getDate()} ${POL_MONTHS_GEN[end.getMonth()]} ${end.getFullYear()}`;
+  return sameYear ? `${startStr} – ${endStr}` : `${d} ${POL_MONTHS_GEN[m]} ${y} – ${endStr}`;
+}
+
+/* ============================================================
+   Booking detail + actions modal
+   Surfaces every operation that previously lived on /studio/bookings:
+   confirm, cancel, mark completed, mark no-show, reschedule. Action set
+   is gated by booking status and whether the session is in the past.
+   ============================================================ */
+function BookingDetail({
+  booking, trainerId, hasPendingReschedule, onClose, onAfterAction,
+}: {
+  booking: BookingEvent;
+  trainerId: string;
+  hasPendingReschedule: boolean;
+  onClose: () => void;
+  onAfterAction: () => void;
+}) {
+  const s = STATUS_STYLE[booking.status];
+  const start = new Date(booking.start);
+  const end = new Date(booking.end);
+  const dateLabel = `${["niedz", "pon", "wt", "śr", "czw", "pt", "sob"][start.getDay()]}, ${start.getDate()} ${POL_MONTHS_GEN[start.getMonth()]} ${start.getFullYear()}`;
+  const timeLabel = `${pad(start.getHours())}:${pad(start.getMinutes())} – ${pad(end.getHours())}:${pad(end.getMinutes())}`;
+  const durationMin = Math.max(30, Math.round((end.getTime() - start.getTime()) / 60000));
+  const isPast = end.getTime() < Date.now();
+  const isFutureUpcoming = !isPast && (booking.status === "paid" || booking.status === "confirmed" || booking.status === "pending");
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-[460px] bg-white rounded-2xl shadow-[0_32px_80px_-16px_rgba(2,6,23,0.4)] overflow-hidden"
+      >
+        <div className={`px-6 py-3 ${s.bg} ${s.text} border-b ${s.border} text-[12px] font-semibold uppercase tracking-[0.06em] flex items-center justify-between`}>
+          <span>{s.label}</span>
+          {hasPendingReschedule && (
+            <span className="text-[10px] bg-white/70 text-slate-700 px-2 py-0.5 rounded normal-case font-medium">
+              Oczekuje na decyzję klienta
+            </span>
+          )}
+        </div>
+        <div className="px-6 pt-5 pb-4 grid gap-4">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-slate-500">Klient</div>
+            <div className="flex items-center gap-3 mt-1.5">
+              {booking.clientAvatar && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={booking.clientAvatar} alt="" className="w-10 h-10 rounded-full object-cover" />
+              )}
+              <span className="text-[16px] font-semibold text-slate-900">{booking.clientName}</span>
+            </div>
+          </div>
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-slate-500">Usługa</div>
+            <div className="text-[14px] text-slate-900 mt-0.5">{booking.title}</div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-slate-500">Data</div>
+              <div className="text-[13px] text-slate-700 mt-0.5 capitalize">{dateLabel}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-slate-500">Czas</div>
+              <div className="text-[13px] text-slate-700 mt-0.5 tabular-nums">{timeLabel}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-slate-500">Cena</div>
+              <div className="text-[13px] text-slate-700 mt-0.5 tabular-nums">{booking.price} zł</div>
+            </div>
+          </div>
+          {booking.note && (
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-slate-500">Notatka klienta</div>
+              <div className="text-[13px] text-slate-700 mt-0.5 leading-relaxed">{booking.note}</div>
+            </div>
+          )}
+          <Link
+            href="/studio/messages"
+            className="text-[12px] text-emerald-700 hover:text-emerald-800 inline-flex items-center gap-1 font-medium"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></svg>
+            Napisz do klienta →
+          </Link>
+        </div>
+
+        {/* Actions — gated by status + time. */}
+        <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2 flex-wrap">
+          {booking.status === "pending" && (
+            <>
+              <ActionForm action={cancelAsTrainer} bookingId={booking.id} onDone={onAfterAction} extraInputName="reason" extraInputValue="">
+                <span className="h-9 px-3.5 rounded-lg text-[13px] font-medium text-rose-700 border border-rose-200 hover:bg-rose-50 transition inline-flex items-center">
+                  Odrzuć
+                </span>
+              </ActionForm>
+              <ActionForm action={confirmBooking} bookingId={booking.id} onDone={onAfterAction}>
+                <span className="h-9 px-3.5 rounded-lg text-[13px] font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition inline-flex items-center">
+                  Potwierdź
+                </span>
+              </ActionForm>
+            </>
+          )}
+
+          {isFutureUpcoming && booking.status !== "pending" && (
+            <>
+              <ActionForm action={cancelAsTrainer} bookingId={booking.id} onDone={onAfterAction}>
+                <span className="h-9 px-3.5 rounded-lg text-[13px] font-medium text-rose-700 border border-rose-200 hover:bg-rose-50 transition inline-flex items-center">
+                  Anuluj
+                </span>
+              </ActionForm>
+              <RescheduleDialog
+                bookingId={booking.id}
+                trainerId={trainerId}
+                currentStartIso={booking.start}
+                durationMin={durationMin}
+                triggerLabel="Przenieś"
+                triggerClassName="h-9 px-3.5 rounded-lg text-[13px] font-medium text-slate-700 border border-slate-200 hover:bg-slate-100 transition inline-flex items-center"
+              />
+            </>
+          )}
+
+          {isPast && (booking.status === "paid" || booking.status === "confirmed") && (
+            <>
+              <ActionForm action={markNoShow} bookingId={booking.id} onDone={onAfterAction}>
+                <span className="h-9 px-3.5 rounded-lg text-[13px] font-medium text-rose-700 border border-rose-200 hover:bg-rose-50 transition inline-flex items-center">
+                  Nieobecność
+                </span>
+              </ActionForm>
+              <ActionForm action={markCompleted} bookingId={booking.id} onDone={onAfterAction}>
+                <span className="h-9 px-3.5 rounded-lg text-[13px] font-semibold text-white bg-slate-900 hover:bg-black transition inline-flex items-center">
+                  Zakończona
+                </span>
+              </ActionForm>
+            </>
+          )}
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-9 px-4 rounded-lg text-[13px] font-medium text-slate-700 hover:bg-slate-100 transition"
+          >
+            Zamknij
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Tiny wrapper that turns a server action into a clickable form so we can
+ *  keep all the imperative refresh/close logic in one place. */
+function ActionForm({
+  action, bookingId, onDone, children, extraInputName, extraInputValue,
+}: {
+  action: (formData: FormData) => Promise<void>;
+  bookingId: string;
+  onDone: () => void;
+  children: React.ReactNode;
+  extraInputName?: string;
+  extraInputValue?: string;
+}) {
+  return (
+    <form
+      action={async (fd) => {
+        await action(fd);
+        onDone();
+      }}
+    >
+      <input type="hidden" name="booking_id" value={bookingId} />
+      {extraInputName && <input type="hidden" name={extraInputName} value={extraInputValue ?? ""} />}
+      <button type="submit" className="contents">
+        {children}
+      </button>
+    </form>
+  );
+}
+
+function pad(n: number) { return String(n).padStart(2, "0"); }

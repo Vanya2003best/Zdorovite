@@ -3,12 +3,20 @@ import { headers } from "next/headers";
 
 export default async function Footer() {
   // Hide on /studio (own layout), iframe preview (?embed=1), and auth screens.
+  // Also hide on the trainer profile page itself — every template renders its
+  // own branded footer (e.g. Cinematic's "© NAZDROW! · IVAN ZHIGALIN · CINEMATIC
+  // TEMPLATE · v1" line). Sub-routes like /trainers/[id]/book still get the
+  // site footer because they're not the template-styled page.
   const h = await headers();
   const pathname = h.get("x-pathname") ?? "";
   if (pathname.startsWith("/studio")) return null;
   if (pathname.startsWith("/account")) return null;
   if (pathname === "/login" || pathname.startsWith("/register")) return null;
   if (h.get("x-embed") === "1") return null;
+  // Match /trainers/<slug> exactly OR /trainers/<slug>/<pageSlug> — same as Header.
+  // Exclude reserved sub-routes (book, gallery) — those keep the site footer.
+  if (/^\/trainers\/[^/]+$/.test(pathname)) return null;
+  if (/^\/trainers\/[^/]+\/(?!book(?:\/|$)|gallery(?:\/|$))[^/]+$/.test(pathname)) return null;
 
   return (
     <footer className="border-t border-slate-200 bg-slate-50">
