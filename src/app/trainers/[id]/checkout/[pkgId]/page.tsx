@@ -76,7 +76,12 @@ export default async function PackageCheckoutPage(props: {
         <aside className="rounded-[18px] bg-white border border-slate-200 p-6 shadow-[0_1px_3px_rgba(2,6,23,.04)] h-fit lg:sticky lg:top-6">
           <div className="flex items-center gap-3 mb-5">
             {trainer.avatar && (
-              <img src={trainer.avatar} alt="" className="w-10 h-10 rounded-[10px] object-cover" />
+              <img
+                src={trainer.avatar}
+                alt=""
+                className="w-10 h-10 rounded-[10px] object-cover"
+                style={{ objectPosition: trainer.avatarFocal || "center" }}
+              />
             )}
             <div className="min-w-0">
               <div className="text-[14px] font-semibold text-slate-900 truncate">{trainer.name}</div>

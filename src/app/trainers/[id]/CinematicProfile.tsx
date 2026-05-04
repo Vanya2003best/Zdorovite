@@ -428,7 +428,12 @@ export default function CinematicProfile({
                 <div className="w-12 h-12 rounded-full overflow-hidden shrink-0">
                   {trainer.avatar ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={trainer.avatar} alt="" className="w-full h-full object-cover" />
+                    <img
+                      src={trainer.avatar}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      style={{ objectPosition: trainer.avatarFocal || "center" }}
+                    />
                   ) : (
                     <span className="w-full h-full inline-flex items-center justify-center text-[#0a0a0c] font-semibold text-base bg-[#d4ff00]">
                       {(trainer.name || "?").charAt(0).toUpperCase()}

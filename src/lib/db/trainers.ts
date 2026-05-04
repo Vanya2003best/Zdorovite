@@ -20,7 +20,11 @@ type TrainerRow = {
   rating: number | string; // numeric comes back as string sometimes
   review_count: number;
   customization: ProfileCustomization;
-  profile: { display_name: string; avatar_url: string | null } | null;
+  profile: {
+    display_name: string;
+    avatar_url: string | null;
+    avatar_focal?: string | null;
+  } | null;
   trainer_specializations: { specialization_id: string }[];
   services: {
     id: string;
@@ -88,7 +92,7 @@ type TrainerRow = {
 const SELECT = `
   id, slug, tagline, about, experience, price_from, location, languages,
   cover_image, rating, review_count, customization,
-  profile:profiles!id ( display_name, avatar_url ),
+  profile:profiles!id ( display_name, avatar_url, avatar_focal ),
   trainer_specializations ( specialization_id ),
   services ( id, name, description, duration, price, position, is_placeholder ),
   packages ( id, name, description, items, price, period, featured, position, is_placeholder ),
@@ -109,6 +113,7 @@ function mapTrainer(row: TrainerRow): Trainer {
     avatar:
       row.profile?.avatar_url ??
       "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&h=400&fit=crop",
+    avatarFocal: row.profile?.avatar_focal ?? null,
     specializations: row.trainer_specializations.map(
       (ts) => ts.specialization_id as Specialization,
     ),
@@ -234,13 +239,28 @@ async function attachCertVerification(
   }
 }
 
+/** Same 42703 fallback used by getTrainerBySlug — when migration 020 isn't
+ *  applied, retry the SELECT without `avatar_focal`. Centralised so the three
+ *  callers below stay one-liner mostly. */
+async function selectTrainersWithFocalFallback(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  build: (sel: string) => unknown,
+): Promise<{ data: unknown; error: { code?: string; message: string } | null }> {
+  const first = (await build(SELECT)) as { data: unknown; error: { code?: string; message: string } | null };
+  if (first.error?.code !== "42703") return first;
+  const fallback = (await build(SELECT.replace(", avatar_focal", ""))) as { data: unknown; error: { code?: string; message: string } | null };
+  return fallback;
+}
+
 export async function getTrainers(): Promise<Trainer[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("trainers")
-    .select(SELECT)
-    .eq("published", true)
-    .order("rating", { ascending: false });
+  const { data, error } = await selectTrainersWithFocalFallback(supabase, (sel) =>
+    supabase
+      .from("trainers")
+      .select(sel)
+      .eq("published", true)
+      .order("rating", { ascending: false }),
+  );
   if (error) throw error;
   const rows = data as unknown as TrainerRow[];
   await attachCertVerification(supabase, rows);
@@ -249,13 +269,15 @@ export async function getTrainers(): Promise<Trainer[]> {
 
 export async function getTopTrainers(limit = 3): Promise<Trainer[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("trainers")
-    .select(SELECT)
-    .eq("published", true)
-    .order("rating", { ascending: false })
-    .order("review_count", { ascending: false })
-    .limit(limit);
+  const { data, error } = await selectTrainersWithFocalFallback(supabase, (sel) =>
+    supabase
+      .from("trainers")
+      .select(sel)
+      .eq("published", true)
+      .order("rating", { ascending: false })
+      .order("review_count", { ascending: false })
+      .limit(limit),
+  );
   if (error) throw error;
   const rows = data as unknown as TrainerRow[];
   await attachCertVerification(supabase, rows);
@@ -267,14 +289,27 @@ export async function getTrainerBySlug(slug: string): Promise<Trainer | null> {
   // Note: we DON'T filter by published here — RLS ("trainers read published or own")
   // handles visibility automatically. Without auth: only published returns.
   // As the owner: returns own row even when unpublished, so trainer can preview/edit drafts.
-  const { data, error } = await supabase
+  let res = await supabase
     .from("trainers")
     .select(SELECT)
     .eq("slug", slug)
     .maybeSingle();
-  if (error) throw error;
-  if (!data) return null;
-  const row = data as unknown as TrainerRow;
+  // Fallback when migration 020 isn't applied (avatar_focal column missing).
+  // Postgres rejects the join column, returns code 42703 — retry without it.
+  if (res.error?.code === "42703") {
+    const SELECT_FALLBACK = SELECT.replace(
+      ", avatar_focal",
+      "",
+    );
+    res = await supabase
+      .from("trainers")
+      .select(SELECT_FALLBACK)
+      .eq("slug", slug)
+      .maybeSingle();
+  }
+  if (res.error) throw res.error;
+  if (!res.data) return null;
+  const row = res.data as unknown as TrainerRow;
   await attachCertVerification(supabase, [row]);
   // The PRIMARY trainer page mirrors trainers.customization (kept in sync by
   // the design editor's actions), so we don't need a second lookup here. The

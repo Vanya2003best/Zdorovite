@@ -63,6 +63,7 @@ export default async function BookPage(props: {
           trainerId={trainerRow.id}
           trainerName={trainer.name}
           trainerAvatar={trainer.avatar}
+          trainerAvatarFocal={trainer.avatarFocal}
           trainerLocation={trainer.location}
           services={services}
           initialServiceId={serviceParam && services.some((s) => s.id === serviceParam) ? serviceParam : undefined}

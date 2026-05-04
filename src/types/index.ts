@@ -569,6 +569,11 @@ export interface Trainer {
   id: string;
   name: string;
   avatar: string;
+  /** CSS object-position for the avatar (e.g. "30% 45%"). Set via drag-pan
+   *  on /studio/profile, sourced from profiles.avatar_focal. Null means
+   *  default centering. Threaded through every place the avatar renders
+   *  so the trainer's framing choice survives across the public profile. */
+  avatarFocal?: string | null;
   specializations: Specialization[];
   tagline: string;
   about: string;

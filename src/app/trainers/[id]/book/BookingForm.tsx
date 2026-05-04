@@ -11,6 +11,7 @@ type Props = {
   trainerId: string;
   trainerName: string;
   trainerAvatar: string;
+  trainerAvatarFocal?: string | null;
   trainerLocation: string;
   services: (Service & { id: string })[];
   initialServiceId?: string;
@@ -41,6 +42,7 @@ export default function BookingForm({
   trainerId,
   trainerName,
   trainerAvatar,
+  trainerAvatarFocal,
   trainerLocation,
   services,
   initialServiceId,
@@ -94,7 +96,12 @@ export default function BookingForm({
           <p className="text-[13px] sm:text-[14px] text-slate-600 mt-1">Trzy proste kroki. Zajmie około 2 minut.</p>
         </div>
         <div className="inline-flex items-center gap-3 px-3.5 py-2 bg-white border border-slate-200 rounded-xl">
-          <img src={trainerAvatar} alt="" className="w-10 h-10 rounded-[10px] object-cover" />
+          <img
+            src={trainerAvatar}
+            alt=""
+            className="w-10 h-10 rounded-[10px] object-cover"
+            style={{ objectPosition: trainerAvatarFocal || "center" }}
+          />
           <div>
             <div className="text-[13px] font-semibold">{trainerName}</div>
             <div className="text-[12px] text-slate-500">{trainerLocation}</div>

@@ -261,7 +261,14 @@ export default async function PremiumProfile({
             {/* Avatar */}
             <div className="flex @[640px]:block gap-3.5">
               <div className="w-[72px] h-[72px] @[640px]:w-[180px] @[640px]:h-[180px] rounded-2xl @[640px]:rounded-3xl overflow-hidden border-[3px] @[640px]:border-4 border-white shadow-lg shrink-0">
-                <Image src={trainer.avatar} alt={trainer.name} width={180} height={180} className="w-full h-full object-cover" />
+                <Image
+                  src={trainer.avatar}
+                  alt={trainer.name}
+                  width={180}
+                  height={180}
+                  className="w-full h-full object-cover"
+                  style={{ objectPosition: trainer.avatarFocal || "center" }}
+                />
               </div>
               {/* Mobile name — next to avatar */}
               <div className="@[640px]:hidden">

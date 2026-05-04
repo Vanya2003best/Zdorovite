@@ -377,7 +377,14 @@ export default async function TemplateProfile({
           <div>
             <div className="px-6 -mt-12 sm:-mt-16 relative z-10">
               <div className={`${isCozy ? "w-[120px] h-[120px] sm:w-[140px] sm:h-[140px] rounded-full border-4 border-[#fdf6ec] bg-[#fbbf77] shadow-[0_8px_24px_rgba(164,95,30,0.22)]" : s.avatarStyle} overflow-hidden`}>
-                <Image src={trainer.avatar} alt={trainer.name} width={140} height={140} className="w-full h-full object-cover" />
+                <Image
+                  src={trainer.avatar}
+                  alt={trainer.name}
+                  width={140}
+                  height={140}
+                  className="w-full h-full object-cover"
+                  style={{ objectPosition: trainer.avatarFocal || "center" }}
+                />
               </div>
               <h1 className={`mt-5 ${isCozy ? "text-[36px] sm:text-[44px] font-semibold tracking-tight text-[#2d2418] leading-[1.05]" : s.nameStyle}`}>
                 {trainer.name}
