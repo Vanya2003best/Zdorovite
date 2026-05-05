@@ -14,12 +14,12 @@ type BranchOption = {
 
 /**
  * QR-code generator block on /studio/profile. Outputs a print-ready QR
- * pointing to /t/[trainerSlug] (short URL) with an optional ?source=…
- * tag for analytics — so when a flyer at Zdrofit Aleja Pokoju gets
- * scanned we know which placement drove the visit.
+ * pointing directly to /trainers/[slug] with an optional ?source=… tag
+ * for analytics — so when a flyer at Zdrofit Aleja Pokoju gets scanned
+ * we know which placement drove the visit.
  *
  * Two modes (radio toggle):
- *   - "Ogólny" — just /t/[slug] without source. For business cards,
+ *   - "Ogólny" — just /trainers/[slug] without source. For business cards,
  *     Insta bio, generic flyers.
  *   - "Dla klubu" — appends ?source=[chain]-[branch]. Dropdown filtered
  *     to the trainer's confirmed branch affiliations, so a trainer
@@ -52,7 +52,7 @@ export default function QrSection({
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const url = useMemo(() => {
-    const base = `${origin}/t/${trainerSlug}`;
+    const base = `${origin}/trainers/${trainerSlug}`;
     if (mode === "branch" && branchId) {
       const b = branches.find((x) => x.id === branchId);
       if (b) return `${base}?source=${b.chainSlug}-${b.branchSlug}`;
