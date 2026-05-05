@@ -1,8 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 
 /**
  * Chain landing — /sieci/[chain]. Lists all branches of a gym chain
@@ -49,9 +47,7 @@ export default async function ChainLanding({
   const accent = chain.brand_color ?? "#10b981";
 
   return (
-    <>
-      <Header />
-      <main className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50">
         <section
           className="relative px-4 sm:px-6 pt-12 pb-10 sm:pt-16 sm:pb-14"
           style={{ background: `linear-gradient(180deg, ${accent}10 0%, transparent 100%)` }}
@@ -115,9 +111,7 @@ export default async function ChainLanding({
             )}
           </div>
         </section>
-      </main>
-      <Footer />
-    </>
+    </div>
   );
 }
 

@@ -1,7 +1,5 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 
 /**
  * /sieci — index of all gym chains on NaZdrow!. Low-traffic page mainly
@@ -38,9 +36,7 @@ export default async function SieciIndex() {
   }
 
   return (
-    <>
-      <Header />
-      <main className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50">
         <section className="px-4 sm:px-6 pt-12 pb-8 sm:pt-16">
           <div className="max-w-[1200px] mx-auto">
             <div className="flex items-center gap-2 mb-4 text-[12.5px] text-slate-500">
@@ -109,8 +105,6 @@ export default async function SieciIndex() {
             </div>
           )}
         </section>
-      </main>
-      <Footer />
-    </>
+    </div>
   );
 }

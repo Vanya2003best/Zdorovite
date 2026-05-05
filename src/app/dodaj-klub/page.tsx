@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import AddClubForm from "./AddClubForm";
 
 /**
@@ -34,9 +32,7 @@ export default async function AddClubPage() {
     .order("name");
 
   return (
-    <>
-      <Header />
-      <main className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50">
         <section className="px-4 sm:px-6 pt-12 pb-8 sm:pt-16">
           <div className="max-w-[760px] mx-auto">
             <div className="flex items-center gap-2 mb-4 text-[12.5px] text-slate-500">
@@ -98,8 +94,6 @@ export default async function AddClubPage() {
             <AddClubForm chains={chains ?? []} />
           </div>
         </section>
-      </main>
-      <Footer />
-    </>
+    </div>
   );
 }

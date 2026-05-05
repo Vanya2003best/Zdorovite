@@ -1,8 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import type { Trainer } from "@/types";
 
 const FALLBACK_AVATAR =
@@ -135,9 +133,7 @@ export default async function BranchLanding({
   const accent = chainObj.brand_color ?? "#10b981";
 
   return (
-    <>
-      <Header />
-      <main className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50">
         {/* Hero — branded with the chain's accent color */}
         <section
           className="relative px-4 sm:px-6 pt-12 pb-10 sm:pt-16 sm:pb-14"
@@ -279,8 +275,6 @@ export default async function BranchLanding({
             </div>
           </section>
         )}
-      </main>
-      <Footer />
-    </>
+    </div>
   );
 }
