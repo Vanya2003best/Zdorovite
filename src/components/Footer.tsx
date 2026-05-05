@@ -21,8 +21,8 @@ export default async function Footer() {
   return (
     <footer className="border-t border-slate-200 bg-slate-50">
       <div className="mx-auto max-w-[1200px] px-5 sm:px-6 py-8 sm:pt-12 sm:pb-8">
-        {/* Desktop: 4-column grid */}
-        <div className="hidden sm:grid sm:grid-cols-[1.4fr_1fr_1fr_1fr] gap-10">
+        {/* Desktop: 5-column grid (brand + 4 link columns) */}
+        <div className="hidden sm:grid sm:grid-cols-[1.4fr_1fr_1fr_1fr_1fr] gap-10">
           <div>
             <Link href="/" className="inline-flex items-center gap-2.5 font-bold text-lg text-slate-900">
               <span className="w-7 h-7 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 inline-flex items-center justify-center text-white font-bold text-sm shadow-[0_10px_30px_rgba(16,185,129,0.18)]">N</span>
@@ -44,10 +44,17 @@ export default async function Footer() {
           <div>
             <h4 className="text-[13px] font-semibold text-slate-900 mb-3.5">Dla trenerów</h4>
             <ul className="space-y-2.5 text-sm text-slate-600">
-              <li><Link href="#" className="hover:text-slate-900 transition">Dołącz</Link></li>
+              <li><Link href="/register/trainer" className="hover:text-slate-900 transition">Dołącz</Link></li>
               <li><Link href="#" className="hover:text-slate-900 transition">Szablony profilu</Link></li>
               <li><Link href="#" className="hover:text-slate-900 transition">Kalendarz</Link></li>
               <li><Link href="#" className="hover:text-slate-900 transition">Cennik</Link></li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="text-[13px] font-semibold text-slate-900 mb-3.5">Dla klubów</h4>
+            <ul className="space-y-2.5 text-sm text-slate-600">
+              <li><Link href="/dodaj-klub" className="hover:text-slate-900 transition">Dodaj klub</Link></li>
+              <li><Link href="/sieci" className="hover:text-slate-900 transition">Sieci</Link></li>
             </ul>
           </div>
           <div>
