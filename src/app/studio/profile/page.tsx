@@ -1,9 +1,11 @@
+import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import CertificationsEditor from "./CertificationsEditor";
 import AvatarTile from "./AvatarTile";
 import AiContextForm from "./AiContextForm";
+import QrSection from "./QrSection";
 import type { AiContext } from "./ai-context-actions";
 import type { Certification } from "@/types";
 
@@ -119,6 +121,67 @@ export default async function StudioProfile() {
 
   const aiContext = (trainer.ai_context ?? {}) as AiContext;
 
+  // Origin for the QR — must be resolved server-side so the QR component
+  // has the URL ready on first render (no flicker / "loading…" state on
+  // a printable page). headers() gives us the canonical host even behind
+  // proxies / vercel preview URLs.
+  const h = await headers();
+  const host = h.get("host") ?? "localhost:3000";
+  const proto = host.startsWith("localhost") ? "http" : "https";
+  const origin = `${proto}://${host}`;
+
+  // Load this trainer's branch affiliations so the QR can include a
+  // ?source= tag for the right club. Tolerates migration 021 not being
+  // applied — empty list is fine, QR component falls back to general mode.
+  type BranchOption = {
+    id: string;
+    chainSlug: string;
+    branchSlug: string;
+    chainName: string;
+    branchName: string;
+    status: "self_claimed" | "verified" | "rejected";
+  };
+  let branches: BranchOption[] = [];
+  const aff = await supabase
+    .from("trainer_branches")
+    .select(
+      `
+      status,
+      branch:gym_branches!branch_id (
+        id, slug, name,
+        chain:gym_chains!chain_id ( slug, name )
+      )
+      `,
+    )
+    .eq("trainer_id", user.id);
+  if (!aff.error && aff.data) {
+    branches = aff.data
+      .map((r) => {
+        const b = (r as unknown as {
+          status: BranchOption["status"];
+          branch: {
+            id: string;
+            slug: string;
+            name: string;
+            chain: { slug: string; name: string } | null;
+          } | null;
+        }).branch;
+        const status = (r as unknown as { status: BranchOption["status"] }).status;
+        if (!b || !b.chain) return null;
+        return {
+          id: b.id,
+          chainSlug: b.chain.slug,
+          chainName: b.chain.name,
+          branchSlug: b.slug,
+          branchName: b.name,
+          status,
+        };
+      })
+      .filter((x): x is BranchOption => x !== null)
+      // Verified branches first (more legitimate for the QR), then rest.
+      .sort((a, b) => (a.status === b.status ? 0 : a.status === "verified" ? -1 : 1));
+  }
+
   return (
     <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10 grid gap-5">
       {/* Page header is intentionally absent — the studio top-bar already
@@ -150,6 +213,20 @@ export default async function StudioProfile() {
             </div>
           </div>
         </div>
+      </Card>
+
+      {/* QR-codes — printable PNG for the gym wall / business card / Insta bio.
+          Lives between identity and certifications because trainers iterate
+          on it constantly during launch (one for general use, one per
+          gym they print stickers for). Doesn't block the page if migration
+          021 isn't applied — branches just falls through to "Ogólny" mode. */}
+      <Card>
+        <QrSection
+          trainerSlug={trainer.slug}
+          trainerName={profile?.display_name ?? ""}
+          origin={origin}
+          branches={branches}
+        />
       </Card>
 
       {/* Certifications — the only piece of content edited here, with verification */}
