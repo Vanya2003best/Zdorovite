@@ -20,7 +20,6 @@ import WorkingHoursOverlay from "./WorkingHoursOverlay";
 import {
   ModeSwitcher,
   PatternSaveBar,
-  PatternSummaryPanel,
   isMode,
   type CalendarMode,
 } from "./CalendarMode";
@@ -485,8 +484,9 @@ export default function CalendarClient({
         </div>
       )}
 
-      {/* Pattern mode 7-day summary above the grid */}
-      {mode === "pattern" && <PatternSummaryPanel rules={rulesState} />}
+      {/* Inline 7-day summary above the grid was redundant — the
+          per-day hours already show in the day-headers ('12 godz.')
+          and the green bands themselves convey window times. Removed. */}
 
       {/* Calendar */}
       <div
