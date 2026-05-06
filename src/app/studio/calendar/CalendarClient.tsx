@@ -673,6 +673,10 @@ export default function CalendarClient({
           // mode is the only place where bands are interactive.
           readOnly={mode === "availability"}
           hidden={mode === "bookings"}
+          // Match the dynamic slotMinTime so block positions stay
+          // aligned with the rendered grid even when the calendar
+          // doesn't start at 06:00.
+          slotMinHour={parseInt(slotMinTime.slice(0, 2), 10)}
         />
       </div>
 

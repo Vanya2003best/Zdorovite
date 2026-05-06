@@ -19,14 +19,13 @@ import DayHoursDialog from "./DayHoursDialog";
  */
 
 const SLOT_HEIGHT_PER_HOUR = 56; // .fc-timegrid-slot height (28px) × 2
-const SLOT_MIN_HOUR = 6;
 
 function timeToMin(t: string): number {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
 }
-function minToY(min: number): number {
-  return ((min - SLOT_MIN_HOUR * 60) * SLOT_HEIGHT_PER_HOUR) / 60;
+function minToY(min: number, minHour: number): number {
+  return ((min - minHour * 60) * SLOT_HEIGHT_PER_HOUR) / 60;
 }
 
 type ColInfo = { dow: number; date: string; frameEl: HTMLElement };
@@ -45,6 +44,11 @@ type Props = {
    *  where the trainer wants only the sessions in view, no
    *  green availability wash competing with them. */
   hidden?: boolean;
+  /** First hour visible in the FullCalendar grid — needed because
+   *  CalendarClient now sets slotMinTime dynamically based on the
+   *  trainer's earliest rule. Without it, our minToY math drifts
+   *  by however many hours we differ from 06:00. */
+  slotMinHour?: number;
 };
 
 export default function WorkingHoursOverlay({
@@ -54,6 +58,7 @@ export default function WorkingHoursOverlay({
   onChange,
   readOnly = false,
   hidden = false,
+  slotMinHour = 6,
 }: Props) {
   const [columns, setColumns] = useState<ColInfo[]>([]);
   const [editingDow, setEditingDow] = useState<number | null>(null);
@@ -107,9 +112,11 @@ export default function WorkingHoursOverlay({
         const elements: React.ReactNode[] = [];
 
         if (dayRules.length === 0) {
-          // Empty day — clickable "+ Godziny pracy" button at default 09:00.
-          // Hidden in read-only mode; the day column simply has no
-          // emerald wash, conveying "no hours" without an action chip.
+          // Empty day — clickable "+ Godziny pracy" button at the
+          // grid's earliest-band start hour so it sits at the visible
+          // top, not buried in mid-grid. Hidden in read-only mode; the
+          // day column simply has no emerald wash, conveying "no hours"
+          // without an action chip.
           if (!readOnly) {
             elements.push(
               <button
@@ -117,7 +124,7 @@ export default function WorkingHoursOverlay({
                 type="button"
                 onClick={() => setEditingDow(col.dow)}
                 className="absolute left-1 right-1 h-7 rounded-md text-[10px] font-medium text-emerald-700 bg-emerald-50/40 hover:bg-emerald-50 border border-dashed border-emerald-300/60 hover:border-emerald-500 transition pointer-events-auto z-[1] flex items-center justify-center gap-1"
-                style={{ top: `${minToY(9 * 60)}px` }}
+                style={{ top: `${minToY(slotMinHour * 60 + 30, slotMinHour)}px` }}
                 title="Ustaw godziny pracy"
               >
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
@@ -131,8 +138,8 @@ export default function WorkingHoursOverlay({
           dayRules.forEach((rule, idx) => {
             const startMin = timeToMin(rule.start);
             const endMin = timeToMin(rule.end);
-            const top = minToY(startMin);
-            const height = minToY(endMin) - top;
+            const top = minToY(startMin, slotMinHour);
+            const height = minToY(endMin, slotMinHour) - top;
             if (readOnly) {
               // Per user request: no fill, no label — just two dashed
               // emerald lines marking the start and end of the work
