@@ -256,19 +256,6 @@ export default async function StudioHome() {
     });
   }
 
-  // Greeting
-  const hour = now.getHours();
-  const greeting = hour < 12 ? "Dzień dobry" : hour < 18 ? "Cześć" : "Dobry wieczór";
-  const todayDateStr = now.toLocaleDateString("pl-PL", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
-  const nextSession = upcomingList[0];
-  const nextSessionStr = nextSession
-    ? `masz ${todayCount} ${todayCount === 1 ? "sesję" : todayCount < 5 ? "sesje" : "sesji"} dziś, kolejna o ${new Date(nextSession.start_time).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })}`
-    : `${todayCount === 0 ? "dziś bez sesji — dobry czas żeby uzupełnić profil" : `masz ${todayCount} sesji dziś`}`;
-
   // Spark series for KPI cards — last 7 weekdays of session counts (cheap proxy).
   // For revenue: last 7 months sum from monthBuckets.
   const sparkRevenue = monthBuckets.slice(-7).map((m) => m.sum);
@@ -276,60 +263,6 @@ export default async function StudioHome() {
 
   return (
     <div className="mx-auto max-w-[1280px] px-4 sm:px-7 py-5 sm:py-7">
-      {/* Topbar */}
-      <header className="flex items-end justify-between gap-4 flex-wrap mb-7">
-        <div>
-          <h1 className="text-[26px] sm:text-[28px] font-semibold tracking-[-0.022em] text-slate-900 m-0">
-            {greeting} {profile?.display_name?.split(" ")[0] ?? ""} 👋
-          </h1>
-          <p className="text-[13.5px] text-slate-500 mt-1 m-0">
-            {todayDateStr} · {nextSessionStr}
-          </p>
-        </div>
-        <div className="flex gap-2.5 items-center">
-          <Link
-            href="/studio/calendar?new=1"
-            className="inline-flex items-center gap-1.5 h-10 px-4 rounded-[10px] bg-slate-900 text-white text-[13px] font-semibold hover:bg-black transition"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Nowa sesja
-          </Link>
-        </div>
-      </header>
-
-      {/* Onboarding banner — only when incomplete. Sits between topbar and KPIs
-          so a fresh trainer's eyes go there first. Hides at 100%. */}
-      {onboarding.percent < 100 && (
-        <Link
-          href="/studio/start"
-          className="block mb-5 rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-teal-50 px-5 py-4 hover:border-emerald-400 transition group"
-        >
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="min-w-0">
-              <div className="text-[12px] font-semibold tracking-[0.08em] uppercase text-emerald-700">
-                Konfiguracja konta · {onboarding.percent}%
-              </div>
-              <div className="text-[14.5px] font-semibold tracking-tight text-slate-900 mt-0.5">
-                {onboarding.readyToPublish
-                  ? "Profil gotowy do publikacji — dokończ pozostałe pola"
-                  : "Skonfiguruj profil żeby zacząć przyjmować klientów"}
-              </div>
-            </div>
-            <div className="shrink-0 inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-slate-900 text-white text-[12.5px] font-semibold group-hover:bg-black transition">
-              Otwórz checklistę →
-            </div>
-          </div>
-          <div className="h-1.5 bg-emerald-100 rounded-full overflow-hidden mt-3">
-            <div
-              className="h-full bg-gradient-to-r from-emerald-500 to-teal-500"
-              style={{ width: `${onboarding.percent}%` }}
-            />
-          </div>
-        </Link>
-      )}
-
       {/* ============ KPI ROW ============ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <KpiCard
