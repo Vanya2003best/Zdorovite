@@ -1,11 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import ReplyComposer from "./ReplyComposer";
+import { togglePinReview } from "./actions";
 
-const STAR_LABELS = ["jedna", "dwie", "trzy", "cztery", "pięć"];
+export type ReviewCategories = {
+  wiedza: number | null;
+  atmosfera: number | null;
+  punktualnosc: number | null;
+  efekty: number | null;
+};
 
 export type ReviewRow = {
   id: string;
@@ -14,6 +20,10 @@ export type ReviewRow = {
   createdAt: string;
   replyText: string | null;
   replyAt: string | null;
+  pinnedAt: string | null;
+  photos: string[];
+  serviceContext: string | null;
+  categories: ReviewCategories | null;
   authorName: string;
   authorAvatar: string | null;
 };
@@ -79,6 +89,7 @@ export default function OpinieClient({
   reviews,
   headlineRating,
   headlineCount,
+  topPercent,
 }: {
   mode: Mode;
   reviews: ReviewRow[];
@@ -87,6 +98,9 @@ export default function OpinieClient({
   /** kept for future "back to public profile" CTA — currently the
    *  sidebar's 'Strona publiczna' link covers this. */
   trainerSlug: string | null;
+  /** Percentile vs other published trainers (1 = top 1%, etc.).
+   *  Null when there isn't enough data to compute meaningfully. */
+  topPercent: number | null;
 }) {
   const searchParams = useSearchParams();
   const modeParam = searchParams.get("mode") as Mode | null;
@@ -290,6 +304,7 @@ export default function OpinieClient({
           headlineCount={headlineCount}
           starFilter={starFilter}
           setStarFilter={setStarFilter}
+          topPercent={topPercent}
         />
       )}
       {mode === "skrzynka" && (
@@ -406,6 +421,7 @@ function ReviewsListLayout({
   headlineCount,
   starFilter,
   setStarFilter,
+  topPercent,
 }: {
   reviews: ReviewRow[];
   allReviews: ReviewRow[];
@@ -415,6 +431,7 @@ function ReviewsListLayout({
   headlineCount: number;
   starFilter: number | null;
   setStarFilter: (n: number | null) => void;
+  topPercent: number | null;
 }) {
   if (allReviews.length === 0) {
     return (
@@ -454,7 +471,7 @@ function ReviewsListLayout({
         )}
       </div>
       <div className="flex flex-col gap-4">
-        <BigRatingCard rating={headlineRating} count={headlineCount} />
+        <BigRatingCard rating={headlineRating} count={headlineCount} topPercent={topPercent} />
         <DistributionCard dist={dist} distMax={distMax} starFilter={starFilter} setStarFilter={setStarFilter} />
       </div>
     </div>
@@ -463,6 +480,10 @@ function ReviewsListLayout({
 
 /* ============ Review card ============ */
 function ReviewCard({ review }: { review: ReviewRow }) {
+  const router = useRouter();
+  const [pinPending, startPinTransition] = useTransition();
+  const [copied, setCopied] = useState(false);
+
   const date = new Date(review.createdAt).toLocaleDateString("pl-PL", {
     day: "numeric",
     month: "long",
@@ -470,14 +491,46 @@ function ReviewCard({ review }: { review: ReviewRow }) {
   });
   const initial = review.authorName.charAt(0).toUpperCase();
   const needsReply = !review.replyText;
+  const isPinned = !!review.pinnedAt;
+
+  const onPin = () => {
+    startPinTransition(async () => {
+      await togglePinReview(review.id);
+      router.refresh();
+    });
+  };
+
+  const onQuote = async () => {
+    const block = `„${review.text}"\n— ${review.authorName}`;
+    try {
+      await navigator.clipboard.writeText(block);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard blocked — silently no-op */
+    }
+  };
 
   return (
     <article
       className={
-        "bg-white border rounded-[14px] p-5 transition hover:shadow-sm " +
-        (needsReply ? "border-amber-300 border-l-[3px]" : "border-slate-200 hover:border-slate-300")
+        "bg-white border rounded-[14px] p-5 transition hover:shadow-sm relative " +
+        (isPinned
+          ? "border-emerald-300 bg-gradient-to-b from-emerald-50/50 to-white"
+          : needsReply
+            ? "border-amber-300 border-l-[3px]"
+            : "border-slate-200 hover:border-slate-300")
       }
     >
+      {isPinned && (
+        <span className="absolute -top-2.5 left-4 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-bold uppercase tracking-[0.06em]">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2l1.7 5.3H19l-4.4 3.2L16.3 16 12 12.7 7.7 16l1.7-5.5L5 7.3h5.3z" />
+          </svg>
+          Przypięte
+        </span>
+      )}
+
       <div className="flex items-start gap-3 mb-3">
         <div className="w-10 h-10 rounded-full overflow-hidden bg-emerald-100 text-emerald-700 inline-flex items-center justify-center font-bold text-[14px] shrink-0">
           {review.authorAvatar ? (
@@ -500,7 +553,9 @@ function ReviewCard({ review }: { review: ReviewRow }) {
           <div className="text-[11.5px] text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
             <span>{date}</span>
             <span className="text-slate-300">·</span>
-            <span className="text-slate-700 font-medium">Sesja indywidualna</span>
+            <span className="text-slate-700 font-medium">
+              {review.serviceContext ?? "Sesja indywidualna"}
+            </span>
           </div>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
@@ -511,6 +566,69 @@ function ReviewCard({ review }: { review: ReviewRow }) {
 
       <p className="text-[13.5px] text-slate-800 leading-[1.55] mb-3 whitespace-pre-line">{review.text}</p>
 
+      {/* Per-category bars (Wiedza / Atmosfera / Punktualność / Efekty)
+          — only render when at least one is set. Filled bar width =
+          rating/5; null shows as a faint placeholder. */}
+      {review.categories && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-1 py-2.5 mb-3 border-y border-dashed border-slate-100">
+          <CategoryBar label="Wiedza" value={review.categories.wiedza} />
+          <CategoryBar label="Atmosfera" value={review.categories.atmosfera} />
+          <CategoryBar label="Punktualność" value={review.categories.punktualnosc} />
+          <CategoryBar label="Efekty" value={review.categories.efekty} />
+        </div>
+      )}
+
+      {/* Client-attached photos — small tile gallery. Click opens
+          the original in a new tab (no light-box for now). */}
+      {review.photos.length > 0 && (
+        <div className="flex gap-1.5 mb-3 flex-wrap">
+          {review.photos.slice(0, 6).map((url, i) => (
+            <a
+              key={i}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-16 h-16 rounded-[8px] overflow-hidden bg-slate-100 inline-block hover:ring-2 hover:ring-emerald-400 transition"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt="" className="w-full h-full object-cover" />
+            </a>
+          ))}
+        </div>
+      )}
+
+      {/* Action row: Pin/Unpin + Cytuj alongside the existing reply. */}
+      <div className="flex flex-wrap gap-1.5 mb-2.5">
+        <button
+          type="button"
+          onClick={onPin}
+          disabled={pinPending}
+          className={
+            "inline-flex items-center gap-1.5 h-7 px-2.5 rounded-[7px] text-[11.5px] font-medium border transition disabled:opacity-50 " +
+            (isPinned
+              ? "bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600"
+              : "bg-white text-slate-700 border-slate-200 hover:border-slate-300")
+          }
+          title={isPinned ? "Odepnij od góry listy" : "Przypnij na górę"}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 17v5M5 9.5L8 6h8l3 3.5L17 13H7L5 9.5z" />
+          </svg>
+          {isPinned ? "Odepnij" : "Przypnij"}
+        </button>
+        <button
+          type="button"
+          onClick={onQuote}
+          className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-[7px] text-[11.5px] font-medium bg-white text-slate-700 border border-slate-200 hover:border-slate-300"
+          title="Skopiuj cytat do schowka — wstaw na social media"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 7v10c0 1.1.9 2 2 2h10M9 5h10a2 2 0 012 2v10a2 2 0 01-2 2H9a2 2 0 01-2-2V7a2 2 0 012-2z" />
+          </svg>
+          {copied ? "Skopiowano" : "Cytuj"}
+        </button>
+      </div>
+
       <ReplyComposer
         reviewId={review.id}
         initialReply={review.replyText ?? undefined}
@@ -520,14 +638,40 @@ function ReviewCard({ review }: { review: ReviewRow }) {
   );
 }
 
-function Stars({ rating }: { rating: number }) {
+function CategoryBar({ label, value }: { label: string; value: number | null }) {
+  const pct = value !== null ? (value / 5) * 100 : 0;
+  return (
+    <div>
+      <div className="text-[10.5px] text-slate-500 mb-1">{label}</div>
+      <div className="flex items-center gap-1.5">
+        <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
+          {value !== null && (
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${pct}%`,
+                background: "linear-gradient(90deg,#f59e0b,#fbbf24)",
+              }}
+            />
+          )}
+        </div>
+        <span className="text-[11px] font-semibold text-slate-900 tabular-nums w-6 text-right">
+          {value !== null ? value.toFixed(1).replace(".", ",") : "—"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function Stars({ rating, size = "md" }: { rating: number; size?: "md" | "lg" }) {
+  const px = size === "lg" ? 18 : 14;
   return (
     <span className="inline-flex gap-px">
       {[1, 2, 3, 4, 5].map((n) => (
         <svg
           key={n}
-          width="14"
-          height="14"
+          width={px}
+          height={px}
           viewBox="0 0 24 24"
           className={n <= rating ? "text-amber-400" : "text-slate-200"}
           fill="currentColor"
@@ -550,23 +694,39 @@ function relativeDays(iso: string): string {
 }
 
 /* ============ Right rail cards ============ */
-function BigRatingCard({ rating, count }: { rating: number; count: number }) {
+function BigRatingCard({
+  rating,
+  count,
+  topPercent,
+}: {
+  rating: number;
+  count: number;
+  topPercent: number | null;
+}) {
   return (
     <div className="bg-white border border-slate-200 rounded-[14px] p-5">
       <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-700 mb-3">
         Ogólna ocena
+        <span className="text-[10.5px] font-medium text-slate-500 normal-case tracking-normal ml-1.5">
+          {count} {count === 1 ? "opinia" : pluralOpinii(count)}
+        </span>
       </div>
       <div className="flex items-baseline gap-3.5">
         <div className="text-[48px] font-bold tracking-[-0.035em] text-slate-900 leading-none tabular-nums">
-          {rating > 0 ? rating.toFixed(1).replace(".", ",") : "—"}
+          {rating > 0 ? rating.toFixed(2).replace(".", ",") : "—"}
         </div>
         <div className="flex flex-col gap-1">
-          <Stars rating={Math.round(rating)} />
-          <div className="text-[11.5px] text-slate-500">
-            {count} {count === 1 ? "opinia" : pluralOpinii(count)}
-          </div>
+          <Stars rating={Math.round(rating)} size="lg" />
         </div>
       </div>
+      {topPercent !== null && (
+        <div className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+          </svg>
+          Top {topPercent}% trenerów na NaZdrow!
+        </div>
+      )}
     </div>
   );
 }

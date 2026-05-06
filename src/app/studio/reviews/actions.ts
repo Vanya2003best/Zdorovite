@@ -56,3 +56,47 @@ export async function setReviewReply(
   revalidatePath("/trainers/[id]/[pageSlug]", "page");
   return { ok: true };
 }
+
+/**
+ * Pin a review to the top of /studio/reviews + the public profile's
+ * Opinie section, or unpin if already pinned. Stored as
+ * `reviews.pinned_at` (migration 029) so we can sort pinned-by-most-
+ * recent. Tolerant of the column not existing (42703 → silently
+ * succeeds with no-op so the UI doesn't break before the migration
+ * is applied).
+ */
+export async function togglePinReview(reviewId: string): Promise<ActionResult> {
+  if (!reviewId) return { error: "Brak id opinii." };
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Niezalogowany." };
+
+  const { data: review, error: readErr } = await supabase
+    .from("reviews")
+    .select("id, trainer_id, pinned_at")
+    .eq("id", reviewId)
+    .maybeSingle();
+  if (readErr?.code === "42703") {
+    // Migration 029 not applied — nothing to do, surface a quiet ok
+    // so the optimistic UI doesn't error out.
+    return { ok: true };
+  }
+  if (!review) return { error: "Opinia nie istnieje." };
+  type Row = { id: string; trainer_id: string; pinned_at: string | null };
+  const r = review as Row;
+  if (r.trainer_id !== user.id) return { error: "Nie należy do Ciebie." };
+
+  const next = r.pinned_at ? null : new Date().toISOString();
+  const { error } = await supabase
+    .from("reviews")
+    .update({ pinned_at: next })
+    .eq("id", reviewId)
+    .eq("trainer_id", user.id);
+  if (error?.code === "42703") return { ok: true };
+  if (error) return { error: error.message };
+
+  revalidatePath("/studio/reviews");
+  revalidatePath("/trainers/[id]", "page");
+  revalidatePath("/trainers/[id]/[pageSlug]", "page");
+  return { ok: true };
+}
