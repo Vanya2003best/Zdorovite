@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import ReplyComposer from "./ReplyComposer";
 
+const STAR_LABELS = ["jedna", "dwie", "trzy", "cztery", "pięć"];
+
 export type ReviewRow = {
   id: string;
   rating: number;
@@ -77,17 +79,26 @@ export default function OpinieClient({
   reviews,
   headlineRating,
   headlineCount,
-  trainerSlug,
 }: {
   mode: Mode;
   reviews: ReviewRow[];
   headlineRating: number;
   headlineCount: number;
+  /** kept for future "back to public profile" CTA — currently the
+   *  sidebar's 'Strona publiczna' link covers this. */
   trainerSlug: string | null;
 }) {
   const searchParams = useSearchParams();
   const modeParam = searchParams.get("mode") as Mode | null;
   const mode: Mode = MODES.some((m) => m.id === modeParam) ? (modeParam as Mode) : initialMode;
+
+  // Star filter — clicking a row in the right-rail distribution
+  // narrows the list to just that rating bucket. null = show all.
+  const [starFilter, setStarFilter] = useState<number | null>(null);
+  const filteredReviews = useMemo(
+    () => (starFilter === null ? reviews : reviews.filter((r) => r.rating === starFilter)),
+    [reviews, starFilter],
+  );
 
   // Star distribution + simple aggregations.
   const dist = useMemo(() => {
@@ -113,6 +124,22 @@ export default function OpinieClient({
     return { avg, count: recent30.length };
   }, [reviews]);
 
+  // Average response time — across reviews that have a reply, how
+  // many hours between the review's created_at and the trainer's
+  // reply_at. Surfaces in the summary card so the trainer sees the
+  // 'Czas odpowiedzi' the design 34 promises. Falls back to '—'
+  // when there are no replied reviews to measure.
+  const avgResponseHours = useMemo(() => {
+    const replied = reviews.filter((r) => r.replyAt && r.createdAt);
+    if (replied.length === 0) return null;
+    const totalMs = replied.reduce((acc, r) => {
+      const dt = new Date(r.replyAt!).getTime() - new Date(r.createdAt).getTime();
+      return acc + Math.max(0, dt);
+    }, 0);
+    return Math.round(totalMs / replied.length / 3600_000);
+  }, [reviews]);
+  const fivePct = headlineCount > 0 ? Math.round(((dist[4]?.c ?? 0) / headlineCount) * 100) : 0;
+
   return (
     <div className="mx-auto max-w-[1280px] px-4 sm:px-7 py-5 sm:py-7">
       {/* Topbar */}
@@ -131,23 +158,33 @@ export default function OpinieClient({
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {trainerSlug && (
-            <Link
-              href={`/trainers/${trainerSlug}#reviews`}
-              target="_blank"
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[9px] bg-white border border-slate-200 text-[12.5px] font-medium text-slate-700 hover:border-slate-300"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-              Zobacz publicznie
-            </Link>
-          )}
           <button
             type="button"
             disabled
-            title="Wkrótce — wysyłka prośby o opinię do klientów po sesji"
+            title="Wkrótce — automatyczne prośby o opinię 2h po zakończonej sesji"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[9px] bg-white border border-slate-200 text-[12.5px] font-medium text-slate-500 disabled:opacity-60"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 6v6l4 2" />
+            </svg>
+            Auto-prośby
+          </button>
+          <button
+            type="button"
+            disabled
+            title="Wkrótce — eksport wszystkich opinii do CSV"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[9px] bg-white border border-slate-200 text-[12.5px] font-medium text-slate-500 disabled:opacity-60"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            Eksport CSV
+          </button>
+          <button
+            type="button"
+            disabled
+            title="Wkrótce — wyślij prośbę o opinię do wybranych klientów"
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[9px] bg-slate-900 text-white text-[12.5px] font-semibold disabled:opacity-60"
           >
             + Poproś o opinię
@@ -155,43 +192,89 @@ export default function OpinieClient({
         </div>
       </div>
 
-      {/* Mode switcher */}
-      <ModeSwitcher mode={mode} reviewsTotal={reviews.length} needsReplyCount={needsReply.length} />
+      {/* Tabs row + Star filter pills together so they sit at the
+          same horizontal level, like design 34's toolbar. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <ModeSwitcher mode={mode} reviewsTotal={reviews.length} needsReplyCount={needsReply.length} />
+        {(mode === "wszystkie" || mode === "skrzynka") && (
+          <StarFilterPills
+            current={starFilter}
+            onChange={setStarFilter}
+            counts={{
+              all: reviews.length,
+              s5: dist[4]?.c ?? 0,
+              s4: dist[3]?.c ?? 0,
+              low: (dist[2]?.c ?? 0) + (dist[1]?.c ?? 0) + (dist[0]?.c ?? 0),
+            }}
+          />
+        )}
+      </div>
 
-      {/* Summary strip — visible on Wszystkie + Skrzynka */}
+      {/* Mode banner — context for what's on screen + the next action.
+          Only the active mode's banner shows. */}
+      {mode === "wszystkie" && (
+        <ContextBanner
+          tone="all"
+          title={`Wszystkie opinie · ${reviews.length} łącznie`}
+          detail={'Verified = po opłaconej sesji. Klikaj „Odpowiedz" / „Cytuj" na karcie. Sortowanie: najnowsze.'}
+          link={
+            needsReply.length > 0
+              ? { href: "/studio/reviews?mode=skrzynka", label: `Załatw ${needsReply.length} czekające →` }
+              : null
+          }
+        />
+      )}
+      {mode === "skrzynka" && (
+        <ContextBanner
+          tone="inbox"
+          title={`Skrzynka · ${needsReply.length} czeka na odpowiedź`}
+          detail="Każda opinia bez odpowiedzi obniża zaufanie. Średnia odpowiedź <24h zwiększa konwersję rezerwacji o ~12%."
+          link={null}
+        />
+      )}
+
+      {/* Summary strip — 5 cards per design 34, only on Wszystkie + Skrzynka */}
       {(mode === "wszystkie" || mode === "skrzynka") && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-4 mb-4">
           <SummaryCard
             label="Średnia ocena"
-            value={headlineRating > 0 ? headlineRating.toFixed(1).replace(".", ",") : "—"}
+            value={headlineRating > 0 ? headlineRating.toFixed(2).replace(".", ",") : "—"}
             unit="★"
-            detail={recent ? `30 dni: ${recent.avg.toFixed(1).replace(".", ",")}` : undefined}
+            detail={
+              recent
+                ? `${recent.avg >= headlineRating ? "↑" : "↓"} ${Math.abs(recent.avg - headlineRating).toFixed(2).replace(".", ",")} vs poprzednie`
+                : "Pierwsza opinia czeka"
+            }
             valueColor="amber"
           />
           <SummaryCard
-            label="Wszystkie opinie"
+            label="Opinii łącznie"
             value={String(headlineCount)}
-            detail={recent ? `+${recent.count} w 30 dni` : "Pierwsza opinia czeka"}
+            detail={recent ? `+${recent.count} w tym mies.` : undefined}
           />
           <SummaryCard
-            label="Wymagają odpowiedzi"
-            value={String(needsReply.length)}
-            detail={needsReply.length === 0 ? "Wszystko ogarnięte" : "Klienci to widzą"}
-          />
-          <SummaryCard
-            label="Wskaźnik odpowiedzi"
-            value={String(replyRate)}
+            label="% 5 gwiazdek"
+            value={String(fivePct)}
             unit="%"
-            detail={replyRate >= 80 ? "Świetnie" : replyRate >= 50 ? "OK" : "Mało"}
+            detail={`${dist[4]?.c ?? 0} z ${headlineCount}`}
           />
           <SummaryCard
-            label="5★ recenzje"
-            value={String(dist[4]?.c ?? 0)}
+            label="Czas odpowiedzi"
+            value={avgResponseHours !== null ? String(avgResponseHours) : "—"}
+            unit={avgResponseHours !== null ? "godz." : undefined}
             detail={
-              headlineCount > 0
-                ? `${Math.round(((dist[4]?.c ?? 0) / headlineCount) * 100)}% wszystkich`
-                : "—"
+              avgResponseHours === null
+                ? "wkrótce — średnia z odpowiedzi"
+                : avgResponseHours <= 24
+                  ? "świetnie · pod 24h"
+                  : `${avgResponseHours}h średnio`
             }
+          />
+          <SummaryCard
+            label="Konwersja proszenia"
+            value="—"
+            unit="%"
+            detail="wkrótce — po włączeniu auto-próśb"
           />
         </div>
       )}
@@ -199,11 +282,14 @@ export default function OpinieClient({
       {/* Content per mode */}
       {mode === "wszystkie" && (
         <ReviewsListLayout
-          reviews={reviews}
+          reviews={filteredReviews}
+          allReviews={reviews}
           dist={dist}
           distMax={distMax}
           headlineRating={headlineRating}
           headlineCount={headlineCount}
+          starFilter={starFilter}
+          setStarFilter={setStarFilter}
         />
       )}
       {mode === "skrzynka" && (
@@ -313,18 +399,24 @@ function SummaryCard({
 /* ============ Reviews list (Wszystkie) — 2-col layout ============ */
 function ReviewsListLayout({
   reviews,
+  allReviews,
   dist,
   distMax,
   headlineRating,
   headlineCount,
+  starFilter,
+  setStarFilter,
 }: {
   reviews: ReviewRow[];
+  allReviews: ReviewRow[];
   dist: { n: number; c: number }[];
   distMax: number;
   headlineRating: number;
   headlineCount: number;
+  starFilter: number | null;
+  setStarFilter: (n: number | null) => void;
 }) {
-  if (reviews.length === 0) {
+  if (allReviews.length === 0) {
     return (
       <div className="bg-white border-2 border-dashed border-slate-300 rounded-2xl px-6 py-16 text-center">
         <div className="text-amber-400 text-[36px] mb-2">★</div>
@@ -338,14 +430,32 @@ function ReviewsListLayout({
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[1.6fr_1fr] gap-4">
       <div className="flex flex-col gap-3">
-        {reviews.map((r) => (
-          <ReviewCard key={r.id} review={r} />
-        ))}
+        {starFilter !== null && (
+          <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-[10px] px-3.5 py-2 text-[12px] text-amber-900">
+            <span>
+              Filtr: <b className="font-semibold">{starFilter}★</b> · {reviews.length}{" "}
+              {reviews.length === 1 ? "opinia" : pluralOpinii(reviews.length)}
+            </span>
+            <button
+              type="button"
+              onClick={() => setStarFilter(null)}
+              className="text-[11.5px] font-semibold text-amber-700 hover:underline"
+            >
+              Wyczyść filtr
+            </button>
+          </div>
+        )}
+        {reviews.length === 0 ? (
+          <div className="bg-white border border-dashed border-slate-300 rounded-2xl px-6 py-12 text-center text-[12.5px] text-slate-500">
+            Brak opinii w tym filtrze. Spróbuj innego rozkładu po prawej.
+          </div>
+        ) : (
+          reviews.map((r) => <ReviewCard key={r.id} review={r} />)
+        )}
       </div>
       <div className="flex flex-col gap-4">
         <BigRatingCard rating={headlineRating} count={headlineCount} />
-        <DistributionCard dist={dist} distMax={distMax} />
-        <FeaturedQuotesCard reviews={reviews} />
+        <DistributionCard dist={dist} distMax={distMax} starFilter={starFilter} setStarFilter={setStarFilter} />
       </div>
     </div>
   );
@@ -464,65 +574,167 @@ function BigRatingCard({ rating, count }: { rating: number; count: number }) {
 function DistributionCard({
   dist,
   distMax,
+  starFilter,
+  setStarFilter,
 }: {
   dist: { n: number; c: number }[];
   distMax: number;
+  starFilter: number | null;
+  setStarFilter: (n: number | null) => void;
 }) {
   return (
     <div className="bg-white border border-slate-200 rounded-[14px] p-5">
-      <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-700 mb-3">
-        Rozkład ocen
+      <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-700 mb-3 flex items-center justify-between">
+        <span>Rozkład ocen</span>
+        <span className="text-[10.5px] font-medium text-slate-500 normal-case tracking-normal">
+          kliknij, aby filtrować
+        </span>
       </div>
       <div className="grid gap-1.5">
-        {[...dist].reverse().map(({ n, c }) => (
-          <div key={n} className="grid grid-cols-[18px_1fr_30px] items-center gap-2 text-[12px]">
-            <span className="font-semibold text-slate-700 tabular-nums">{n}</span>
-            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-              <div
-                className={
-                  "h-full rounded-full " +
-                  (n === 5 ? "bg-emerald-500" : n === 1 ? "bg-rose-500" : "bg-amber-400")
-                }
-                style={{ width: `${(c / distMax) * 100}%` }}
-              />
-            </div>
-            <span className="text-slate-500 tabular-nums text-right">{c}</span>
-          </div>
-        ))}
+        {[...dist].reverse().map(({ n, c }) => {
+          const active = starFilter === n;
+          return (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setStarFilter(active ? null : n)}
+              disabled={c === 0}
+              className={
+                "grid grid-cols-[20px_1fr_30px] items-center gap-2 text-[12px] py-1 px-1.5 rounded-md transition disabled:cursor-default disabled:opacity-50 " +
+                (active
+                  ? "bg-amber-50 ring-1 ring-amber-200"
+                  : c === 0
+                    ? ""
+                    : "hover:bg-slate-50 cursor-pointer")
+              }
+            >
+              <span className="font-semibold text-slate-700 tabular-nums text-left inline-flex items-center gap-0.5">
+                {n}
+                <span className="text-amber-400 text-[10px]">★</span>
+              </span>
+              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className={
+                    "h-full rounded-full " +
+                    (n === 5 ? "bg-emerald-500" : n === 1 ? "bg-rose-500" : "bg-amber-400")
+                  }
+                  style={{ width: `${(c / distMax) * 100}%` }}
+                />
+              </div>
+              <span className={"tabular-nums text-right " + (active ? "text-amber-700 font-semibold" : "text-slate-500")}>
+                {c}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function FeaturedQuotesCard({ reviews }: { reviews: ReviewRow[] }) {
-  // Pick up to 2 of the highest-rated, longest reviews — these read
-  // best as featured testimonials.
-  const featured = useMemo(() => {
-    return [...reviews]
-      .filter((r) => r.rating >= 5 && r.text.length > 80)
-      .sort((a, b) => b.text.length - a.text.length)
-      .slice(0, 2);
-  }, [reviews]);
-  if (featured.length === 0) return null;
+/* ============ Star filter pills (toolbar row, design 34) ============ */
+function StarFilterPills({
+  current,
+  onChange,
+  counts,
+}: {
+  current: number | null;
+  onChange: (n: number | null) => void;
+  counts: { all: number; s5: number; s4: number; low: number };
+}) {
+  const items: { id: number | null; label: string; count: number; tone: "all" | "good" | "ok" | "bad" }[] = [
+    { id: null, label: "Wszystkie", count: counts.all, tone: "all" },
+    { id: 5, label: "5★", count: counts.s5, tone: "good" },
+    { id: 4, label: "4★", count: counts.s4, tone: "ok" },
+    { id: 3, label: "≤3★", count: counts.low, tone: "bad" },
+  ];
   return (
-    <div className="bg-white border border-slate-200 rounded-[14px] p-5">
-      <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-700 mb-3">
-        Cytaty <span className="text-slate-500 font-medium tracking-normal normal-case ml-1">5★ z dłuższym tekstem</span>
-      </div>
-      <div className="space-y-2">
-        {featured.map((r) => (
-          <div
-            key={r.id}
-            className="rounded-[10px] p-3.5 border border-emerald-200"
-            style={{ background: "linear-gradient(135deg,#ecfdf5,#f0fdfa)" }}
+    <div className="inline-flex flex-wrap gap-1.5">
+      {items.map((it) => {
+        // For ≤3 we let the user toggle through 1/2/3 — keep this
+        // simple for now: clicking ≤3 cycles through 3, 2, 1, off.
+        // For other pills, click toggles set/clear.
+        const active =
+          it.id === null ? current === null : it.id === 3 ? current !== null && current <= 3 : current === it.id;
+        const handleClick = () => {
+          if (it.id === null) onChange(null);
+          else if (it.id === 3) {
+            // Cycle low-end through 3 → 2 → 1 → off.
+            const order = [3, 2, 1, null] as (number | null)[];
+            const idx = order.findIndex((n) => n === current);
+            onChange(order[(idx + 1) % order.length]);
+          } else {
+            onChange(current === it.id ? null : it.id);
+          }
+        };
+        const dotClass =
+          it.tone === "good"
+            ? "text-emerald-500"
+            : it.tone === "ok"
+              ? "text-amber-500"
+              : it.tone === "bad"
+                ? "text-rose-500"
+                : "";
+        return (
+          <button
+            key={String(it.id)}
+            type="button"
+            onClick={handleClick}
+            className={
+              "inline-flex items-center gap-1.5 h-[30px] px-2.5 rounded-[8px] text-[11.5px] font-medium border transition " +
+              (active
+                ? "bg-amber-50 border-amber-300 text-amber-900"
+                : "bg-white text-slate-700 border-slate-200 hover:border-slate-300")
+            }
           >
-            <p className="text-[13px] text-slate-800 leading-[1.5] italic m-0 mb-2 line-clamp-3">
-              {r.text}
-            </p>
-            <div className="text-[11.5px] text-slate-700 font-semibold">{r.authorName}</div>
-          </div>
-        ))}
+            {it.tone !== "all" && <span className={dotClass}>★</span>}
+            {it.id === 3 && current !== null && current <= 3 ? `${current}★` : it.label}
+            {it.count > 0 && <span className="tabular-nums text-slate-500">{it.count}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ============ Mode-context banner ============ */
+function ContextBanner({
+  tone,
+  title,
+  detail,
+  link,
+}: {
+  tone: "all" | "inbox";
+  title: string;
+  detail: string;
+  link: { href: string; label: string } | null;
+}) {
+  const palette =
+    tone === "all"
+      ? { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-900", iconBg: "bg-emerald-500" }
+      : { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-900", iconBg: "bg-amber-500" };
+  return (
+    <div
+      className={`flex items-center gap-3.5 px-4 py-3 rounded-[11px] text-[12.5px] border mt-3 ${palette.bg} ${palette.border} ${palette.text}`}
+    >
+      <span className={`w-7 h-7 rounded-[8px] inline-flex items-center justify-center shrink-0 text-white ${palette.iconBg}`}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M9 11l3 3L22 4" />
+        </svg>
+      </span>
+      <div className="min-w-0">
+        <b className="font-semibold">{title}</b>
+        <div className="opacity-70 leading-[1.4] mt-px">{detail}</div>
       </div>
+      {link && (
+        <Link
+          href={link.href}
+          scroll={false}
+          className="ml-auto shrink-0 font-semibold underline underline-offset-[3px] hover:no-underline"
+        >
+          {link.label}
+        </Link>
+      )}
     </div>
   );
 }
