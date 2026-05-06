@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   addCertification,
@@ -70,7 +70,24 @@ function CertRow({ cert, index }: { cert: Certification; index: number }) {
   const [text, setText] = useState(cert.text);
   const [url, setUrl] = useState(cert.verificationUrl ?? "");
   const [error, setError] = useState<string | null>(null);
+  // Two-click confirm for destructive actions — first click "arms"
+  // the button (3-second window), second click executes. Beats a
+  // modal: keeps the user's hands on the row, no context-switch.
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmRemoveAttachment, setConfirmRemoveAttachment] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const id = setTimeout(() => setConfirmDelete(false), 3000);
+    return () => clearTimeout(id);
+  }, [confirmDelete]);
+
+  useEffect(() => {
+    if (!confirmRemoveAttachment) return;
+    const id = setTimeout(() => setConfirmRemoveAttachment(false), 3000);
+    return () => clearTimeout(id);
+  }, [confirmRemoveAttachment]);
 
   const onTextBlur = () => {
     if (text.trim() === cert.text) return;
@@ -101,7 +118,11 @@ function CertRow({ cert, index }: { cert: Certification; index: number }) {
   };
 
   const onDelete = () => {
-    if (!confirm(`Usunąć certyfikat "${cert.text}"?`)) return;
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setConfirmDelete(false);
     setError(null);
     startTransition(async () => {
       const res = await removeCertification(cert.id);
@@ -127,7 +148,11 @@ function CertRow({ cert, index }: { cert: Certification; index: number }) {
 
   const onRemoveAttachment = () => {
     if (!cert.attachmentUrl) return;
-    if (!confirm("Usunąć załącznik?")) return;
+    if (!confirmRemoveAttachment) {
+      setConfirmRemoveAttachment(true);
+      return;
+    }
+    setConfirmRemoveAttachment(false);
     setError(null);
     startTransition(async () => {
       const res = await removeCertAttachment(cert.id);
@@ -178,10 +203,19 @@ function CertRow({ cert, index }: { cert: Certification; index: number }) {
           type="button"
           onClick={onDelete}
           disabled={pending}
-          title="Usuń certyfikat"
-          className="text-slate-400 hover:text-red-600 transition w-8 h-8 inline-flex items-center justify-center shrink-0"
+          title={confirmDelete ? "Kliknij ponownie, aby potwierdzić" : "Usuń certyfikat"}
+          className={
+            "transition shrink-0 inline-flex items-center justify-center rounded-md text-[12px] font-semibold " +
+            (confirmDelete
+              ? "h-8 px-2.5 bg-rose-600 text-white hover:bg-rose-700 animate-pulse"
+              : "w-8 h-8 text-slate-400 hover:text-rose-600")
+          }
         >
-          🗑
+          {confirmDelete ? "Potwierdź" : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+            </svg>
+          )}
         </button>
       </div>
 
@@ -200,9 +234,14 @@ function CertRow({ cert, index }: { cert: Certification; index: number }) {
               type="button"
               onClick={onRemoveAttachment}
               disabled={pending}
-              className="text-[11px] text-slate-500 hover:text-red-600 transition"
+              className={
+                "text-[11px] font-medium transition px-2 py-0.5 rounded " +
+                (confirmRemoveAttachment
+                  ? "bg-rose-600 text-white animate-pulse"
+                  : "text-slate-500 hover:text-rose-600")
+              }
             >
-              Usuń
+              {confirmRemoveAttachment ? "Potwierdź" : "Usuń"}
             </button>
             <button
               type="button"
