@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import type { ProfileCustomization, SectionId, TemplateName } from "@/types";
+import { ENABLE_PAGES } from "@/lib/feature-flags";
 import { updateDesign } from "./actions";
 import { togglePublished } from "@/app/trainers/[id]/edit-actions";
 import type { DayRule } from "@/app/studio/availability/page";
@@ -463,6 +464,33 @@ export default function EditorClient({ slug, trainerId, trainerName, trainerEmai
     });
   }, [sections, previewSlot]);
 
+  // Scroll-to-hash. Sidebar deep-links from /studio/nav-items send
+  // /studio/design#services and #packages — when those land we find the
+  // matching [data-section-id="services"] inside the preview and scroll
+  // it into view inside the canvas scroller (NOT window — the canvas is
+  // its own overflow-y-auto container). Re-runs on previewSlot change so
+  // a hash-link from a fresh tab waits until SSR is done painting.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash.replace(/^#/, "");
+    if (!hash) return;
+    // Same set of section ids the SECTION_LABELS uses — map "services"
+    // and "packages" + the rest defensively in case future sidebar links
+    // add more.
+    const known = ["about", "cases", "services", "packages", "gallery", "certifications", "reviews"];
+    if (!known.includes(hash)) return;
+    // rAF queue so we wait for the latest layout pass — previewSlot may
+    // have just remounted as part of this same render.
+    const raf = requestAnimationFrame(() => {
+      const wrapper = previewWrapperRef.current;
+      if (!wrapper) return;
+      const target = wrapper.querySelector<HTMLElement>(`[data-section-id="${hash}"]`);
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [previewSlot]);
+
   useEffect(() => {
     const tick = () => {
       if (!savedAt) return setSavedAgo("");
@@ -687,11 +715,12 @@ export default function EditorClient({ slug, trainerId, trainerName, trainerEmai
           </div>
 
 
-          {/* Moje strony — list of trainer pages, replaces the now-removed
-              left-sidebar nav entry. The currently-edited page (matched via
-              the `pageId` prop, or the primary page when pageId is empty) is
-              highlighted; clicking another row hops the editor over to it.
-              Lives at the top so the trainer always sees what they're editing. */}
+          {/* Moje strony — list of trainer pages. Multi-page profiles are
+              feature-flagged OFF in V1 (see lib/feature-flags.ts) — when
+              ENABLE_PAGES is false the entire CollapsibleSection is skipped,
+              the page-switching plumbing in this component still works for
+              the primary page (which is the only page that exists then). */}
+          {ENABLE_PAGES && (
           <CollapsibleSection
             title="Moje strony"
             storageKey="strony"
@@ -790,6 +819,7 @@ export default function EditorClient({ slug, trainerId, trainerName, trainerEmai
               </p>
             )}
           </CollapsibleSection>
+          )}
 
           {/* Templates — doubles as the create-page picker. When `createMode` is
               on, the section header changes, a slug input + Cancel appear, and

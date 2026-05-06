@@ -92,6 +92,23 @@ export const STUDIO_NAV: StudioNavItem[] = [
     icon: UsersIcon,
     match: (p) => p.startsWith("/studio/klienci"),
   },
+  // Usługi + Pakiety are deep-links into /studio/design (single source
+  // of truth — inline editing in the live preview). The hash triggers
+  // scroll-to-section in EditorClient; no separate page state to manage.
+  {
+    href: "/studio/design#services",
+    label: "Usługi",
+    description: "Cennik pojedynczych sesji",
+    icon: BoltIcon,
+    match: () => false,
+  },
+  {
+    href: "/studio/design#packages",
+    label: "Pakiety",
+    description: "Wielorazowe pakiety sesji",
+    icon: PackageIcon,
+    match: () => false,
+  },
   {
     href: "/studio/calendar",
     label: "Kalendarz",

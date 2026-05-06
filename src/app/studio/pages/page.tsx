@@ -5,6 +5,11 @@ import { listTrainerPages } from "@/lib/db/trainer-pages";
 import { templates } from "@/data/templates";
 import type { TemplateName } from "@/types";
 import PageRowActions from "./PageRowActions";
+import { ENABLE_PAGES } from "@/lib/feature-flags";
+
+// Multi-page profiles cut from V1 MVP. Code is preserved (this whole route
+// + the EditorClient page-id plumbing + trainer_pages migrations) — flag
+// flip in feature-flags.ts re-enables the surface for V2.
 
 /**
  * Moje strony — list every page the trainer owns. Each row links to the
@@ -14,6 +19,11 @@ import PageRowActions from "./PageRowActions";
  * The "Nowa strona" CTA opens the wizard at /studio/pages/new.
  */
 export default async function StudioPages() {
+  // Feature-flagged off in V1. Direct hit → bounce to the design editor
+  // (the canonical single-page surface). When flag flips for V2 the
+  // page renders normally below.
+  if (!ENABLE_PAGES) redirect("/studio/design");
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio/pages");
