@@ -16,6 +16,7 @@ const SECTIONS: Section[] = [
   { id: "specjalizacje", label: "Specjalizacje", countKey: "specializations" },
   { id: "certyfikaty", label: "Certyfikaty", countKey: "certifications" },
   { id: "lokalizacja", label: "Lokalizacja" },
+  { id: "qr", label: "QR" },
   { id: "social", label: "Social", countKey: "social" },
   { id: "ai", label: "Kontekst AI", countKey: "aiContext" },
   { id: "polityka", label: "Polityka i prywatność" },

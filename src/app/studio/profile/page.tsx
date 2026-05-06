@@ -364,7 +364,7 @@ export default async function StudioProfile() {
             </Card>
           </div>
 
-          <div id="lokalizacja" className="space-y-4">
+          <div id="lokalizacja">
             <LocationForm
               location={trainer.location ?? ""}
               city={trainer.city ?? ""}
@@ -372,7 +372,9 @@ export default async function StudioProfile() {
               workMode={trainer.work_mode ?? "both"}
               travelRadiusKm={trainer.travel_radius_km ?? 15}
             />
+          </div>
 
+          <div id="qr">
             <Card>
               <CardHeader
                 title="QR i udostępnianie"
