@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/server";
 import CertificationsEditor from "./CertificationsEditor";
 import AvatarTile from "./AvatarTile";
 import QrSection from "./QrSection";
-import ProfileTabs, { type TabKey } from "./ProfileTabs";
 import BasicForm from "./BasicForm";
 import SpecializationsForm from "./SpecializationsForm";
 import LocationForm from "./LocationForm";
@@ -35,17 +34,10 @@ import type { Certification } from "@/types";
  *     forms render with empty defaults; saves silently no-op
  *     for missing columns until the migration is applied.
  */
-export default async function StudioProfile({
-  searchParams,
-}: {
-  searchParams?: Promise<{ tab?: string }>;
-}) {
+export default async function StudioProfile() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio/profile");
-
-  const params = (await searchParams) ?? {};
-  const tab = normalizeTab(params.tab);
 
   // --- Profile (avatar, name, phone) ----------------------------------
   type ProfileShape = {
@@ -252,9 +244,6 @@ export default async function StudioProfile({
   });
 
   const social = (trainer.social ?? {}) as Record<string, string>;
-  const social_count = ["instagram", "youtube", "tiktok", "facebook", "website"].filter(
-    (k) => !!social[k],
-  ).length;
 
   // Build the role/specialty subtitle the design shows under the name —
   // "Trener personalny · siłownia + funkcjonalny". Joins up to 2 of the
@@ -269,110 +258,86 @@ export default async function StudioProfile({
 
   return (
     <div className="mx-auto max-w-[1280px] px-4 sm:px-8 py-5 sm:py-7">
-      {/* Tabs */}
-      <ProfileTabs
-        active={tab}
-        counts={{
-          specializations: selectedSpecIds.length,
-          certifications: certs.length,
-          social: social_count,
-        }}
-      />
-
-      {/* 2-col grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 items-start mt-2">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 items-start">
         <div className="min-w-0 space-y-4">
-          {tab === "podstawowe" && (
-            <>
-              <BasicForm
-                avatarUrl={profile?.avatar_url ?? null}
-                avatarFocal={profile?.avatar_focal ?? null}
-                displayName={profile?.display_name ?? ""}
-                publicName={trainer.display_name ?? ""}
-                email={user.email ?? ""}
-                tagline={trainer.tagline ?? ""}
-                about={trainer.about ?? ""}
-                mission={trainer.mission ?? ""}
-                location={trainer.location ?? ""}
-                roleLine={roleLine}
-                experience={trainer.experience ?? 0}
-                rating={trainer.rating ?? 0}
-                reviewCount={trainer.review_count ?? 0}
-                avatarSlot={
-                  <AvatarTile
-                    currentUrl={profile?.avatar_url ?? null}
-                    currentFocal={profile?.avatar_focal ?? null}
-                    size="lg"
-                  />
-                }
+          <BasicForm
+            avatarUrl={profile?.avatar_url ?? null}
+            avatarFocal={profile?.avatar_focal ?? null}
+            displayName={profile?.display_name ?? ""}
+            publicName={trainer.display_name ?? ""}
+            email={user.email ?? ""}
+            tagline={trainer.tagline ?? ""}
+            about={trainer.about ?? ""}
+            mission={trainer.mission ?? ""}
+            location={trainer.location ?? ""}
+            roleLine={roleLine}
+            experience={trainer.experience ?? 0}
+            rating={trainer.rating ?? 0}
+            reviewCount={trainer.review_count ?? 0}
+            avatarSlot={
+              <AvatarTile
+                currentUrl={profile?.avatar_url ?? null}
+                currentFocal={profile?.avatar_focal ?? null}
+                size="lg"
               />
-            </>
-          )}
+            }
+          />
 
-          {tab === "specjalizacje" && (
-            <SpecializationsForm
-              allSpecs={(allSpecs ?? []) as { id: string; label: string; icon: string }[]}
-              selected={selectedSpecIds}
-              clientGoals={trainer.client_goals ?? []}
-              suggestionSeed={trainer.about ?? trainer.tagline ?? ""}
+          <SpecializationsForm
+            allSpecs={(allSpecs ?? []) as { id: string; label: string; icon: string }[]}
+            selected={selectedSpecIds}
+            clientGoals={trainer.client_goals ?? []}
+            suggestionSeed={trainer.about ?? trainer.tagline ?? ""}
+          />
+
+          <Card>
+            <CardHeader
+              title="Certyfikaty i dokumenty"
+              hint={`${certs.length} ${certs.length === 1 ? "certyfikat" : "certyfikatów"}`}
+              sub="Przesłane PDF/JPG widoczne tylko po weryfikacji. Klienci widzą tylko nazwę i rok."
             />
-          )}
+            <p className="text-[12px] text-slate-500 mt-1 mb-4 leading-[1.55] max-w-[640px]">
+              Dodaj swoje certyfikaty z linkiem do publicznego rejestru wystawcy (np. EREPS, AWF) lub załącz
+              skan dyplomu. Na publicznej stronie obok każdego certyfikatu pojawi się badge weryfikacji,
+              który klient może kliknąć.
+            </p>
+            <CertificationsEditor certs={certs} />
+          </Card>
 
-          {tab === "certyfikaty" && (
-            <Card>
-              <CardHeader
-                title="Certyfikaty i dokumenty"
-                hint={`${certs.length} ${certs.length === 1 ? "certyfikat" : "certyfikatów"}`}
-                sub="Przesłane PDF/JPG widoczne tylko po weryfikacji. Klienci widzą tylko nazwę i rok."
-              />
-              <p className="text-[12px] text-slate-500 mt-1 mb-4 leading-[1.55] max-w-[640px]">
-                Dodaj swoje certyfikaty z linkiem do publicznego rejestru wystawcy (np. EREPS, AWF) lub załącz
-                skan dyplomu. Na publicznej stronie obok każdego certyfikatu pojawi się badge weryfikacji,
-                który klient może kliknąć.
-              </p>
-              <CertificationsEditor certs={certs} />
-            </Card>
-          )}
+          <LocationForm
+            location={trainer.location ?? ""}
+            city={trainer.city ?? ""}
+            district={trainer.district ?? ""}
+            workMode={trainer.work_mode ?? "both"}
+            travelRadiusKm={trainer.travel_radius_km ?? 15}
+          />
 
-          {tab === "lokalizacja" && (
-            <>
-              <LocationForm
-                location={trainer.location ?? ""}
-                city={trainer.city ?? ""}
-                district={trainer.district ?? ""}
-                workMode={trainer.work_mode ?? "both"}
-                travelRadiusKm={trainer.travel_radius_km ?? 15}
-              />
-              <Card>
-                <CardHeader
-                  title="QR i udostępnianie"
-                  sub="Wydrukuj kod QR na ulotkę, wizytówkę lub plakat w klubie. Każdy QR ma swoje źródło, więc widzisz w analityce skąd przyszedł klient."
-                />
-                <div className="mt-3">
-                  <QrSection
-                    trainerSlug={trainer.slug}
-                    trainerName={profile?.display_name ?? ""}
-                    origin={origin}
-                    branches={branches}
-                  />
-                </div>
-              </Card>
-            </>
-          )}
-
-          {tab === "social" && (
-            <SocialForm
-              instagram={social.instagram ?? ""}
-              youtube={social.youtube ?? ""}
-              tiktok={social.tiktok ?? ""}
-              facebook={social.facebook ?? ""}
-              website={social.website ?? ""}
-              phone={profile?.phone ?? ""}
-              email={social.email ?? user.email ?? ""}
+          <Card>
+            <CardHeader
+              title="QR i udostępnianie"
+              sub="Wydrukuj kod QR na ulotkę, wizytówkę lub plakat w klubie. Każdy QR ma swoje źródło, więc widzisz w analityce skąd przyszedł klient."
             />
-          )}
+            <div className="mt-3">
+              <QrSection
+                trainerSlug={trainer.slug}
+                trainerName={profile?.display_name ?? ""}
+                origin={origin}
+                branches={branches}
+              />
+            </div>
+          </Card>
 
-          {tab === "polityka" && <PolicyTab slug={trainer.slug} />}
+          <SocialForm
+            instagram={social.instagram ?? ""}
+            youtube={social.youtube ?? ""}
+            tiktok={social.tiktok ?? ""}
+            facebook={social.facebook ?? ""}
+            website={social.website ?? ""}
+            phone={profile?.phone ?? ""}
+            email={social.email ?? user.email ?? ""}
+          />
+
+          <PolicyTab slug={trainer.slug} />
         </div>
 
         {/* Right rail */}
@@ -388,12 +353,6 @@ export default async function StudioProfile({
       </div>
     </div>
   );
-}
-
-function normalizeTab(raw: string | undefined): TabKey {
-  const allowed: TabKey[] = ["podstawowe", "specjalizacje", "certyfikaty", "lokalizacja", "social", "polityka"];
-  if (raw && (allowed as string[]).includes(raw)) return raw as TabKey;
-  return "podstawowe";
 }
 
 function computeCompletion(flags: {
