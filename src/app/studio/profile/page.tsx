@@ -253,49 +253,6 @@ export default async function StudioProfile({
 
   return (
     <div className="mx-auto max-w-[1280px] px-4 sm:px-8 py-5 sm:py-7">
-      {/* Header */}
-      <div className="text-[12px] text-slate-500 mb-2">
-        Studio · <span className="text-slate-700 font-medium">Profil</span>
-      </div>
-      <div className="flex flex-wrap gap-3 items-end justify-between">
-        <div>
-          <h1 className="text-[28px] tracking-[-0.022em] font-semibold text-slate-900 m-0 inline-flex items-center gap-3">
-            Profil
-            <PublishedPill published={!!trainer.published} />
-          </h1>
-          <p className="text-[13.5px] text-slate-500 mt-1.5 max-w-[680px]">
-            Tu edytujesz dane wyświetlane na publicznym profilu. Wygląd zmienisz w{" "}
-            <Link href="/studio/design" className="text-emerald-600 font-semibold hover:underline">
-              Design profilu
-            </Link>
-            .
-          </p>
-        </div>
-        <div className="flex gap-2.5">
-          <Link
-            href={`/trainers/${trainer.slug}`}
-            target="_blank"
-            className="inline-flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-[9px] bg-white border border-slate-200 hover:bg-slate-50"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-            Podgląd publiczny
-          </Link>
-          <Link
-            href="/studio/design"
-            className="inline-flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-[9px] bg-slate-900 text-white hover:bg-black"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 19l7-7 3 3-7 7-3-3z" />
-              <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
-            </svg>
-            Design profilu
-          </Link>
-        </div>
-      </div>
-
       {/* Tabs */}
       <ProfileTabs
         active={tab}
@@ -438,23 +395,6 @@ function computeCompletion(flags: {
   const done = items.filter((i) => i.done).length;
   const pct = Math.round((done / items.length) * 100);
   return { pct, items };
-}
-
-function PublishedPill({ published }: { published: boolean }) {
-  if (published) {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold px-2 py-1 rounded-[7px] bg-emerald-50 text-emerald-700">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-        Opublikowany
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold px-2 py-1 rounded-[7px] bg-amber-50 text-amber-700">
-      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-      Szkic
-    </span>
-  );
 }
 
 function Card({ children }: { children: React.ReactNode }) {
