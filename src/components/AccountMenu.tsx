@@ -26,6 +26,12 @@ const HelpIcon = (
     <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01" />
   </svg>
 );
+const FinansaIcon = (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <line x1="12" y1="1" x2="12" y2="23" />
+    <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
+  </svg>
+);
 const LogoutIcon = (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
@@ -50,6 +56,13 @@ const ITEMS: Item[] = [
     label: "Mój profil",
     description: "Treść + szablon",
     icon: SettingsIcon,
+  },
+  {
+    kind: "link",
+    href: "/studio/finanse",
+    label: "Finanse",
+    description: "Przychody, oczekujące płatności",
+    icon: FinansaIcon,
   },
   {
     kind: "link",
