@@ -48,7 +48,9 @@ const POL_MONTHS_NOM = [
   "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień",
 ];
 
-/** Status → background colour (CSS variable applied via class). */
+/** Status palette used by the detail modal header pill. Calendar
+ *  events themselves are coloured by service-type (TYPE_STYLE) per
+ *  design 32; status is encoded via dashed border / opacity. */
 const STATUS_STYLE: Record<BookingEvent["status"], { bg: string; border: string; text: string; label: string }> = {
   pending:   { bg: "bg-amber-100",  border: "border-amber-300",  text: "text-amber-900",  label: "Oczekuje" },
   paid:      { bg: "bg-emerald-100", border: "border-emerald-400", text: "text-emerald-900", label: "Opłacone" },
@@ -57,6 +59,30 @@ const STATUS_STYLE: Record<BookingEvent["status"], { bg: string; border: string;
   cancelled: { bg: "bg-rose-50",    border: "border-rose-200",   text: "text-rose-700",   label: "Anulowane" },
   no_show:   { bg: "bg-rose-50",    border: "border-rose-200",   text: "text-rose-700",   label: "Nieobecność" },
 };
+
+/** Service-type → palette. Maps onto the design 32 .ev colour
+ *  variants. Anything that doesn't match a keyword falls through
+ *  to 'siłowy' as the safe default for "1:1 personal training". */
+type ServiceType = "silowy" | "online" | "cardio" | "funkc" | "diag";
+const TYPE_STYLE: Record<
+  ServiceType,
+  { bg: string; border: string; text: string; sub: string; label: string }
+> = {
+  silowy: { bg: "#ecfdf5", border: "#10b981", text: "#064e3b", sub: "#047857", label: "Siłowy" },
+  online: { bg: "#eff6ff", border: "#3b82f6", text: "#1e3a8a", sub: "#1d4ed8", label: "Online" },
+  cardio: { bg: "#fef3c7", border: "#f59e0b", text: "#78350f", sub: "#b45309", label: "Cardio" },
+  funkc:  { bg: "#fae8ff", border: "#a855f7", text: "#581c87", sub: "#7e22ce", label: "Funkc" },
+  diag:   { bg: "#fee2e2", border: "#ef4444", text: "#7f1d1d", sub: "#b91c1c", label: "Diagnostyka" },
+};
+
+function serviceType(title: string): ServiceType {
+  const t = title.toLowerCase();
+  if (/online|zdaln|zoom|video|wideo/.test(t)) return "online";
+  if (/funkc|mobil/.test(t)) return "funkc";
+  if (/cardio|bieg|interw|spal/.test(t)) return "cardio";
+  if (/diagn|fms|ocena|test|movement/.test(t)) return "diag";
+  return "silowy";
+}
 
 type ViewName = "timeGridDay" | "timeGridWeek" | "dayGridMonth";
 
@@ -314,6 +340,37 @@ export default function CalendarClient({
           slotLabelFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
           nowIndicator
           dayHeaderFormat={{ weekday: "short", day: "numeric" }}
+          dayHeaderContent={(arg) => {
+            // Custom 3-line day header per design 32: tiny uppercase
+            // dow on top, big day number (today gets a filled circle),
+            // and a "X sesji" count below from the actual bookings.
+            const day = arg.date;
+            const sameDay = (a: Date, b: Date) =>
+              a.getFullYear() === b.getFullYear() &&
+              a.getMonth() === b.getMonth() &&
+              a.getDate() === b.getDate();
+            const sessionCount = bookings.filter((b) => sameDay(new Date(b.start), day) && b.status !== "cancelled").length;
+            const isToday = sameDay(day, new Date());
+            const dowShort = day.toLocaleDateString("pl-PL", { weekday: "short" }).toUpperCase().replace(".", "");
+            const dayNum = day.getDate();
+            return (
+              <div className="py-1.5 flex flex-col items-center gap-0.5 leading-tight">
+                <span className={"text-[10.5px] font-semibold uppercase tracking-[0.06em] " + (isToday ? "text-slate-900" : "text-slate-500")}>
+                  {dowShort}{isToday ? " · dziś" : ""}
+                </span>
+                {isToday ? (
+                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-900 text-white text-[13px] font-semibold tabular-nums">
+                    {dayNum}
+                  </span>
+                ) : (
+                  <span className="text-[17px] font-semibold tracking-[-0.015em] tabular-nums">{dayNum}</span>
+                )}
+                <span className="text-[10px] text-slate-500">
+                  {sessionCount === 0 ? "wolne" : `${sessionCount} ${sessionCount === 1 ? "sesja" : sessionCount < 5 ? "sesje" : "sesji"}`}
+                </span>
+              </div>
+            );
+          }}
           eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
           // Compact container: ~5-6 hours visible, internal scroll for the rest.
           // The page is locked (no body scroll), so the trainer scrolls the
@@ -327,12 +384,30 @@ export default function CalendarClient({
           eventContent={(arg) => {
             const booking = (arg.event.extendedProps as { booking?: BookingEvent }).booking;
             if (!booking) return null;
-            const s = STATUS_STYLE[booking.status];
+            const t = TYPE_STYLE[serviceType(booking.title)];
+            const isPending = booking.status === "pending";
+            const isCancelled = booking.status === "cancelled" || booking.status === "no_show";
+            const isCompleted = booking.status === "completed";
             return (
-              <div className={`px-1.5 py-1 text-[11px] leading-tight overflow-hidden h-full ${s.bg} ${s.text} border-l-[3px] ${s.border}`}>
-                <div className="font-semibold truncate">{booking.clientName}</div>
-                <div className="opacity-80 truncate">{booking.title}</div>
-                <div className="opacity-60 tabular-nums">
+              <div
+                className="h-full overflow-hidden rounded-[7px] px-[7px] py-[5px] text-[11px] leading-tight"
+                style={{
+                  backgroundColor: t.bg,
+                  borderLeft: `3px ${isPending ? "dashed" : "solid"} ${t.border}`,
+                  boxShadow: "0 1px 2px rgba(2,6,23,0.04)",
+                  opacity: isCancelled ? 0.55 : 1,
+                  textDecoration: isCancelled ? "line-through" : undefined,
+                  color: t.text,
+                  filter: isCompleted ? "grayscale(0.4)" : undefined,
+                }}
+              >
+                <div className="font-semibold truncate text-[11.5px]" style={{ color: "#0f172a" }}>
+                  {booking.clientName}
+                </div>
+                <div className="truncate mt-px" style={{ color: t.sub, fontSize: "10px", opacity: 0.85 }}>
+                  {t.label} · {booking.title}
+                </div>
+                <div className="tabular-nums mt-px" style={{ color: "#64748b", fontSize: "9.5px" }}>
                   {arg.timeText} · {booking.price} zł
                 </div>
               </div>
@@ -353,12 +428,24 @@ export default function CalendarClient({
         />
       </div>
 
-      {/* Status legend */}
-      <div className="flex items-center gap-4 text-[11px] text-slate-500 flex-wrap px-1">
-        <LegendDot bg="bg-emerald-100" border="border-emerald-400" label="Opłacone / Potwierdzone" />
-        <LegendDot bg="bg-amber-100" border="border-amber-300" label="Oczekuje" />
-        <LegendDot bg="bg-slate-100" border="border-slate-300" label="Zakończone" />
-        <LegendDot bg="bg-rose-50" border="border-rose-200" label="Anulowane / Nieobecność" />
+      {/* Type legend — colors come from the service-type heuristic
+          (siłowy / online / cardio / funkc / diag). Status is implied
+          via dashed border (oczekuje), opacity (anulowane/nieobecność)
+          and grayscale (zakończone) on the cards themselves. */}
+      <div className="flex items-center gap-3 text-[11px] text-slate-500 flex-wrap px-1">
+        {(Object.entries(TYPE_STYLE) as [ServiceType, (typeof TYPE_STYLE)[ServiceType]][]).map(([key, t]) => (
+          <span key={key} className="inline-flex items-center gap-1.5">
+            <span
+              className="w-3 h-3 rounded-[3px]"
+              style={{ background: t.bg, borderLeft: `2px solid ${t.border}` }}
+            />
+            {t.label}
+          </span>
+        ))}
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-[3px] border-2 border-dashed" style={{ borderColor: "#fb923c" }} />
+          Oczekuje
+        </span>
         <span className="inline-flex items-center gap-1.5 ml-auto">
           <span className="w-3 h-3 rounded" style={{ background: "rgba(16,185,129,0.20)" }} />
           Godziny pracy <span className="text-slate-400">— kliknij aby edytować</span>
@@ -411,23 +498,20 @@ export default function CalendarClient({
         /* Day-column borders subtly stronger than half-hour borders. */
         .fc-theme-standard td, .fc-theme-standard th { border-color: #e2e8f0; }
         /* Day header row sits in a tinted bar so it visually separates from
-           the grid below. */
+           the grid below. dayHeaderContent renders custom 3-line cells
+           (DOW + big number + 'X sesji'), so we just neutralise FC's
+           default cushion styling. */
         .fc-col-header { background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
         .fc-col-header-cell-cushion {
-          font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
-          font-weight: 700; color: #475569; padding: 11px 4px;
+          padding: 0 !important;
+          color: inherit; text-transform: none; letter-spacing: 0;
+          font-weight: inherit; font-size: inherit;
         }
+        /* Today's column gets a very subtle emerald wash so it pops a
+           little, but the heavy "this is today" cue is the black circle
+           around the date number rendered by dayHeaderContent. */
         .fc-col-header-cell.fc-day-today {
-          background: rgba(16, 185, 129, 0.08);
-        }
-        .fc-col-header-cell.fc-day-today .fc-col-header-cell-cushion {
-          color: #047857;
-        }
-        /* Today's date number gets a small emerald pill for clarity. */
-        .fc-col-header-cell.fc-day-today .fc-col-header-cell-cushion::after {
-          content: ""; display: inline-block; width: 6px; height: 6px;
-          border-radius: 9999px; background: #10b981; margin-left: 6px;
-          vertical-align: middle;
+          background: rgba(16, 185, 129, 0.04);
         }
         .fc-timegrid-slot-label-cushion {
           font-size: 11px; color: #64748b; font-variant-numeric: tabular-nums;
