@@ -6,6 +6,7 @@ type Counts = {
   specializations: number;
   certifications: number;
   social: number;
+  aiContext: number;
 };
 
 type Section = { id: string; label: string; countKey?: keyof Counts };
@@ -16,6 +17,7 @@ const SECTIONS: Section[] = [
   { id: "certyfikaty", label: "Certyfikaty", countKey: "certifications" },
   { id: "lokalizacja", label: "Lokalizacja" },
   { id: "social", label: "Social", countKey: "social" },
+  { id: "ai", label: "Kontekst AI", countKey: "aiContext" },
   { id: "polityka", label: "Polityka i prywatność" },
 ];
 

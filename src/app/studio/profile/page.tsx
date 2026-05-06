@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import CertificationsEditor from "./CertificationsEditor";
 import AvatarTile from "./AvatarTile";
+import AiContextForm from "./AiContextForm";
+import type { AiContext } from "./ai-context-actions";
 import QrSection from "./QrSection";
 import BasicForm from "./BasicForm";
 import ProfileSectionNav from "./ProfileSectionNav";
@@ -83,12 +85,13 @@ export default async function StudioProfile() {
     travel_radius_km?: number | null;
     client_goals?: string[] | null;
     social?: Record<string, string> | null;
+    ai_context?: Record<string, unknown> | null;
   };
   let trainer: TrainerShape | null = null;
   const trainerFull = await supabase
     .from("trainers")
     .select(
-      "slug, tagline, about, location, published, experience, rating, review_count, display_name, mission, city, district, work_mode, travel_radius_km, client_goals, social",
+      "slug, tagline, about, location, published, experience, rating, review_count, display_name, mission, city, district, work_mode, travel_radius_km, client_goals, social, ai_context",
     )
     .eq("id", user.id)
     .maybeSingle();
@@ -109,6 +112,7 @@ export default async function StudioProfile() {
           travel_radius_km: null,
           client_goals: null,
           social: null,
+          ai_context: null,
         }
       : null;
   } else {
@@ -249,6 +253,11 @@ export default async function StudioProfile() {
     (k) => !!social[k],
   ).length;
 
+  const aiContext = (trainer.ai_context ?? {}) as AiContext;
+  const aiContextFilled = (
+    ["background", "targetAudience", "methodology", "differentiators", "tonePreference"] as const
+  ).filter((k) => (aiContext[k] ?? "").trim().length > 0).length;
+
   // Build the role/specialty subtitle the design shows under the name —
   // "Trener personalny · siłownia + funkcjonalny". Joins up to 2 of the
   // trainer's selected specialization labels.
@@ -267,6 +276,7 @@ export default async function StudioProfile() {
           specializations: selectedSpecIds.length,
           certifications: certs.length,
           social: socialCount,
+          aiContext: aiContextFilled,
         }}
       />
 
@@ -357,6 +367,10 @@ export default async function StudioProfile() {
               phone={profile?.phone ?? ""}
               email={social.email ?? user.email ?? ""}
             />
+          </div>
+
+          <div id="ai">
+            <AiContextForm initial={aiContext} />
           </div>
 
           <div id="polityka">
