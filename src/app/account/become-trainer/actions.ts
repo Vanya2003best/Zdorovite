@@ -111,5 +111,5 @@ export async function becomeTrainer(
   revalidatePath("/studio/bookings");
   revalidatePath(`/trainers/${slug}`);
   revalidatePath("/trainers");
-  redirect("/studio/bookings?welcome=1");
+  redirect("/studio/start?welcome=1");
 }

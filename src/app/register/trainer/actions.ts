@@ -128,5 +128,8 @@ export async function registerTrainer(
     );
   }
 
-  redirect("/studio?welcome=1");
+  // New trainers land on the onboarding wizard so they don't drown in
+  // the empty /studio with no guidance. The wizard collapses naturally
+  // as they fill in fields and disappears once they hit 100%.
+  redirect("/studio/start?welcome=1");
 }

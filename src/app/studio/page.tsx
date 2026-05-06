@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { computeOnboarding } from "./start/onboarding-checklist";
 
 type RecentBooking = {
   id: string;
@@ -95,8 +96,44 @@ export default async function StudioHome() {
     .limit(5);
   const upcomingList = (upcoming ?? []) as unknown as RecentBooking[];
 
+  // Onboarding state — banner shows up top until 100% complete. Computed
+  // server-side so the banner reflects the very latest data (no race with
+  // client refetches). Light query — heavily cached at Postgres level.
+  const onboarding = await computeOnboarding(user.id);
+
   return (
     <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10">
+      {onboarding.percent < 100 && (
+        <Link
+          href="/studio/start"
+          className="block mb-6 rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-teal-50 px-5 py-4 hover:border-emerald-400 transition group"
+        >
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="min-w-0">
+              <div className="text-[12px] font-semibold tracking-[0.08em] uppercase text-emerald-700">
+                Konfiguracja konta · {onboarding.percent}%
+              </div>
+              <div className="text-[15px] font-semibold tracking-tight text-slate-900 mt-0.5">
+                {onboarding.readyToPublish
+                  ? "Profil gotowy do publikacji — dokończ pozostałe pola"
+                  : "Skonfiguruj profil żeby zacząć przyjmować klientów"}
+              </div>
+              <div className="text-[12.5px] text-slate-600 mt-0.5">
+                {onboarding.doneCount} z {onboarding.totalCount} ukończonych
+              </div>
+            </div>
+            <div className="shrink-0 inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-slate-900 text-white text-[13px] font-semibold group-hover:bg-black transition">
+              Otwórz checklistę →
+            </div>
+          </div>
+          <div className="h-1.5 bg-emerald-100 rounded-full overflow-hidden mt-3">
+            <div
+              className="h-full bg-gradient-to-r from-emerald-500 to-teal-500"
+              style={{ width: `${onboarding.percent}%` }}
+            />
+          </div>
+        </Link>
+      )}
       <header className="mb-8">
         <p className="text-[13px] uppercase tracking-[0.08em] text-emerald-700 font-medium">
           {greeting()} 👋
