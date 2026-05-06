@@ -324,6 +324,28 @@ export default function CalendarClient({
     return () => mql.removeEventListener("change", apply);
   }, []);
 
+  // FullCalendar height has to be a number/string — `height="100%"`
+  // works only when the wrapper has a deterministic height, which we
+  // don't have in this flex layout. Measure the viewport and subtract
+  // the chrome above the grid (topbar + KPI + toolbar + filter pills
+  // + breathing). Re-runs on resize.
+  const [calHeight, setCalHeight] = useState(560);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const recompute = () => {
+      // Sum of approximate above-grid heights (topbar 70 + kpi 22 +
+      // toolbar 56 + filter pills 38 + paddings ~36). Tuned so 22:00
+      // fits without scroll on a 1080p viewport, and tall monitors
+      // get even more headroom.
+      const above = 230;
+      const h = Math.max(420, window.innerHeight - above);
+      setCalHeight(h);
+    };
+    recompute();
+    window.addEventListener("resize", recompute);
+    return () => window.removeEventListener("resize", recompute);
+  }, []);
+
   // FullCalendar events: bookings only. Working-hours emerald wash is drawn
   // by the WorkingHoursOverlay (drag-editable), NOT as FC background events.
   // Pattern mode hides events entirely (the trainer is editing rules, not
@@ -621,12 +643,11 @@ export default function CalendarClient({
             );
           }}
           eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
-          // Compact container: ~5-6 hours visible, internal scroll for the rest.
-          // The page is locked (no body scroll), so the trainer scrolls the
-          // calendar itself to see hours outside the visible window.
-          // expandRows + height="auto" together cause runaway layout in some
-          // flex parent contexts (slot labels grow to ~1M px), so we pin a value.
-          height="560px"
+          // Dynamic height — measured from window inner-height minus
+          // the chrome above the grid. Tall monitors → all 16 hours
+          // fit without scroll. Short ones → internal scroll kicks in
+          // but the bottom hour (22:00) is reachable.
+          height={calHeight}
           events={events}
           eventClick={handleEventClick}
           datesSet={(arg) => setTitle(formatTitle(arg.view.currentStart, arg.view.type as ViewName))}
