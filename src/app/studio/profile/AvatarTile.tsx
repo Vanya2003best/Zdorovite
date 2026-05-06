@@ -18,12 +18,21 @@ import { uploadAvatar, removeAvatar, setProfileAvatarFocal } from "../upload-act
  * the action returns ok anyway and the focal lasts until refresh — see
  * upload-actions.setProfileAvatarFocal for the 42703 swallow.
  */
+type Size = "sm" | "lg";
+
+const SIZE_CLASSES: Record<Size, string> = {
+  sm: "w-16 h-16 rounded-2xl",
+  lg: "w-[110px] h-[110px] rounded-full",
+};
+
 export default function AvatarTile({
   currentUrl,
   currentFocal,
+  size = "sm",
 }: {
   currentUrl: string | null;
   currentFocal: string | null;
+  size?: Size;
 }) {
   const router = useRouter();
 
@@ -58,7 +67,7 @@ export default function AvatarTile({
       // mounts; the placeholder Card-level UX remains unchanged.
       fallback="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
       alt="Avatar"
-      containerClassName="w-16 h-16 rounded-2xl overflow-hidden border border-slate-200 shrink-0"
+      containerClassName={`${SIZE_CLASSES[size]} overflow-hidden border border-slate-200 shrink-0`}
       className="w-full h-full object-cover"
       compact
       helpText={null}

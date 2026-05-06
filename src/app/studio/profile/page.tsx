@@ -79,6 +79,9 @@ export default async function StudioProfile({
     about: string | null;
     location: string | null;
     published: boolean | null;
+    experience: number | null;
+    rating: number | null;
+    review_count: number | null;
     mission?: string | null;
     city?: string | null;
     district?: string | null;
@@ -91,14 +94,14 @@ export default async function StudioProfile({
   const trainerFull = await supabase
     .from("trainers")
     .select(
-      "slug, tagline, about, location, published, mission, city, district, work_mode, travel_radius_km, client_goals, social",
+      "slug, tagline, about, location, published, experience, rating, review_count, mission, city, district, work_mode, travel_radius_km, client_goals, social",
     )
     .eq("id", user.id)
     .maybeSingle();
   if (trainerFull.error?.code === "42703") {
     const stripped = await supabase
       .from("trainers")
-      .select("slug, tagline, about, location, published")
+      .select("slug, tagline, about, location, published, experience, rating, review_count")
       .eq("id", user.id)
       .maybeSingle();
     trainer = stripped.data
@@ -251,6 +254,17 @@ export default async function StudioProfile({
     (k) => !!social[k],
   ).length;
 
+  // Build the role/specialty subtitle the design shows under the name —
+  // "Trener personalny · siłownia + funkcjonalny". Joins up to 2 of the
+  // trainer's selected specialization labels.
+  const specLabelMap = new Map((allSpecs ?? []).map((s) => [s.id, s.label.toLowerCase()]));
+  const specLabels = selectedSpecIds
+    .map((id) => specLabelMap.get(id))
+    .filter((s): s is string => !!s)
+    .slice(0, 2);
+  const roleLine =
+    specLabels.length > 0 ? `Trener personalny · ${specLabels.join(" + ")}` : "Trener personalny";
+
   return (
     <div className="mx-auto max-w-[1280px] px-4 sm:px-8 py-5 sm:py-7">
       {/* Tabs */}
@@ -277,10 +291,15 @@ export default async function StudioProfile({
                 about={trainer.about ?? ""}
                 mission={trainer.mission ?? ""}
                 location={trainer.location ?? ""}
+                roleLine={roleLine}
+                experience={trainer.experience ?? 0}
+                rating={trainer.rating ?? 0}
+                reviewCount={trainer.review_count ?? 0}
                 avatarSlot={
                   <AvatarTile
                     currentUrl={profile?.avatar_url ?? null}
                     currentFocal={profile?.avatar_focal ?? null}
+                    size="lg"
                   />
                 }
               />

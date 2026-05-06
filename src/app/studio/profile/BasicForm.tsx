@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { updateProfileBasic } from "./profile-actions";
 
+const MIN_BIO = 200;
 const MAX_BIO = 600;
 const MAX_TAGLINE = 200;
 const MAX_MISSION = 200;
@@ -17,16 +18,24 @@ type Props = {
   about: string;
   mission: string;
   location: string;
+  roleLine: string;
+  experience: number;
+  rating: number;
+  reviewCount: number;
   avatarSlot: ReactNode;
 };
 
 export default function BasicForm({
   displayName: initialDisplayName,
-  email,
+  email: _email,
   tagline: initialTagline,
   about: initialAbout,
   mission: initialMission,
   location,
+  roleLine,
+  experience,
+  rating,
+  reviewCount,
   avatarSlot,
 }: Props) {
   const router = useRouter();
@@ -91,15 +100,15 @@ export default function BasicForm({
           </p>
         </div>
 
-        <div className="flex gap-5 items-center">
+        <div className="flex gap-[22px] items-center">
           {/* Avatar (component injected so server-side actions stay attached) */}
           <div className="shrink-0">{avatarSlot}</div>
           <div className="min-w-0 flex-1">
-            <div className="text-[20px] font-semibold tracking-[-0.015em] truncate">
+            <div className="text-[22px] font-semibold tracking-[-0.015em] truncate">
               {displayName || "Bez nazwy"}
             </div>
-            <div className="text-[12.5px] text-slate-500 mt-0.5 truncate">{email}</div>
-            <div className="text-[12px] text-slate-700 mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
+            <div className="text-[13px] text-slate-500 mt-1 truncate">{roleLine}</div>
+            <div className="text-[12.5px] text-slate-700 mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
               {location && (
                 <span className="inline-flex items-center gap-1.5">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-500">
@@ -109,9 +118,23 @@ export default function BasicForm({
                   {location}
                 </span>
               )}
-              <span className="inline-flex items-center gap-1.5 text-slate-500">
-                JPG / PNG / WebP, max 5 MB
-              </span>
+              {experience > 0 && (
+                <span className="inline-flex items-center gap-1.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-500">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 6v6l4 2" />
+                  </svg>
+                  {experience} lat doświadczenia
+                </span>
+              )}
+              {rating > 0 && (
+                <span className="inline-flex items-center gap-1.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-500">
+                    <path d="M12 2l2.4 7.4H22l-6 4.5 2.3 7.1L12 16.6 5.7 21l2.3-7.1L2 9.4h7.6z" />
+                  </svg>
+                  {rating.toFixed(2)} · {reviewCount} {reviewCount === 1 ? "opinia" : "opinii"}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -139,7 +162,7 @@ export default function BasicForm({
             />
           </Field>
 
-          <Field label="O mnie" hint={`Markdown · ${MAX_BIO} znaków`} full>
+          <Field label="O mnie" hint={`Markdown · ${MIN_BIO}–${MAX_BIO} znaków`} full>
             <textarea
               value={about}
               maxLength={MAX_BIO + 200}
@@ -149,7 +172,11 @@ export default function BasicForm({
             <div
               className={
                 "text-[11px] text-right mt-1 " +
-                (about.length > MAX_BIO ? "text-rose-600" : "text-slate-500")
+                (about.length > MAX_BIO
+                  ? "text-rose-600"
+                  : about.length >= MIN_BIO
+                    ? "text-emerald-600"
+                    : "text-slate-500")
               }
             >
               {about.length} / {MAX_BIO}
