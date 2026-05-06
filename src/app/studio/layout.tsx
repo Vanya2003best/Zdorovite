@@ -52,7 +52,7 @@ export default async function StudioLayout({
         unreadMessages={unreadMessages}
       />
 
-      <div data-studio-content className="lg:ml-[280px] flex flex-col min-h-screen">
+      <div data-studio-content className="lg:ml-[240px] flex flex-col min-h-screen">
         <StudioTopBarSlot>
           <StudioTopBar
             trainerId={user.id}
