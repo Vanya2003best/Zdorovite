@@ -171,12 +171,74 @@ export default function CalendarClient({
     () => bookings.filter((b) => new Date(b.start).getTime() >= Date.now() && b.status !== "cancelled").length,
     [bookings],
   );
+
   // Mobile gets day-view by default; desktop gets week. SSR safe — start with
   // week and update on mount. Avoids a hydration flash because FullCalendar
   // mounts client-only anyway.
   const [view, setView] = useState<ViewName>("timeGridWeek");
   const [title, setTitle] = useState("");
   const [selected, setSelected] = useState<BookingEvent | null>(null);
+
+  // Filter pills — toggle visibility by service type. Default: all on.
+  // The pill on/off state filters which events FullCalendar receives,
+  // so the count for hidden types stays in the side panel but the
+  // grid is uncluttered.
+  const allTypes: ServiceType[] = useMemo(() => ["silowy", "online", "cardio", "funkc", "diag"], []);
+  const [hiddenTypes, setHiddenTypes] = useState<Set<ServiceType>>(new Set());
+  const toggleType = (t: ServiceType) =>
+    setHiddenTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(t)) next.delete(t);
+      else next.add(t);
+      return next;
+    });
+
+  // Current week (Mon → Sun) range, recomputed when title changes
+  // because `title` is set in datesSet — proxy for "view date moved".
+  const weekRange = useMemo(() => {
+    const ref = calRef.current?.getApi().view.currentStart ?? new Date();
+    const start = new Date(ref);
+    const day = start.getDay();
+    const diff = (day + 6) % 7; // Mon=0
+    start.setDate(start.getDate() - diff);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    return { start: start.getTime(), end: end.getTime() };
+  }, [title]);
+
+  const weekBookings = useMemo(
+    () =>
+      bookings.filter((b) => {
+        const t = new Date(b.start).getTime();
+        return t >= weekRange.start && t < weekRange.end && b.status !== "cancelled";
+      }),
+    [bookings, weekRange],
+  );
+
+  const weekRevenue = useMemo(
+    () => weekBookings.reduce((acc, b) => acc + (b.price ?? 0), 0),
+    [weekBookings],
+  );
+
+  // Per-type counts for the side panel breakdown.
+  const typeCounts = useMemo(() => {
+    const counts: Record<ServiceType, number> = { silowy: 0, online: 0, cardio: 0, funkc: 0, diag: 0 };
+    for (const b of weekBookings) counts[serviceType(b.title)] += 1;
+    return counts;
+  }, [weekBookings]);
+
+  // Weekly capacity: sum of working-hour minutes ÷ 60-min slot length.
+  // Capped at 99% so a sparse week with no rules doesn't read 200%.
+  const weekUtilisation = useMemo(() => {
+    const weeklyMins = rulesState.reduce((acc, r) => {
+      const [sh, sm] = r.start.split(":").map(Number);
+      const [eh, em] = r.end.split(":").map(Number);
+      return acc + Math.max(0, eh * 60 + em - (sh * 60 + sm));
+    }, 0);
+    const cap = Math.max(1, Math.round(weeklyMins / 60));
+    return Math.min(99, Math.round((weekBookings.length / cap) * 100));
+  }, [weekBookings.length, rulesState]);
 
   // Reset html { zoom: 1.1 } (set on >=1500px in globals.css) for the duration
   // of the calendar page. Same trick as /studio/design — without it 100vh-based
@@ -224,18 +286,21 @@ export default function CalendarClient({
   // Pattern mode hides events entirely (the trainer is editing rules, not
   // looking at sessions); availability fades them via a class so they're
   // visible context but don't compete with the green availability bands.
+  // Filter pills suppress events of de-selected types.
   const events: EventInput[] = useMemo(() => {
     if (mode === "pattern") return [];
     const fadedClass = mode === "availability" ? "nz-event-faded" : "";
-    return bookings.map((b) => ({
-      id: b.id,
-      title: b.clientName,
-      start: b.start,
-      end: b.end,
-      classNames: ["nz-booking", `nz-status-${b.status}`, fadedClass].filter(Boolean) as string[],
-      extendedProps: { booking: b } as { booking: BookingEvent },
-    }));
-  }, [bookings, mode]);
+    return bookings
+      .filter((b) => !hiddenTypes.has(serviceType(b.title)))
+      .map((b) => ({
+        id: b.id,
+        title: b.clientName,
+        start: b.start,
+        end: b.end,
+        classNames: ["nz-booking", `nz-status-${b.status}`, fadedClass].filter(Boolean) as string[],
+        extendedProps: { booking: b } as { booking: BookingEvent },
+      }));
+  }, [bookings, mode, hiddenTypes]);
 
   const navigate = (dir: "prev" | "next" | "today") => {
     const api = calRef.current?.getApi();
@@ -260,7 +325,59 @@ export default function CalendarClient({
   };
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 sm:px-8 pt-3 pb-8 grid gap-3">
+    <div className="mx-auto max-w-[1280px] px-4 sm:px-8 pt-5 pb-8 grid gap-3">
+      {/* Internal topbar — replaces the studio shell's StudioTopBar
+          on /studio/calendar (hidden via StudioTopBarSlot). Title +
+          weekly KPIs on the left, action buttons on the right. */}
+      <div className="flex items-start justify-between gap-4 flex-wrap mb-1">
+        <div>
+          <h1 className="text-[24px] sm:text-[26px] font-semibold tracking-[-0.022em] m-0">
+            Kalendarz
+          </h1>
+          <p className="text-[12.5px] text-slate-500 mt-1">
+            {weekBookings.length} {weekBookings.length === 1 ? "sesja" : weekBookings.length < 5 ? "sesje" : "sesji"} w tym tygodniu
+            {weekRevenue > 0 && ` · ${weekRevenue.toLocaleString("pl-PL")} PLN przychodu`}
+            {weekUtilisation > 0 && ` · ${weekUtilisation}% wypełnienia`}
+          </p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            type="button"
+            disabled
+            title="Wkrótce — eksport do iCal"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[9px] bg-white border border-slate-200 text-[12.5px] font-medium text-slate-500 disabled:opacity-60"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            Eksport .ics
+          </button>
+          <button
+            type="button"
+            disabled
+            title="Wkrótce — synchronizacja z Google Calendar"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[9px] bg-white border border-slate-200 text-[12.5px] font-medium text-slate-500 disabled:opacity-60"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 6v6l4 2" />
+            </svg>
+            Sync Google
+          </button>
+          <button
+            type="button"
+            disabled
+            title="Wkrótce — tworzenie sesji ręcznie z kalendarza"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[9px] bg-slate-900 text-white text-[12.5px] font-semibold disabled:opacity-60"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            Nowa sesja
+          </button>
+        </div>
+      </div>
+
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-3 flex-wrap rounded-xl border border-slate-200 bg-white px-3 sm:px-4 py-2.5">
         <div className="flex items-center gap-1.5">
@@ -313,6 +430,36 @@ export default function CalendarClient({
           ))}
         </div>
       </div>
+
+      {/* Filter pills — toggle service-type visibility on the grid.
+          Hidden for pattern mode (events suppressed entirely there). */}
+      {mode !== "pattern" && (
+        <div className="flex items-center gap-2 flex-wrap px-1">
+          {allTypes.map((t) => {
+            const cfg = TYPE_STYLE[t];
+            const off = hiddenTypes.has(t);
+            const count = typeCounts[t];
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => toggleType(t)}
+                className={
+                  "inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-[11.5px] font-medium border transition " +
+                  (off
+                    ? "bg-white text-slate-400 border-slate-200 line-through decoration-slate-300"
+                    : "bg-white text-slate-700 border-slate-200 hover:border-slate-300")
+                }
+                title={off ? `Pokaż ${cfg.label}` : `Ukryj ${cfg.label}`}
+              >
+                <span className="w-2 h-2 rounded-full" style={{ background: cfg.border }} />
+                {cfg.label}
+                {count > 0 && <span className="text-slate-400 tabular-nums">{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Pattern mode 7-day summary above the grid */}
       {mode === "pattern" && <PatternSummaryPanel rules={rulesState} />}
@@ -478,6 +625,17 @@ export default function CalendarClient({
         />
       )}
 
+      {/* Floating week-summary panel (only in bookings mode — the
+          breakdown is meaningless when events are hidden / faded). */}
+      {mode === "bookings" && weekBookings.length > 0 && (
+        <WeekSummaryPanel
+          counts={typeCounts}
+          total={weekBookings.length}
+          revenue={weekRevenue}
+          utilisation={weekUtilisation}
+        />
+      )}
+
       {/* FullCalendar appearance overrides — keep them scoped to .nz-* classes
           we add above. Pulled inline as <style jsx global> to avoid touching
           globals.css. */}
@@ -550,12 +708,85 @@ export default function CalendarClient({
   );
 }
 
-function LegendDot({ bg, border, label }: { bg: string; border: string; label: string }) {
+/**
+ * Floating "Tydzień w skrócie" panel — design 32 layout. Bottom-right,
+ * collapsible, breaks down the current week's bookings by service
+ * type with totals + utilisation. Hidden when there are no bookings
+ * (empty state would just be 0s across the board).
+ */
+function WeekSummaryPanel({
+  counts,
+  total,
+  revenue,
+  utilisation,
+}: {
+  counts: Record<ServiceType, number>;
+  total: number;
+  revenue: number;
+  utilisation: number;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setCollapsed(false)}
+        className="fixed right-6 bottom-6 z-30 inline-flex items-center gap-2 h-10 px-3.5 rounded-full bg-slate-900 text-white text-[12.5px] font-semibold shadow-[0_12px_36px_rgba(2,6,23,0.18)] hover:bg-black"
+        title="Tydzień w skrócie"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M3 12h18M3 6h18M3 18h18" />
+        </svg>
+        Skrót tygodnia
+      </button>
+    );
+  }
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className={`w-3 h-3 rounded border-l-[3px] ${border} ${bg}`} />
-      {label}
-    </span>
+    <div className="fixed right-6 bottom-6 w-[300px] bg-white border border-slate-200 rounded-[14px] overflow-hidden shadow-[0_12px_36px_rgba(2,6,23,0.12)] z-30">
+      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+        <h4 className="m-0 text-[12px] font-bold uppercase tracking-[0.08em] text-slate-700">
+          Tydzień w skrócie
+        </h4>
+        <button
+          type="button"
+          onClick={() => setCollapsed(true)}
+          className="w-6 h-6 rounded-md bg-slate-50 hover:bg-slate-100 text-slate-500 inline-flex items-center justify-center"
+          title="Zwiń"
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div className="px-4 py-3 space-y-1.5">
+        {(Object.entries(counts) as [ServiceType, number][])
+          .filter(([, n]) => n > 0)
+          .sort((a, b) => b[1] - a[1])
+          .map(([key, n]) => {
+            const cfg = TYPE_STYLE[key];
+            return (
+              <div key={key} className="flex items-center gap-2.5 text-[12.5px] text-slate-700 py-1">
+                <span className="w-2.5 h-2.5 rounded-[3px]" style={{ background: cfg.border }} />
+                <span className="font-medium">{cfg.label}</span>
+                <span className="ml-auto tabular-nums font-semibold text-slate-900">{n}</span>
+              </div>
+            );
+          })}
+        <div className="h-px bg-slate-100 my-2" />
+        <div className="flex items-center text-[12.5px] text-slate-700 py-1">
+          <span>{total} {total === 1 ? "sesja" : total < 5 ? "sesje" : "sesji"}</span>
+          {revenue > 0 && (
+            <span className="ml-auto tabular-nums font-semibold text-slate-900">
+              {revenue.toLocaleString("pl-PL")} PLN
+            </span>
+          )}
+        </div>
+        <div className="flex items-center text-[12.5px] text-slate-700 py-1">
+          <span>Obciążenie tygodnia</span>
+          <span className="ml-auto tabular-nums font-semibold text-slate-900">{utilisation}%</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
