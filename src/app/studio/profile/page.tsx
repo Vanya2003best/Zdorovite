@@ -72,7 +72,7 @@ export default async function StudioProfile({
     profile = profileFull.data as ProfileShape;
   }
 
-  // --- Trainer (full row including 026 fields) ------------------------
+  // --- Trainer (full row including 026 + 027 fields) ------------------
   type TrainerShape = {
     slug: string;
     tagline: string | null;
@@ -82,6 +82,7 @@ export default async function StudioProfile({
     experience: number | null;
     rating: number | null;
     review_count: number | null;
+    display_name?: string | null;
     mission?: string | null;
     city?: string | null;
     district?: string | null;
@@ -94,7 +95,7 @@ export default async function StudioProfile({
   const trainerFull = await supabase
     .from("trainers")
     .select(
-      "slug, tagline, about, location, published, experience, rating, review_count, mission, city, district, work_mode, travel_radius_km, client_goals, social",
+      "slug, tagline, about, location, published, experience, rating, review_count, display_name, mission, city, district, work_mode, travel_radius_km, client_goals, social",
     )
     .eq("id", user.id)
     .maybeSingle();
@@ -107,6 +108,7 @@ export default async function StudioProfile({
     trainer = stripped.data
       ? {
           ...stripped.data,
+          display_name: null,
           mission: null,
           city: null,
           district: null,
@@ -286,6 +288,7 @@ export default async function StudioProfile({
                 avatarUrl={profile?.avatar_url ?? null}
                 avatarFocal={profile?.avatar_focal ?? null}
                 displayName={profile?.display_name ?? ""}
+                publicName={trainer.display_name ?? ""}
                 email={user.email ?? ""}
                 tagline={trainer.tagline ?? ""}
                 about={trainer.about ?? ""}

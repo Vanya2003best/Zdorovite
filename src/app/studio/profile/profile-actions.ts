@@ -25,6 +25,7 @@ const MAX_HANDLE = 200;
 
 type ProfileBasic = {
   displayName: string;
+  publicName: string;
   tagline: string;
   about: string;
   mission: string;
@@ -64,6 +65,9 @@ export async function updateProfileBasic(input: ProfileBasic): Promise<Result> {
   const { supabase, userId, slug } = ctx;
 
   const displayName = input.displayName.trim().slice(0, MAX_DISPLAY_NAME);
+  const publicNameRaw = input.publicName.trim().slice(0, MAX_DISPLAY_NAME);
+  // Empty publicName = clear override (fall back to displayName publicly).
+  const publicName: string | null = publicNameRaw === "" ? null : publicNameRaw;
   const tagline = input.tagline.trim().slice(0, MAX_TAGLINE);
   const about = input.about.trim().slice(0, MAX_ABOUT);
   const mission = input.mission.trim().slice(0, MAX_MISSION);
@@ -77,17 +81,30 @@ export async function updateProfileBasic(input: ProfileBasic): Promise<Result> {
     .eq("id", userId);
   if (profileUpd.error) return { error: profileUpd.error.message };
 
+  // Try the full trainers update (mission from 026 + display_name from 027).
+  // Fall back through column-missing errors so the page works on partially
+  // migrated databases without throwing for the user.
   const trainerUpdFull = await supabase
     .from("trainers")
-    .update({ tagline, about, mission })
+    .update({ tagline, about, mission, display_name: publicName })
     .eq("id", userId);
   if (trainerUpdFull.error?.code === "42703") {
-    // mission column missing — write the rest, swallow mission for now.
-    const fallback = await supabase
+    // Drop columns one at a time until the write succeeds. Order matters:
+    // 027 (display_name) is newer than 026 (mission), so try without it
+    // first; only then drop mission.
+    const without027 = await supabase
       .from("trainers")
-      .update({ tagline, about })
+      .update({ tagline, about, mission })
       .eq("id", userId);
-    if (fallback.error) return { error: fallback.error.message };
+    if (without027.error?.code === "42703") {
+      const minimal = await supabase
+        .from("trainers")
+        .update({ tagline, about })
+        .eq("id", userId);
+      if (minimal.error) return { error: minimal.error.message };
+    } else if (without027.error) {
+      return { error: without027.error.message };
+    }
   } else if (trainerUpdFull.error) {
     return { error: trainerUpdFull.error.message };
   }

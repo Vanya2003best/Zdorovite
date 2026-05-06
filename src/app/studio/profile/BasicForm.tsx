@@ -13,6 +13,7 @@ type Props = {
   avatarUrl: string | null;
   avatarFocal: string | null;
   displayName: string;
+  publicName: string;
   email: string;
   tagline: string;
   about: string;
@@ -27,6 +28,7 @@ type Props = {
 
 export default function BasicForm({
   displayName: initialDisplayName,
+  publicName: initialPublicName,
   email: _email,
   tagline: initialTagline,
   about: initialAbout,
@@ -42,12 +44,14 @@ export default function BasicForm({
 
   const initial = {
     displayName: initialDisplayName,
+    publicName: initialPublicName,
     tagline: initialTagline,
     about: initialAbout,
     mission: initialMission,
   };
 
   const [displayName, setDisplayName] = useState(initialDisplayName);
+  const [publicName, setPublicName] = useState(initialPublicName);
   const [tagline, setTagline] = useState(initialTagline);
   const [about, setAbout] = useState(initialAbout);
   const [mission, setMission] = useState(initialMission);
@@ -57,16 +61,17 @@ export default function BasicForm({
 
   const dirty =
     displayName !== initial.displayName ||
+    publicName !== initial.publicName ||
     tagline !== initial.tagline ||
     about !== initial.about ||
     mission !== initial.mission;
 
   // Track most recent dirty values via a ref so we can guard against
   // stale-closure saves when the user clicks Zapisz right after typing.
-  const liveRef = useRef({ displayName, tagline, about, mission });
+  const liveRef = useRef({ displayName, publicName, tagline, about, mission });
   useEffect(() => {
-    liveRef.current = { displayName, tagline, about, mission };
-  }, [displayName, tagline, about, mission]);
+    liveRef.current = { displayName, publicName, tagline, about, mission };
+  }, [displayName, publicName, tagline, about, mission]);
 
   const handleSave = async () => {
     if (!dirty || saving) return;
@@ -84,6 +89,7 @@ export default function BasicForm({
 
   const handleDiscard = () => {
     setDisplayName(initial.displayName);
+    setPublicName(initial.publicName);
     setTagline(initial.tagline);
     setAbout(initial.about);
     setMission(initial.mission);
@@ -151,8 +157,22 @@ export default function BasicForm({
             />
           </Field>
           <Field
+            label="Wyświetlana nazwa"
+            hint='opcjonalnie, np. „Trener Marek"'
+          >
+            <input
+              value={publicName}
+              maxLength={80}
+              onChange={(e) => setPublicName(e.target.value)}
+              placeholder={displayName ? `np. „Trener ${displayName.split(" ")[0]}"` : 'np. „Trener Marek"'}
+              className="px-3 py-2.5 text-[13.5px] rounded-[9px] border border-slate-200 bg-white outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15"
+            />
+          </Field>
+
+          <Field
             label="Tagline"
-            hint="(jedna linia, pokazuje się pod imieniem na profilu)"
+            hint="jedna linia, pokazuje się pod imieniem na profilu"
+            full
           >
             <input
               value={tagline}
