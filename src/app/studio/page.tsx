@@ -244,7 +244,7 @@ function UpcomingRow({ booking: b }: { booking: RecentBooking }) {
   const isPending = b.status === "pending";
   return (
     <Link
-      href="/studio/bookings"
+      href={`/studio/sesja/${b.id}`}
       className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3.5 hover:border-emerald-400 hover:shadow-sm transition"
     >
       {b.client?.avatar_url ? (
