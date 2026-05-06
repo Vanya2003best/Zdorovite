@@ -26,7 +26,7 @@ const SECTIONS: Section[] = [
 // below it. The scroll-into-view offset has to clear the top-bar plus
 // the nav itself so the section heading isn't hidden by either.
 const TOPBAR_PX = 56;
-const NAV_PX = 48;
+const NAV_PX = 56;
 const SCROLL_OFFSET = TOPBAR_PX + NAV_PX + 8;
 
 export default function ProfileSectionNav({ counts }: { counts: Counts }) {
@@ -79,7 +79,9 @@ export default function ProfileSectionNav({ counts }: { counts: Counts }) {
       className="sticky z-20 -mx-4 sm:-mx-8 px-4 sm:px-8 bg-slate-50/85 backdrop-blur border-b border-slate-200"
       style={{ top: TOPBAR_PX }}
     >
-      <div className="flex gap-0.5 overflow-x-auto -mb-px">
+      <div
+        className="flex gap-0.5 overflow-x-auto -mb-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         {SECTIONS.map((s) => {
           const isOn = active === s.id;
           const count = s.countKey ? counts[s.countKey] : undefined;
@@ -89,7 +91,7 @@ export default function ProfileSectionNav({ counts }: { counts: Counts }) {
               type="button"
               onClick={() => scrollTo(s.id)}
               className={
-                "inline-flex items-center px-4 py-3 text-[13.5px] font-medium border-b-2 -mb-px whitespace-nowrap transition-colors " +
+                "inline-flex items-center h-14 px-4 text-[13.5px] font-medium border-b-2 -mb-px whitespace-nowrap transition-colors " +
                 (isOn
                   ? "text-slate-900 border-slate-900 font-semibold"
                   : "text-slate-500 border-transparent hover:text-slate-700")

@@ -13,7 +13,7 @@ export default function ProfileSideRail({
   completionItems: { label: string; done: boolean }[];
 }) {
   return (
-    <aside className="space-y-4 xl:sticky xl:top-[120px]">
+    <aside className="space-y-4 xl:sticky xl:top-[128px]">
       <div className="rounded-2xl border border-slate-200 bg-white p-5">
         <div className="flex items-end justify-between">
           <h3 className="text-[13.5px] font-semibold m-0">Profil ukończony</h3>
