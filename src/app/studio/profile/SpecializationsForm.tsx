@@ -1,10 +1,16 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { replaceClientGoals, replaceSpecializations } from "./profile-actions";
 
 type Spec = { id: string; label: string; icon: string };
+
+// Coalesce rapid clicks into a single server write — clicks accepted
+// instantly via optimistic state; save fires this many ms after the
+// last click. 400 ms is short enough to feel "saves on its own" but
+// long enough that a 5-chip pick burst goes as one round-trip.
+const SAVE_DEBOUNCE_MS = 400;
 
 const GOAL_SUGGESTIONS = [
   "Pierwsze kroki w gym",
@@ -29,26 +35,72 @@ export default function SpecializationsForm({
   suggestionSeed: string;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
   const [selected, setSelected] = useState<string[]>(initialSelected);
   const [goals, setGoals] = useState<string[]>(initialGoals);
   const [newGoal, setNewGoal] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const toggleSpec = (id: string) => {
-    const next = selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id];
-    setSelected(next);
-    setError(null);
-    startTransition(async () => {
-      const res = await replaceSpecializations(next);
+  // Refs hold the freshest values so the debounced save reads the
+  // final state — not whatever was current when the timer was set.
+  const selectedRef = useRef(selected);
+  const goalsRef = useRef(goals);
+  useEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
+  useEffect(() => {
+    goalsRef.current = goals;
+  }, [goals]);
+
+  const specsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const goalsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cancel any pending debounce when the component unmounts so a
+  // refresh after navigation doesn't fire on an unmounted form.
+  useEffect(() => {
+    return () => {
+      if (specsTimer.current) clearTimeout(specsTimer.current);
+      if (goalsTimer.current) clearTimeout(goalsTimer.current);
+    };
+  }, []);
+
+  const scheduleSpecsSave = () => {
+    if (specsTimer.current) clearTimeout(specsTimer.current);
+    specsTimer.current = setTimeout(async () => {
+      setSaving(true);
+      const res = await replaceSpecializations(selectedRef.current);
+      setSaving(false);
       if ("error" in res) setError(res.error);
       else router.refresh();
-    });
+    }, SAVE_DEBOUNCE_MS);
+  };
+
+  const scheduleGoalsSave = () => {
+    if (goalsTimer.current) clearTimeout(goalsTimer.current);
+    goalsTimer.current = setTimeout(async () => {
+      setSaving(true);
+      const res = await replaceClientGoals(goalsRef.current);
+      setSaving(false);
+      if ("error" in res) setError(res.error);
+      else router.refresh();
+    }, SAVE_DEBOUNCE_MS);
+  };
+
+  const toggleSpec = (id: string) => {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
+    );
+    setError(null);
+    scheduleSpecsSave();
   };
 
   const addGoal = (text: string) => {
     const trimmed = text.trim();
-    if (!trimmed || goals.includes(trimmed)) {
+    if (!trimmed) {
+      setNewGoal("");
+      return;
+    }
+    if (goals.includes(trimmed)) {
       setNewGoal("");
       return;
     }
@@ -56,26 +108,16 @@ export default function SpecializationsForm({
       setError("Maksymalnie 12 celów.");
       return;
     }
-    const next = [...goals, trimmed];
-    setGoals(next);
+    setGoals((prev) => [...prev, trimmed]);
     setNewGoal("");
     setError(null);
-    startTransition(async () => {
-      const res = await replaceClientGoals(next);
-      if ("error" in res) setError(res.error);
-      else router.refresh();
-    });
+    scheduleGoalsSave();
   };
 
   const removeGoal = (text: string) => {
-    const next = goals.filter((g) => g !== text);
-    setGoals(next);
+    setGoals((prev) => prev.filter((g) => g !== text));
     setError(null);
-    startTransition(async () => {
-      const res = await replaceClientGoals(next);
-      if ("error" in res) setError(res.error);
-      else router.refresh();
-    });
+    scheduleGoalsSave();
   };
 
   const unusedSuggestions = GOAL_SUGGESTIONS.filter((s) => !goals.includes(s));
@@ -95,31 +137,32 @@ export default function SpecializationsForm({
       setError("Bio jest puste lub nie zawiera nazw specjalizacji.");
       return;
     }
-    const next = [...selected, ...hits];
-    setSelected(next);
+    setSelected((prev) => [...prev, ...hits]);
     setError(null);
-    startTransition(async () => {
-      const res = await replaceSpecializations(next);
-      if ("error" in res) setError(res.error);
-      else router.refresh();
-    });
+    scheduleSpecsSave();
   };
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-6">
       <div>
         <div className="flex items-start justify-between gap-3 mb-3">
-          <div>
-            <h3 className="text-[15px] font-semibold tracking-[-0.005em] m-0">Specjalizacje</h3>
-            <p className="text-[12px] text-slate-500 mt-1">
-              Wpływa na to, w jakich filtrach katalogu się pojawisz. Wybierz 3–6.
-            </p>
+          <div className="flex items-center gap-2">
+            <div>
+              <h3 className="text-[15px] font-semibold tracking-[-0.005em] m-0">Specjalizacje</h3>
+              <p className="text-[12px] text-slate-500 mt-1">
+                Wpływa na to, w jakich filtrach katalogu się pojawisz. Wybierz 3–6.
+              </p>
+            </div>
+            {saving && (
+              <span className="text-[11px] text-slate-400 italic shrink-0 mt-1">
+                zapisuję…
+              </span>
+            )}
           </div>
           <button
             type="button"
             onClick={suggestFromBio}
-            className="text-[12.5px] text-emerald-700 font-semibold px-2.5 py-1.5 rounded-[7px] hover:bg-emerald-50 disabled:opacity-50"
-            disabled={pending}
+            className="text-[12.5px] text-emerald-700 font-semibold px-2.5 py-1.5 rounded-[7px] hover:bg-emerald-50"
           >
             Sugeruj na podstawie bio
           </button>
@@ -133,7 +176,6 @@ export default function SpecializationsForm({
                 key={s.id}
                 type="button"
                 onClick={() => toggleSpec(s.id)}
-                disabled={pending}
                 className={
                   "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12.5px] font-medium border transition " +
                   (isOn
@@ -171,7 +213,6 @@ export default function SpecializationsForm({
                 type="button"
                 onClick={() => removeGoal(g)}
                 className="text-emerald-700/60 hover:text-emerald-900 text-[14px] leading-none"
-                disabled={pending}
               >
                 ×
               </button>
@@ -182,7 +223,6 @@ export default function SpecializationsForm({
               key={s}
               type="button"
               onClick={() => addGoal(s)}
-              disabled={pending}
               className="bg-white text-slate-600 border border-dashed border-slate-300 px-3 py-1.5 rounded-full text-[12.5px] font-medium hover:border-slate-400"
             >
               + {s}
@@ -206,7 +246,7 @@ export default function SpecializationsForm({
           />
           <button
             type="submit"
-            disabled={pending || !newGoal.trim()}
+            disabled={!newGoal.trim()}
             className="text-[13px] font-medium px-3.5 py-2 rounded-[8px] bg-slate-900 text-white disabled:opacity-50"
           >
             Dodaj
