@@ -239,11 +239,18 @@ function CertRow({ cert, index }: { cert: Certification; index: number }) {
 }
 
 /**
- * Status pill above each cert row. The four states map to the
- * cert_verification_status enum from migration 028. Pre-028 rows
- * (status undefined) get a neutral "no evidence" hint when there's
- * nothing attached, otherwise no badge — they fall under the legacy
- * "URL/file present === verified" rule.
+ * Status pill above each cert row — same shape across all four
+ * states (colored dot + short label) so the indicator pattern is
+ * consistent. Optional second-line hint sits below for context.
+ *
+ * State map (cert_verification_status enum from migration 028):
+ *   unverified — slate dot. "Brak dowodów" + nudge to add a URL/file.
+ *   pending    — amber pulsing dot. Trainer attached evidence; admin queued.
+ *   verified   — emerald dot. Admin approved; visible publicly.
+ *   rejected   — rose dot. Admin rejected; reason shown below.
+ *
+ * Pre-028 fallback: when status is undefined we still render the
+ * 'unverified' look so the trainer always sees an indicator.
  */
 function StatusBadge({
   status,
@@ -252,27 +259,38 @@ function StatusBadge({
   status?: "unverified" | "pending" | "verified" | "rejected";
   rejectReason?: string;
 }) {
-  if (!status || status === "unverified") {
+  const effective = status ?? "unverified";
+
+  if (effective === "unverified") {
     return (
-      <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold w-fit px-2 py-1 rounded-md bg-slate-50 text-slate-500 border border-slate-200">
-        Bez weryfikacji — dodaj link lub plik, żeby przesłać do oceny
+      <div className="grid gap-1">
+        <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold w-fit px-2 py-1 rounded-md bg-slate-50 text-slate-600 border border-slate-200">
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+          Brak dowodów
+        </div>
+        <div className="text-[11px] text-slate-500 leading-[1.5] pl-0.5">
+          Dodaj link weryfikacyjny lub plik, żeby przesłać certyfikat do oceny.
+        </div>
       </div>
     );
   }
-  if (status === "pending") {
+  if (effective === "pending") {
     return (
-      <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold w-fit px-2 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-        Oczekuje weryfikacji · zwykle ~2 dni
+      <div className="grid gap-1">
+        <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold w-fit px-2 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+          Oczekuje weryfikacji
+        </div>
+        <div className="text-[11px] text-amber-700/80 leading-[1.5] pl-0.5">
+          Sprawdzimy w ciągu ~2 dni roboczych. Do tego czasu certyfikat nie jest widoczny publicznie.
+        </div>
       </div>
     );
   }
-  if (status === "verified") {
+  if (effective === "verified") {
     return (
       <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold w-fit px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-          <path d="M5 13l4 4L19 7" />
-        </svg>
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
         Zweryfikowany — widoczny publicznie
       </div>
     );
