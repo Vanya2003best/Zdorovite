@@ -532,7 +532,7 @@ export default function CinematicProfile({
           Hidden in view mode when there are no certs (no point showing an
           empty trust signal); always visible in editMode so the trainer can
           start filling it from the studio. */}
-      {isVisible("certifications") && trainer.certifications.length > 0 && (
+      {isVisible("certifications") && (
         <section id="certifications" data-section-id="certifications" className="py-12 sm:py-20 scroll-mt-20" style={{ order: orderOf("certifications") }}>
           <div className="mx-auto max-w-[1440px] px-6 sm:px-12">
             <Chap>{`Rozdział ${chapterNumberOf("certifications")} · Certyfikaty`}</Chap>
@@ -549,6 +549,19 @@ export default function CinematicProfile({
                 <span dangerouslySetInnerHTML={{ __html: copy.certificationsH2 ?? RICH_DEFAULTS.certificationsH2 }} />
               )}
             </h2>
+            {trainer.certifications.length === 0 ? (
+              <div className="border border-white/10 rounded-2xl p-8 sm:p-10 bg-white/[0.02] text-center">
+                <div className="font-mono text-[11px] text-[#d4ff00]/80 tracking-[0.15em] uppercase mb-3">
+                  Brak danych
+                </div>
+                <div className="text-[18px] sm:text-[20px] text-white/85 leading-[1.4] tracking-[-0.005em]">
+                  Wykształcenie nieuzupełnione
+                </div>
+                <div className="text-[13px] text-white/55 mt-2 max-w-[420px] mx-auto leading-[1.55]">
+                  Trener nie udostępnił jeszcze potwierdzonych certyfikatów ani dyplomów.
+                </div>
+              </div>
+            ) : (
             <div className="grid @[640px]:grid-cols-2 @[1024px]:grid-cols-3 gap-3">
               {trainer.certifications.map((cert, i) => {
                 const detail = trainer.certificationDetails?.[i];
@@ -593,6 +606,7 @@ export default function CinematicProfile({
                 );
               })}
             </div>
+            )}
           </div>
         </section>
       )}

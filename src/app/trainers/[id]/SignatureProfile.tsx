@@ -891,19 +891,26 @@ export default function SignatureProfile({
         </section>
       )}
 
-      {/* CERTIFICATIONS — small editorial strip if trainer has any */}
-      {trainer.certifications.length > 0 && (
-        <section id="certifications" data-section-id="certifications" className="bg-white border-y border-[#e4dccf] px-6 sm:px-10 py-16 sm:py-20 scroll-mt-20">
-          <div className="max-w-[1340px] mx-auto">
-            <div className="font-mono text-[11px] text-[#7d7268] tracking-[0.2em] uppercase mb-4 text-center">
-              <Sig k="certificationsLabel" fb="§ 04 · Wykształcenie" maxLength={40} rich={false} />
+      {/* CERTIFICATIONS — small editorial strip; always rendered, empty-state below */}
+      <section id="certifications" data-section-id="certifications" className="bg-white border-y border-[#e4dccf] px-6 sm:px-10 py-16 sm:py-20 scroll-mt-20">
+        <div className="max-w-[1340px] mx-auto">
+          <div className="font-mono text-[11px] text-[#7d7268] tracking-[0.2em] uppercase mb-4 text-center">
+            <Sig k="certificationsLabel" fb="§ 04 · Wykształcenie" maxLength={40} rich={false} />
+          </div>
+          <h2
+            style={{ fontSize: "clamp(32px, 4.5cqw, 48px)", lineHeight: 1, letterSpacing: "-0.03em" }}
+            className="font-normal m-0 mb-10 text-center"
+          >
+            <Sig k="certificationsH2" fb="Czarno na <em>białym.</em>" maxLength={80} />
+          </h2>
+          {trainer.certifications.length === 0 ? (
+            <div className="border border-[#e4dccf] rounded-sm py-10 text-center max-w-[640px] mx-auto">
+              <div className="text-[18px] sm:text-[20px] font-normal text-[#3d362f]">Wykształcenie nieuzupełnione</div>
+              <div className="text-[12px] sm:text-[13px] text-[#7d7268] mt-2 max-w-[420px] mx-auto leading-[1.55]">
+                Trener nie udostępnił jeszcze potwierdzonych certyfikatów ani dyplomów.
+              </div>
             </div>
-            <h2
-              style={{ fontSize: "clamp(32px, 4.5cqw, 48px)", lineHeight: 1, letterSpacing: "-0.03em" }}
-              className="font-normal m-0 mb-10 text-center"
-            >
-              <Sig k="certificationsH2" fb="Czarno na <em>białym.</em>" maxLength={80} />
-            </h2>
+          ) : (
             <div className="grid @[640px]:grid-cols-2 @[1024px]:grid-cols-3 gap-3">
               {trainer.certifications.map((cert, i) => {
                 const detail = trainer.certificationDetails?.[i];
@@ -946,9 +953,9 @@ export default function SignatureProfile({
                 );
               })}
             </div>
-          </div>
-        </section>
-      )}
+          )}
+        </div>
+      </section>
 
       {/* PRESS FEATURE — three quote cards. Hidden entirely when the trainer
           has no real press_mentions: the fallback Polish-mag content is too

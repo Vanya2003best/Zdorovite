@@ -909,16 +909,21 @@ export default function EditorClient({ slug, trainerId, trainerName, trainerEmai
                 // alone in studioCopy.cases for trainers who switch to a
                 // portfolio template (Studio / Cinematic / Luxury / Signature).
                 if ((template === "cozy" || template === "premium") && s.id === "cases") return null;
+                // Certifications can't be hidden — credentials matter for trust,
+                // even if empty (the public profile renders a placeholder).
+                const isLocked = s.id === "certifications";
                 const count = counts[s.id];
                 return (
                   <li
                     key={s.id}
-                    draggable
-                    onDragStart={onDragStart(i)}
+                    draggable={!isLocked}
+                    onDragStart={isLocked ? undefined : onDragStart(i)}
                     onDragOver={onDragOver(i)}
                     onDrop={onDrop(i)}
                     onDragEnd={onDragEnd}
-                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-[10px] border bg-slate-50 cursor-grab active:cursor-grabbing transition ${
+                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-[10px] border bg-slate-50 transition ${
+                      isLocked ? "cursor-default" : "cursor-grab active:cursor-grabbing"
+                    } ${
                       dragging === i
                         ? "opacity-50 border-dashed border-emerald-400 bg-white shadow-[0_6px_18px_rgba(16,185,129,0.2)]"
                         : dragOverIdx === i && dragging !== null
@@ -926,19 +931,40 @@ export default function EditorClient({ slug, trainerId, trainerName, trainerEmai
                           : "border-slate-200"
                     } ${!s.visible ? "opacity-60" : ""}`}
                   >
-                    <svg className="text-slate-400 shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                      <circle cx="9" cy="5" r="1.4" /><circle cx="9" cy="12" r="1.4" /><circle cx="9" cy="19" r="1.4" />
-                      <circle cx="15" cy="5" r="1.4" /><circle cx="15" cy="12" r="1.4" /><circle cx="15" cy="19" r="1.4" />
-                    </svg>
-                    <span className="text-[13px] font-medium flex-1 text-slate-900">{SECTION_LABELS[s.id]}</span>
+                    {isLocked ? (
+                      <svg className="text-slate-400 shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="4" y="11" width="16" height="10" rx="2" />
+                        <path d="M8 11V7a4 4 0 018 0v4" />
+                      </svg>
+                    ) : (
+                      <svg className="text-slate-400 shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="9" cy="5" r="1.4" /><circle cx="9" cy="12" r="1.4" /><circle cx="9" cy="19" r="1.4" />
+                        <circle cx="15" cy="5" r="1.4" /><circle cx="15" cy="12" r="1.4" /><circle cx="15" cy="19" r="1.4" />
+                      </svg>
+                    )}
+                    <span className="text-[13px] font-medium flex-1 text-slate-900">
+                      {SECTION_LABELS[s.id]}
+                      {isLocked && (
+                        <span className="ml-1.5 text-[10.5px] uppercase tracking-[0.06em] text-slate-400 font-semibold">
+                          wymagana
+                        </span>
+                      )}
+                    </span>
                     {typeof count === "number" && (
                       <span className="text-[11px] text-slate-500 tabular-nums">{count}</span>
                     )}
-                    <label className="relative inline-block w-8 h-[18px] shrink-0">
+                    <label
+                      className={
+                        "relative inline-block w-8 h-[18px] shrink-0 " +
+                        (isLocked ? "opacity-50 pointer-events-none" : "")
+                      }
+                      title={isLocked ? "Sekcja certyfikatów jest wymagana" : undefined}
+                    >
                       <input
                         type="checkbox"
-                        checked={s.visible}
-                        onChange={() => toggleSection(s.id)}
+                        checked={isLocked ? true : s.visible}
+                        disabled={isLocked}
+                        onChange={isLocked ? undefined : () => toggleSection(s.id)}
                         className="sr-only peer"
                       />
                       <span className="absolute inset-0 cursor-pointer bg-slate-300 rounded-full transition peer-checked:bg-emerald-500" />

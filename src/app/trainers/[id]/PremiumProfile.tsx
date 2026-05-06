@@ -602,22 +602,31 @@ export default async function PremiumProfile({
                 </section>
               );
             }
-            if (id === "certifications" && trainer.certifications.length > 0) return (
+            if (id === "certifications") return (
               <section key="certifications" id="certifications" data-section-id="certifications" className="mb-12 scroll-mt-20">
                 <Hdr labelKey="certificationsLabel" labelFb="Certyfikaty" h2Key="certificationsH2" h2Fb="Wykształcenie i szkolenia" subKey="certificationsSub" />
-                <div className="grid @[640px]:grid-cols-2 gap-3">
-                  {trainer.certifications.map((cert) => (
-                    <div key={cert} className="bg-white/75 backdrop-blur-sm border border-white/70 rounded-[14px] p-4 flex items-center gap-3.5">
-                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-700 inline-flex items-center justify-center shrink-0">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="8" r="7" /><path d="M8.21 13.89L7 23l5-3 5 3-1.21-9.12" /></svg>
+                {trainer.certifications.length > 0 ? (
+                  <div className="grid @[640px]:grid-cols-2 gap-3">
+                    {trainer.certifications.map((cert) => (
+                      <div key={cert} className="bg-white/75 backdrop-blur-sm border border-white/70 rounded-[14px] p-4 flex items-center gap-3.5">
+                        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-700 inline-flex items-center justify-center shrink-0">
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="8" r="7" /><path d="M8.21 13.89L7 23l5-3 5 3-1.21-9.12" /></svg>
+                        </div>
+                        <div>
+                          <div className="text-[16px] @[640px]:text-[17px] font-semibold text-slate-900 leading-snug">{cert.split("—")[0].trim()}</div>
+                          {cert.includes("—") && <div className="text-[13px] text-slate-500 mt-0.5">{cert.split("—")[1]?.trim()}</div>}
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-[16px] @[640px]:text-[17px] font-semibold text-slate-900 leading-snug">{cert.split("—")[0].trim()}</div>
-                        {cert.includes("—") && <div className="text-[13px] text-slate-500 mt-0.5">{cert.split("—")[1]?.trim()}</div>}
-                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-[14px] border border-dashed border-slate-300 bg-white/60 px-5 py-8 text-center">
+                    <div className="text-[15px] font-semibold text-slate-700">Wykształcenie nieuzupełnione</div>
+                    <div className="text-[13px] text-slate-500 mt-1.5 max-w-[420px] mx-auto leading-[1.55]">
+                      Trener nie udostępnił jeszcze potwierdzonych certyfikatów ani dyplomów.
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
               </section>
             );
             if (id === "reviews") return (

@@ -125,16 +125,25 @@ function mapTrainer(row: TrainerRow): Trainer {
     priceFrom: row.price_from,
     location: row.location,
     languages: row.languages ?? [],
+    // Public profile only shows certifications that the trainer has
+    // backed up — either with a verification URL (link to the issuer's
+    // public registry) or an uploaded scan. Unverified rows still live
+    // on /studio/profile so the trainer can edit them, but they don't
+    // surface to clients until evidence is attached.
     certifications: [...row.certifications]
+      .filter((c) => !!c.verification_url || !!c.attachment_url)
       .sort(sortByPos)
       .map((c) => c.text),
-    certificationDetails: [...row.certifications].sort(sortByPos).map((c) => ({
-      id: c.id,
-      text: c.text,
-      verificationUrl: c.verification_url ?? undefined,
-      attachmentUrl: c.attachment_url ?? undefined,
-      attachmentFilename: c.attachment_filename ?? undefined,
-    })),
+    certificationDetails: [...row.certifications]
+      .filter((c) => !!c.verification_url || !!c.attachment_url)
+      .sort(sortByPos)
+      .map((c) => ({
+        id: c.id,
+        text: c.text,
+        verificationUrl: c.verification_url ?? undefined,
+        attachmentUrl: c.attachment_url ?? undefined,
+        attachmentFilename: c.attachment_filename ?? undefined,
+      })),
     gallery: [...row.gallery_photos].sort(sortByPos).map((g) => g.url),
     galleryItems: [...row.gallery_photos].sort(sortByPos).map((g) => ({ id: g.id, url: g.url })),
     services: [...row.services].sort(sortByPos).map(({ id, name, description, duration, price, is_placeholder }) => ({
@@ -190,6 +199,13 @@ function mapTrainer(row: TrainerRow): Trainer {
       // from before we trimmed to 6 in 2026-04. Without this, TemplateProfile
       // crashes on `templates[template]` lookup.
       template: normalizeTemplate(row.customization?.template),
+      // Certifications section is non-hideable — credentials matter for
+      // trust, even when empty (the section then renders the
+      // "Wykształcenie nieuzupełnione" placeholder). Force visible
+      // regardless of any stale `visible: false` in the JSONB.
+      sections: (row.customization?.sections ?? []).map((s) =>
+        s.id === "certifications" ? { ...s, visible: true } : s,
+      ),
     },
   };
 }

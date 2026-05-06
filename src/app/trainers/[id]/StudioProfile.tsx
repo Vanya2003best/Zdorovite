@@ -949,32 +949,41 @@ export default function StudioProfile({
           </section>
         )}
 
-        {/* CERTIFICATIONS */}
-        {trainer.certifications.length > 0 && (
-          <section id="certifications" data-section-id="certifications" className="py-20 sm:py-24 border-t border-[#e8e6df] scroll-mt-20">
-            <div className="grid @[1024px]:grid-cols-[1fr_2fr] gap-8 @[1024px]:gap-14 items-end mb-12">
-              <div>
-                <div className="text-[14px] text-[#77756f] font-medium mb-3">
-                  <span style={{ color: "#ff5722" }}>→</span>{" "}
-                  <Stu k="certificationsLabel" fb="06 / Akredytacje" maxLength={40} rich={false} />
-                </div>
-                <h2
-                  className="font-medium m-0"
-                  style={{ fontSize: "clamp(36px, 5.5cqw, 56px)", lineHeight: 1, letterSpacing: "-0.035em" }}
-                >
-                  <Stu k="certificationsH2" fb="Certyfikaty<br><em>i szkolenia</em>" maxLength={120} />
-                </h2>
+        {/* CERTIFICATIONS — always rendered, empty-state placeholder below */}
+        <section id="certifications" data-section-id="certifications" className="py-20 sm:py-24 border-t border-[#e8e6df] scroll-mt-20">
+          <div className="grid @[1024px]:grid-cols-[1fr_2fr] gap-8 @[1024px]:gap-14 items-end mb-12">
+            <div>
+              <div className="text-[14px] text-[#77756f] font-medium mb-3">
+                <span style={{ color: "#ff5722" }}>→</span>{" "}
+                <Stu k="certificationsLabel" fb="06 / Akredytacje" maxLength={40} rich={false} />
               </div>
-              <p className="text-[15px] @[640px]:text-[17px] leading-[1.55] text-[#3d3d3a] m-0 max-w-[560px]">
-                <Stu
-                  k="certificationsSub"
-                  fb="Pełne wykształcenie zawodowe i certyfikaty potwierdzające kompetencje w specjalizacji."
-                  multiline
-                  block
-                  maxLength={300}
-                />
-              </p>
+              <h2
+                className="font-medium m-0"
+                style={{ fontSize: "clamp(36px, 5.5cqw, 56px)", lineHeight: 1, letterSpacing: "-0.035em" }}
+              >
+                <Stu k="certificationsH2" fb="Certyfikaty<br><em>i szkolenia</em>" maxLength={120} />
+              </h2>
             </div>
+            <p className="text-[15px] @[640px]:text-[17px] leading-[1.55] text-[#3d3d3a] m-0 max-w-[560px]">
+              <Stu
+                k="certificationsSub"
+                fb="Pełne wykształcenie zawodowe i certyfikaty potwierdzające kompetencje w specjalizacji."
+                multiline
+                block
+                maxLength={300}
+              />
+            </p>
+          </div>
+          {trainer.certifications.length === 0 ? (
+            <div className="bg-white border border-dashed border-[#cfc8b6] rounded-[20px] py-12 px-6 text-center">
+              <div className="text-[20px] sm:text-[22px] font-medium text-[#3d3d3a]" style={{ letterSpacing: "-0.01em" }}>
+                Wykształcenie nieuzupełnione
+              </div>
+              <div className="text-[14px] text-[#77756f] mt-2 max-w-[420px] mx-auto leading-[1.55]">
+                Trener nie udostępnił jeszcze potwierdzonych certyfikatów ani dyplomów.
+              </div>
+            </div>
+          ) : (
             <div className="bg-white border border-[#e8e6df] rounded-[20px] overflow-hidden">
               {trainer.certifications.map((cert, i) => {
                 const detail = trainer.certificationDetails?.[i];
@@ -1017,8 +1026,8 @@ export default function StudioProfile({
                 );
               })}
             </div>
-          </section>
-        )}
+          )}
+        </section>
 
         {/* REVIEWS */}
         {(trainer.reviews.length > 0 || trainer.reviewCount > 0) && (

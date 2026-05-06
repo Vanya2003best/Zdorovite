@@ -681,15 +681,22 @@ export default function LuxuryProfile({
         </div>
       </section>
 
-      {/* V. CERTIFICATIONS — timeline */}
-      {trainer.certifications.length > 0 && (
-        <section id="certifications" data-section-id="certifications" className="py-20 sm:py-24 border-t border-[#d9cfb8]">
-          <div className="mx-auto max-w-[1340px] px-6 sm:px-10">
-            <SectionHead
-              num="V."
-              h2={<Lux k="certificationsH2" fb="Akredytacje" maxLength={60} />}
-              sub={<Lux k="certificationsSub" fb="Wykształcenie i certyfikaty zawodowe." multiline block maxLength={200} rich={false} />}
-            />
+      {/* V. CERTIFICATIONS — timeline (always rendered; empty-state below) */}
+      <section id="certifications" data-section-id="certifications" className="py-20 sm:py-24 border-t border-[#d9cfb8]">
+        <div className="mx-auto max-w-[1340px] px-6 sm:px-10">
+          <SectionHead
+            num="V."
+            h2={<Lux k="certificationsH2" fb="Akredytacje" maxLength={60} />}
+            sub={<Lux k="certificationsSub" fb="Wykształcenie i certyfikaty zawodowe." multiline block maxLength={200} rich={false} />}
+          />
+          {trainer.certifications.length === 0 ? (
+            <div className="max-w-[780px] mx-auto py-10 text-center border-t border-[#d9cfb8]">
+              <div className="font-serif italic text-[18px] sm:text-[22px] text-[#7a7365]">Wykształcenie nieuzupełnione</div>
+              <div className="text-[12px] sm:text-[13px] text-[#7a7365] mt-2 max-w-[420px] mx-auto">
+                Trener nie udostępnił jeszcze potwierdzonych certyfikatów ani dyplomów.
+              </div>
+            </div>
+          ) : (
             <div className="max-w-[780px] mx-auto">
               {trainer.certifications.map((cert, i) => {
                 const detail = trainer.certificationDetails?.[i];
@@ -746,9 +753,9 @@ export default function LuxuryProfile({
                 );
               })}
             </div>
-          </div>
-        </section>
-      )}
+          )}
+        </div>
+      </section>
 
       {/* VI. REVIEWS — score + 2-col quote grid */}
       {(reviews.length > 0 || trainer.rating > 0) && (
