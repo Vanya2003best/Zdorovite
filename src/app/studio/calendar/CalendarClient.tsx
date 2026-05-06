@@ -238,6 +238,45 @@ export default function CalendarClient({
     return Math.round(mins / 60);
   }, [rulesState]);
 
+  // Trim the empty hours above the trainer's earliest band so the
+  // calendar opens at the top of the work day, not at 6:00 with two
+  // hours of unused grid above. Also extends past the latest band if
+  // bookings sit outside the rules. Falls back to 06:00–23:00 if there
+  // are no rules and no bookings yet.
+  const slotMinTime = useMemo(() => {
+    const ruleStarts = rulesState.map((r) => {
+      const [h, m] = r.start.split(":").map(Number);
+      return h * 60 + m;
+    });
+    const bookingStarts = bookings.map((b) => {
+      const d = new Date(b.start);
+      return d.getHours() * 60 + d.getMinutes();
+    });
+    const candidates = [...ruleStarts, ...bookingStarts];
+    if (candidates.length === 0) return "06:00:00";
+    const minMin = Math.min(...candidates);
+    // Round down to the previous full hour and back off by 30 min so
+    // the first band has a little breathing room above it.
+    const hourFloor = Math.max(0, Math.floor((minMin - 30) / 60));
+    return `${String(hourFloor).padStart(2, "0")}:00:00`;
+  }, [rulesState, bookings]);
+
+  const slotMaxTime = useMemo(() => {
+    const ruleEnds = rulesState.map((r) => {
+      const [h, m] = r.end.split(":").map(Number);
+      return h * 60 + m;
+    });
+    const bookingEnds = bookings.map((b) => {
+      const d = new Date(b.end);
+      return d.getHours() * 60 + d.getMinutes();
+    });
+    const candidates = [...ruleEnds, ...bookingEnds];
+    if (candidates.length === 0) return "23:00:00";
+    const maxMin = Math.max(...candidates);
+    const hourCeil = Math.min(24, Math.ceil((maxMin + 30) / 60));
+    return `${String(hourCeil).padStart(2, "0")}:00:00`;
+  }, [rulesState, bookings]);
+
   const weekUtilisation = useMemo(() => {
     const cap = Math.max(1, weeklyHours);
     return Math.min(99, Math.round((weekBookings.length / cap) * 100));
@@ -502,10 +541,13 @@ export default function CalendarClient({
           locale="pl"
           buttonText={{ today: "Dziś", month: "Mc", week: "Tydz", day: "Dzień" }}
           allDaySlot={false}
-          // 06:00–23:00 (17 hours). Page is locked, calendar has internal
-          // scroll, so showing the full plausible day window costs nothing.
-          slotMinTime="06:00:00"
-          slotMaxTime="23:00:00"
+          // Slot range is computed from the trainer's actual rules +
+          // booking endpoints (rounded to the surrounding hour with a
+          // 30-min cushion). That keeps the top of the calendar at the
+          // start of the work day instead of a generic 06:00.
+          slotMinTime={slotMinTime}
+          slotMaxTime={slotMaxTime}
+          scrollTime={slotMinTime}
           slotDuration="00:30:00"
           slotLabelInterval="01:00"
           slotLabelFormat={{ hour: "numeric", minute: "2-digit", hour12: false }}
