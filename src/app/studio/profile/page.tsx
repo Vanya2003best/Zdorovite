@@ -4,74 +4,120 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import CertificationsEditor from "./CertificationsEditor";
 import AvatarTile from "./AvatarTile";
-import AiContextForm from "./AiContextForm";
 import QrSection from "./QrSection";
-import type { AiContext } from "./ai-context-actions";
+import ProfileTabs, { type TabKey } from "./ProfileTabs";
+import BasicForm from "./BasicForm";
+import SpecializationsForm from "./SpecializationsForm";
+import LocationForm from "./LocationForm";
+import SocialForm from "./SocialForm";
+import PolicyTab from "./PolicyTab";
+import ProfileSideRail from "./ProfileSideRail";
 import type { Certification } from "@/types";
 
 /**
- * Moje konto — trainer's account-level page. Strictly the things that DON'T
- * belong on the public profile and aren't editable from /studio/design:
- *   - identity preview (name + email — read-only)
- *   - certifications + verification (with PDF/URL upload)
- *   - settings (publish toggle, links to design + availability)
+ * /studio/profile — design 28 implementation. The page is split into 6
+ * tabs (Podstawowe / Specjalizacje / Certyfikaty / Lokalizacja / Social /
+ * Polityka), with a sticky right rail that previews the public profile,
+ * shows completion %, and a tip nudging gallery uploads.
  *
- * Everything visible on the public profile (tagline, about, location, languages,
- * specializations, services, packages, gallery, cover, avatar, price, experience)
- * lives in /studio/design — the visual editor with live preview. Edits propagate
- * to whichever template is active because services/packages/etc. are shared
- * trainer-data tables.
+ * Architecturally this is the SOURCE OF TRUTH for trainer-data fields
+ * (display_name, tagline, about, mission, location, social, etc.) —
+ * /studio/design now focuses on visual choices (template, colors,
+ * section order). The inline editors on /trainers/[slug] still write
+ * to the same columns, so changes propagate either way.
+ *
+ * Tolerant of unapplied migrations:
+ *   - 014 (cert URL/file) — falls back to legacy text-only certs
+ *   - 019 (ai_context) — page still loads without AI block
+ *   - 020 (avatar_focal) — avatar tile renders without focal pan
+ *   - 021 (gym_chains) — QR section drops to "Ogólny" mode only
+ *   - 026 (mission/city/district/work_mode/radius/social/goals) —
+ *     forms render with empty defaults; saves silently no-op
+ *     for missing columns until the migration is applied.
  */
-export default async function StudioProfile() {
+export default async function StudioProfile({
+  searchParams,
+}: {
+  searchParams?: Promise<{ tab?: string }>;
+}) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio/profile");
 
-  // Try with avatar_focal (migration 020); fall back gracefully on 42703.
-  let profile: { display_name: string | null; avatar_url: string | null; avatar_focal?: string | null } | null = null;
+  const params = (await searchParams) ?? {};
+  const tab = normalizeTab(params.tab);
+
+  // --- Profile (avatar, name, phone) ----------------------------------
+  type ProfileShape = {
+    display_name: string | null;
+    avatar_url: string | null;
+    avatar_focal?: string | null;
+    phone?: string | null;
+  };
+  let profile: ProfileShape | null = null;
   const profileFull = await supabase
     .from("profiles")
-    .select("display_name, avatar_url, avatar_focal")
+    .select("display_name, avatar_url, avatar_focal, phone")
     .eq("id", user.id)
     .single();
   if (profileFull.error?.code === "42703") {
-    const { data } = await supabase
+    // Try the older shape (pre-026 phone, pre-020 focal).
+    const stripped = await supabase
       .from("profiles")
       .select("display_name, avatar_url")
       .eq("id", user.id)
       .single();
-    profile = data ? { ...data, avatar_focal: null } : null;
+    profile = stripped.data ? { ...stripped.data, avatar_focal: null, phone: null } : null;
   } else {
-    profile = profileFull.data;
+    profile = profileFull.data as ProfileShape;
   }
 
-  // Try with ai_context first (migration 019); if the column doesn't exist
-  // yet (42703) fall back to just `slug` so the page still loads. The
-  // AiContextForm below tolerates `ai_context: null` and falls through to
-  // empty-field defaults — the page is functional even without the migration.
-  let trainer: { slug: string; ai_context?: Record<string, unknown> | null } | null = null;
+  // --- Trainer (full row including 026 fields) ------------------------
+  type TrainerShape = {
+    slug: string;
+    tagline: string | null;
+    about: string | null;
+    location: string | null;
+    published: boolean | null;
+    mission?: string | null;
+    city?: string | null;
+    district?: string | null;
+    work_mode?: "stationary" | "online" | "both" | null;
+    travel_radius_km?: number | null;
+    client_goals?: string[] | null;
+    social?: Record<string, string> | null;
+  };
+  let trainer: TrainerShape | null = null;
   const trainerFull = await supabase
     .from("trainers")
-    .select("slug, ai_context")
+    .select(
+      "slug, tagline, about, location, published, mission, city, district, work_mode, travel_radius_km, client_goals, social",
+    )
     .eq("id", user.id)
     .maybeSingle();
   if (trainerFull.error?.code === "42703") {
-    const { data } = await supabase
+    const stripped = await supabase
       .from("trainers")
-      .select("slug")
+      .select("slug, tagline, about, location, published")
       .eq("id", user.id)
       .maybeSingle();
-    trainer = data ? { slug: data.slug, ai_context: null } : null;
+    trainer = stripped.data
+      ? {
+          ...stripped.data,
+          mission: null,
+          city: null,
+          district: null,
+          work_mode: null,
+          travel_radius_km: null,
+          client_goals: null,
+          social: null,
+        }
+      : null;
   } else {
-    trainer = trainerFull.data;
+    trainer = trainerFull.data as TrainerShape;
   }
 
   if (!trainer) {
-    // Logged-in user without a trainers row — the trainer-onboarding flow
-    // for an existing account is /account/become-trainer (just fills in the
-    // trainer-only fields), NOT /register/trainer (which creates a brand
-    // new auth user). Sending an authenticated user to the latter just
-    // confuses them — they'd be asked to enter email + password again.
     return (
       <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10">
         <div className="rounded-2xl border-2 border-dashed border-slate-300 py-16 text-center">
@@ -87,52 +133,60 @@ export default async function StudioProfile() {
     );
   }
 
-  // certifications — try the full SELECT (new columns from migration 014).
-  // On code 42703 (undefined column = migration not yet applied), retry with
-  // just the original columns so the page still renders. The Editor UI then
-  // only shows text + delete; URL/file controls write to columns that don't
-  // exist yet so they'll error on the user's first save attempt — that's
-  // their cue to apply the migration.
+  // --- Specializations (M:N) + lookup table ---------------------------
+  const [{ data: allSpecs }, { data: trainerSpecs }, certsRes, galleryRes] = await Promise.all([
+    supabase.from("specializations").select("id, label, icon").order("id"),
+    supabase.from("trainer_specializations").select("specialization_id").eq("trainer_id", user.id),
+    supabase
+      .from("certifications")
+      .select("id, text, verification_url, attachment_url, attachment_filename, position")
+      .eq("trainer_id", user.id)
+      .order("position", { ascending: true }),
+    supabase
+      .from("gallery_photos")
+      .select("id", { count: "exact", head: true })
+      .eq("trainer_id", user.id),
+  ]);
+
+  // Certs — same fallback pattern as before for unapplied 014.
   let certs: Certification[] = [];
-  const certsFull = await supabase
-    .from("certifications")
-    .select("id, text, verification_url, attachment_url, attachment_filename, position")
-    .eq("trainer_id", user.id)
-    .order("position", { ascending: true });
-  if (certsFull.error?.code === "42703") {
+  if (certsRes.error?.code === "42703") {
     const certsLegacy = await supabase
       .from("certifications")
       .select("id, text, position")
       .eq("trainer_id", user.id)
       .order("position", { ascending: true });
-    certs = (certsLegacy.data ?? []).map((c: { id: string; text: string; }) => ({
+    certs = (certsLegacy.data ?? []).map((c: { id: string; text: string }) => ({
       id: c.id,
       text: c.text,
     }));
-  } else if (certsFull.data) {
-    certs = certsFull.data.map((c: { id: string; text: string; verification_url: string | null; attachment_url: string | null; attachment_filename: string | null; }) => ({
-      id: c.id,
-      text: c.text,
-      verificationUrl: c.verification_url ?? undefined,
-      attachmentUrl: c.attachment_url ?? undefined,
-      attachmentFilename: c.attachment_filename ?? undefined,
-    }));
+  } else if (certsRes.data) {
+    certs = certsRes.data.map(
+      (c: {
+        id: string;
+        text: string;
+        verification_url: string | null;
+        attachment_url: string | null;
+        attachment_filename: string | null;
+      }) => ({
+        id: c.id,
+        text: c.text,
+        verificationUrl: c.verification_url ?? undefined,
+        attachmentUrl: c.attachment_url ?? undefined,
+        attachmentFilename: c.attachment_filename ?? undefined,
+      }),
+    );
   }
 
-  const aiContext = (trainer.ai_context ?? {}) as AiContext;
+  const galleryCount = galleryRes.count ?? 0;
+  const selectedSpecIds = (trainerSpecs ?? []).map((s) => s.specialization_id);
 
-  // Origin for the QR — must be resolved server-side so the QR component
-  // has the URL ready on first render (no flicker / "loading…" state on
-  // a printable page). headers() gives us the canonical host even behind
-  // proxies / vercel preview URLs.
+  // --- QR section data (host + branches) ------------------------------
   const h = await headers();
   const host = h.get("host") ?? "localhost:3000";
   const proto = host.startsWith("localhost") ? "http" : "https";
   const origin = `${proto}://${host}`;
 
-  // Load this trainer's branch affiliations so the QR can include a
-  // ?source= tag for the right club. Tolerates migration 021 not being
-  // applied — empty list is fine, QR component falls back to general mode.
   type BranchOption = {
     id: string;
     chainSlug: string;
@@ -178,111 +232,228 @@ export default async function StudioProfile() {
         };
       })
       .filter((x): x is BranchOption => x !== null)
-      // Verified branches first (more legitimate for the QR), then rest.
       .sort((a, b) => (a.status === b.status ? 0 : a.status === "verified" ? -1 : 1));
   }
 
+  // --- Completion checklist (mirrors design 28 right-rail) -----------
+  const completion = computeCompletion({
+    avatar: !!profile?.avatar_url,
+    bio: !!(trainer.tagline ?? "").trim() || !!(trainer.about ?? "").trim(),
+    specs: selectedSpecIds.length >= 3,
+    location: !!(trainer.location ?? "").trim() || !!(trainer.city ?? "").trim(),
+    pricing: false, // wired once a price_from / services count is queried
+    gallery: galleryCount > 0,
+    video: false, // tracked once trainers.video_url is on the row
+  });
+
+  const social = (trainer.social ?? {}) as Record<string, string>;
+  const social_count = ["instagram", "youtube", "tiktok", "facebook", "website"].filter(
+    (k) => !!social[k],
+  ).length;
+
   return (
-    <div className="mx-auto max-w-[1100px] px-4 sm:px-8 py-5 sm:py-10 grid gap-5">
-      {/* Page header is intentionally absent — the studio top-bar already
-          shows "Moje konto · Dane, certyfikaty, ustawienia" via StudioPageTitle,
-          so a duplicate <h1> here just stretches the page. The link to the
-          design editor is moved into the Settings card at the bottom. */}
-
-      {/* AI context — fill once, reused by every AI generator on
-          /studio/design (about/services/packages). Sits at the top of the
-          page so a freshly-onboarded trainer sees it first. */}
-      <AiContextForm initial={aiContext} />
-
-      {/* Identity — avatar is account-level (lives in profiles.avatar_url, not
-          trainers row), so it's editable here rather than in /studio/design.
-          Click the avatar tile (or the pencil overlay) to upload. */}
-      <Card>
-        <div className="flex items-center gap-4">
-          <AvatarTile
-            currentUrl={profile?.avatar_url ?? null}
-            currentFocal={profile?.avatar_focal ?? null}
-          />
-          <div className="min-w-0">
-            <div className="text-lg font-semibold tracking-tight truncate">
-              {profile?.display_name ?? "Bez nazwy"}
-            </div>
-            <div className="text-[13px] text-slate-500 truncate">{user.email}</div>
-            <div className="text-[11px] text-slate-400 mt-0.5">
-              JPG / PNG / WebP, max 5 MB · przeciągnij zdjęcie aby dopasować kadr
-            </div>
-          </div>
+    <div className="mx-auto max-w-[1280px] px-4 sm:px-8 py-5 sm:py-7">
+      {/* Header */}
+      <div className="text-[12px] text-slate-500 mb-2">
+        Studio · <span className="text-slate-700 font-medium">Profil</span>
+      </div>
+      <div className="flex flex-wrap gap-3 items-end justify-between">
+        <div>
+          <h1 className="text-[28px] tracking-[-0.022em] font-semibold text-slate-900 m-0 inline-flex items-center gap-3">
+            Profil
+            <PublishedPill published={!!trainer.published} />
+          </h1>
+          <p className="text-[13.5px] text-slate-500 mt-1.5 max-w-[680px]">
+            Tu edytujesz dane wyświetlane na publicznym profilu. Wygląd zmienisz w{" "}
+            <Link href="/studio/design" className="text-emerald-600 font-semibold hover:underline">
+              Design profilu
+            </Link>
+            .
+          </p>
         </div>
-      </Card>
-
-      {/* QR-codes — printable PNG for the gym wall / business card / Insta bio.
-          Lives between identity and certifications because trainers iterate
-          on it constantly during launch (one for general use, one per
-          gym they print stickers for). Doesn't block the page if migration
-          021 isn't applied — branches just falls through to "Ogólny" mode. */}
-      <Card>
-        <QrSection
-          trainerSlug={trainer.slug}
-          trainerName={profile?.display_name ?? ""}
-          origin={origin}
-          branches={branches}
-        />
-      </Card>
-
-      {/* Certifications — the only piece of content edited here, with verification */}
-      <Card>
-        <CardHeader
-          title="Certyfikaty i dyplomy"
-          hint={`${certs.length} ${certs.length === 1 ? "certyfikat" : "certyfikatów"}`}
-        />
-        <p className="text-[12px] text-slate-500 mt-1 mb-4 leading-[1.55] max-w-[640px]">
-          Dodaj swoje certyfikaty z linkiem do publicznego rejestru wystawcy (np. EREPS, AWF) lub załącz skan dyplomu.
-          Na publicznej stronie obok każdego certyfikatu pojawi się badge weryfikacji, który klient może kliknąć.
-        </p>
-        <CertificationsEditor certs={certs} />
-      </Card>
-
-      {/* Settings — links to other studio surfaces */}
-      <Card>
-        <CardHeader title="Ustawienia" />
-        <div className="grid gap-3 mt-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <strong className="text-[14px] text-slate-900">Adres profilu</strong>
-              <p className="text-[12px] text-slate-500 mt-0.5">
-                <code className="bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">nazdrow.pl/trainers/{trainer.slug}</code>
-              </p>
-            </div>
-            <Link
-              href="/account/become-trainer"
-              className="text-[13px] text-emerald-700 hover:underline font-medium"
-            >
-              Zmień slug →
-            </Link>
-          </div>
-          <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
-            <div>
-              <strong className="text-[14px] text-slate-900">Profil publiczny</strong>
-              <p className="text-[12px] text-slate-500 mt-0.5">
-                Szablon, kolory, treść (o mnie, usługi, pakiety, galeria)
-              </p>
-            </div>
-            <Link href="/studio/design" className="text-[13px] text-emerald-700 hover:underline font-medium">
-              Otwórz edytor →
-            </Link>
-          </div>
-          <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
-            <div>
-              <strong className="text-[14px] text-slate-900">Godziny pracy</strong>
-              <p className="text-[12px] text-slate-500 mt-0.5">Kiedy klienci mogą rezerwować sesje</p>
-            </div>
-            <Link href="/studio/availability" className="text-[13px] text-emerald-700 hover:underline font-medium">
-              Otwórz edytor →
-            </Link>
-          </div>
+        <div className="flex gap-2.5">
+          <Link
+            href={`/trainers/${trainer.slug}`}
+            target="_blank"
+            className="inline-flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-[9px] bg-white border border-slate-200 hover:bg-slate-50"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            Podgląd publiczny
+          </Link>
+          <Link
+            href="/studio/design"
+            className="inline-flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-[9px] bg-slate-900 text-white hover:bg-black"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 19l7-7 3 3-7 7-3-3z" />
+              <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+            </svg>
+            Design profilu
+          </Link>
         </div>
-      </Card>
+      </div>
+
+      {/* Tabs */}
+      <ProfileTabs
+        active={tab}
+        counts={{
+          specializations: selectedSpecIds.length,
+          certifications: certs.length,
+          social: social_count,
+        }}
+      />
+
+      {/* 2-col grid */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 items-start mt-2">
+        <div className="min-w-0 space-y-4">
+          {tab === "podstawowe" && (
+            <>
+              <BasicForm
+                avatarUrl={profile?.avatar_url ?? null}
+                avatarFocal={profile?.avatar_focal ?? null}
+                displayName={profile?.display_name ?? ""}
+                email={user.email ?? ""}
+                tagline={trainer.tagline ?? ""}
+                about={trainer.about ?? ""}
+                mission={trainer.mission ?? ""}
+                location={trainer.location ?? ""}
+                avatarSlot={
+                  <AvatarTile
+                    currentUrl={profile?.avatar_url ?? null}
+                    currentFocal={profile?.avatar_focal ?? null}
+                  />
+                }
+              />
+            </>
+          )}
+
+          {tab === "specjalizacje" && (
+            <SpecializationsForm
+              allSpecs={(allSpecs ?? []) as { id: string; label: string; icon: string }[]}
+              selected={selectedSpecIds}
+              clientGoals={trainer.client_goals ?? []}
+              suggestionSeed={trainer.about ?? trainer.tagline ?? ""}
+            />
+          )}
+
+          {tab === "certyfikaty" && (
+            <Card>
+              <CardHeader
+                title="Certyfikaty i dokumenty"
+                hint={`${certs.length} ${certs.length === 1 ? "certyfikat" : "certyfikatów"}`}
+                sub="Przesłane PDF/JPG widoczne tylko po weryfikacji. Klienci widzą tylko nazwę i rok."
+              />
+              <p className="text-[12px] text-slate-500 mt-1 mb-4 leading-[1.55] max-w-[640px]">
+                Dodaj swoje certyfikaty z linkiem do publicznego rejestru wystawcy (np. EREPS, AWF) lub załącz
+                skan dyplomu. Na publicznej stronie obok każdego certyfikatu pojawi się badge weryfikacji,
+                który klient może kliknąć.
+              </p>
+              <CertificationsEditor certs={certs} />
+            </Card>
+          )}
+
+          {tab === "lokalizacja" && (
+            <>
+              <LocationForm
+                location={trainer.location ?? ""}
+                city={trainer.city ?? ""}
+                district={trainer.district ?? ""}
+                workMode={trainer.work_mode ?? "both"}
+                travelRadiusKm={trainer.travel_radius_km ?? 15}
+              />
+              <Card>
+                <CardHeader
+                  title="QR i udostępnianie"
+                  sub="Wydrukuj kod QR na ulotkę, wizytówkę lub plakat w klubie. Każdy QR ma swoje źródło, więc widzisz w analityce skąd przyszedł klient."
+                />
+                <div className="mt-3">
+                  <QrSection
+                    trainerSlug={trainer.slug}
+                    trainerName={profile?.display_name ?? ""}
+                    origin={origin}
+                    branches={branches}
+                  />
+                </div>
+              </Card>
+            </>
+          )}
+
+          {tab === "social" && (
+            <SocialForm
+              instagram={social.instagram ?? ""}
+              youtube={social.youtube ?? ""}
+              tiktok={social.tiktok ?? ""}
+              facebook={social.facebook ?? ""}
+              website={social.website ?? ""}
+              phone={profile?.phone ?? ""}
+              email={social.email ?? user.email ?? ""}
+            />
+          )}
+
+          {tab === "polityka" && <PolicyTab slug={trainer.slug} />}
+        </div>
+
+        {/* Right rail */}
+        <ProfileSideRail
+          slug={trainer.slug}
+          displayName={profile?.display_name ?? ""}
+          tagline={trainer.tagline ?? ""}
+          avatarUrl={profile?.avatar_url ?? null}
+          avatarFocal={profile?.avatar_focal ?? null}
+          completionPct={completion.pct}
+          completionItems={completion.items}
+        />
+      </div>
     </div>
+  );
+}
+
+function normalizeTab(raw: string | undefined): TabKey {
+  const allowed: TabKey[] = ["podstawowe", "specjalizacje", "certyfikaty", "lokalizacja", "social", "polityka"];
+  if (raw && (allowed as string[]).includes(raw)) return raw as TabKey;
+  return "podstawowe";
+}
+
+function computeCompletion(flags: {
+  avatar: boolean;
+  bio: boolean;
+  specs: boolean;
+  location: boolean;
+  pricing: boolean;
+  gallery: boolean;
+  video: boolean;
+}): { pct: number; items: { label: string; done: boolean }[] } {
+  const items = [
+    { label: "Zdjęcie profilowe", done: flags.avatar },
+    { label: "Bio i tagline", done: flags.bio },
+    { label: "Specjalizacje (3+)", done: flags.specs },
+    { label: "Lokalizacja", done: flags.location },
+    { label: "Cennik i pakiety", done: flags.pricing },
+    { label: "Galeria zdjęć (0/8)", done: flags.gallery },
+    { label: "Wideo prezentujące", done: flags.video },
+  ];
+  const done = items.filter((i) => i.done).length;
+  const pct = Math.round((done / items.length) * 100);
+  return { pct, items };
+}
+
+function PublishedPill({ published }: { published: boolean }) {
+  if (published) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold px-2 py-1 rounded-[7px] bg-emerald-50 text-emerald-700">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+        Opublikowany
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold px-2 py-1 rounded-[7px] bg-amber-50 text-amber-700">
+      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+      Szkic
+    </span>
   );
 }
 
@@ -294,11 +465,14 @@ function Card({ children }: { children: React.ReactNode }) {
   );
 }
 
-function CardHeader({ title, hint }: { title: string; hint?: string }) {
+function CardHeader({ title, hint, sub }: { title: string; hint?: string; sub?: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-3">
-      <h3 className="text-[15px] font-semibold tracking-tight text-slate-900">{title}</h3>
-      {hint && <span className="text-[12px] text-slate-500">{hint}</span>}
+    <div className="flex items-start justify-between gap-4 mb-3">
+      <div className="min-w-0">
+        <h3 className="text-[15px] font-semibold tracking-[-0.005em] text-slate-900 m-0">{title}</h3>
+        {sub && <p className="text-[12px] text-slate-500 mt-1 max-w-[640px] leading-[1.55]">{sub}</p>}
+      </div>
+      {hint && <span className="text-[12px] text-slate-500 shrink-0">{hint}</span>}
     </div>
   );
 }
