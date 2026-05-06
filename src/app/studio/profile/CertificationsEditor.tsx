@@ -138,6 +138,7 @@ function CertRow({ cert, index }: { cert: Certification; index: number }) {
 
   return (
     <div className="border border-slate-200 rounded-xl p-4 bg-white grid gap-3">
+      <StatusBadge status={cert.verificationStatus} rejectReason={cert.rejectReason} />
       <div className="flex items-start gap-3">
         <div className="font-mono text-[11px] text-slate-400 tracking-[0.1em] mt-3 shrink-0 w-6">
           {String(index + 1).padStart(2, "0")}
@@ -233,6 +234,61 @@ function CertRow({ cert, index }: { cert: Certification; index: number }) {
       </div>
 
       {error && <div className="text-[11px] text-red-600 pl-9">{error}</div>}
+    </div>
+  );
+}
+
+/**
+ * Status pill above each cert row. The four states map to the
+ * cert_verification_status enum from migration 028. Pre-028 rows
+ * (status undefined) get a neutral "no evidence" hint when there's
+ * nothing attached, otherwise no badge — they fall under the legacy
+ * "URL/file present === verified" rule.
+ */
+function StatusBadge({
+  status,
+  rejectReason,
+}: {
+  status?: "unverified" | "pending" | "verified" | "rejected";
+  rejectReason?: string;
+}) {
+  if (!status || status === "unverified") {
+    return (
+      <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold w-fit px-2 py-1 rounded-md bg-slate-50 text-slate-500 border border-slate-200">
+        Bez weryfikacji — dodaj link lub plik, żeby przesłać do oceny
+      </div>
+    );
+  }
+  if (status === "pending") {
+    return (
+      <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold w-fit px-2 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+        Oczekuje weryfikacji · zwykle ~2 dni
+      </div>
+    );
+  }
+  if (status === "verified") {
+    return (
+      <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold w-fit px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+          <path d="M5 13l4 4L19 7" />
+        </svg>
+        Zweryfikowany — widoczny publicznie
+      </div>
+    );
+  }
+  // rejected
+  return (
+    <div className="grid gap-1">
+      <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold w-fit px-2 py-1 rounded-md bg-rose-50 text-rose-700 border border-rose-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+        Odrzucony — nie pokazujemy publicznie
+      </div>
+      {rejectReason && (
+        <div className="text-[11px] text-rose-700/80 leading-[1.5] bg-rose-50/60 border border-rose-100 rounded-md px-2 py-1.5">
+          <strong className="font-semibold">Powód:</strong> {rejectReason}
+        </div>
+      )}
     </div>
   );
 }

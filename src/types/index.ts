@@ -42,18 +42,25 @@ export interface Package {
 }
 
 /**
- * Certification record with optional self-verification metadata. Phase 1 of
- * cert verification: trainer can attach a `verificationUrl` (link to issuer's
- * registry — EREPS, AWF, FMS) and/or an uploaded `attachmentUrl` (PDF/image
- * of the diploma in cert-attachments bucket). Phase 2 will add admin-stamped
- * `verifiedAt`/`verifiedBy` fields.
+ * Certification record with optional self-verification metadata.
+ *   - Phase 1 (migration 014): trainer attaches a `verificationUrl`
+ *     (link to issuer's registry — EREPS, AWF, FMS) and/or an
+ *     uploaded `attachmentUrl` (PDF/image in cert-attachments bucket).
+ *   - Phase 2 (migration 028): admin-reviewed verification workflow.
+ *     `verificationStatus` controls whether the cert appears on the
+ *     public profile; `rejectReason` is shown to the trainer in
+ *     /studio/profile when an admin rejects with a note.
  */
+export type CertVerificationStatus = "unverified" | "pending" | "verified" | "rejected";
+
 export interface Certification {
   id: string;
   text: string;
   verificationUrl?: string;
   attachmentUrl?: string;
   attachmentFilename?: string;
+  verificationStatus?: CertVerificationStatus;
+  rejectReason?: string;
 }
 
 export interface Review {

@@ -56,6 +56,8 @@ type TrainerRow = {
     verification_url?: string | null;
     attachment_url?: string | null;
     attachment_filename?: string | null;
+    /** Populated alongside verification_url when migration 028 is applied. */
+    verification_status?: "unverified" | "pending" | "verified" | "rejected" | null;
   }[];
   gallery_photos: { id: string; url: string; position: number }[];
   reviews: {
@@ -125,17 +127,30 @@ function mapTrainer(row: TrainerRow): Trainer {
     priceFrom: row.price_from,
     location: row.location,
     languages: row.languages ?? [],
-    // Public profile only shows certifications that the trainer has
-    // backed up — either with a verification URL (link to the issuer's
-    // public registry) or an uploaded scan. Unverified rows still live
-    // on /studio/profile so the trainer can edit them, but they don't
-    // surface to clients until evidence is attached.
+    // Public profile only shows certifications that the admin has
+    // approved (verification_status === 'verified'). Unverified /
+    // pending / rejected rows still live on /studio/profile so the
+    // trainer can edit them, but they don't surface to clients.
+    //
+    // Pre-028 fallback: when verification_status is missing (the
+    // post-fetch hit migration 014's columns but not 028's),
+    // attachCertVerification leaves status null. In that case fall
+    // back to the old "has evidence" check so partially-migrated
+    // databases still render verified-looking certs.
     certifications: [...row.certifications]
-      .filter((c) => !!c.verification_url || !!c.attachment_url)
+      .filter((c) =>
+        c.verification_status != null
+          ? c.verification_status === "verified"
+          : !!c.verification_url || !!c.attachment_url,
+      )
       .sort(sortByPos)
       .map((c) => c.text),
     certificationDetails: [...row.certifications]
-      .filter((c) => !!c.verification_url || !!c.attachment_url)
+      .filter((c) =>
+        c.verification_status != null
+          ? c.verification_status === "verified"
+          : !!c.verification_url || !!c.attachment_url,
+      )
       .sort(sortByPos)
       .map((c) => ({
         id: c.id,
@@ -226,23 +241,40 @@ async function attachCertVerification(
   const trainerIds = rows.map((r) => r.id);
   if (trainerIds.length === 0) return;
 
+  // Try the rich shape (014 + 028). On 42703, fall back to the
+  // 014-only shape so pages render without verification status.
+  type CertExtras = {
+    id: string;
+    verification_url: string | null;
+    attachment_url: string | null;
+    attachment_filename: string | null;
+    verification_status?: "unverified" | "pending" | "verified" | "rejected" | null;
+  };
+
   const { data, error } = await supabase
     .from("certifications")
-    .select("id, trainer_id, verification_url, attachment_url, attachment_filename")
+    .select("id, trainer_id, verification_url, attachment_url, attachment_filename, verification_status")
     .in("trainer_id", trainerIds);
 
-  // 42703 = undefined column → migration 014 not applied yet. Other errors:
-  // log + give up so the page still renders without verification badges.
-  if (error) {
-    if ((error as { code?: string }).code !== "42703") {
-      console.warn("[trainers] cert verification fetch error:", error.message);
+  let rows_data: CertExtras[] | null = null;
+  if (error?.code === "42703") {
+    const fallback = await supabase
+      .from("certifications")
+      .select("id, trainer_id, verification_url, attachment_url, attachment_filename")
+      .in("trainer_id", trainerIds);
+    if (fallback.error) {
+      console.warn("[trainers] cert verification fetch error:", fallback.error.message);
+      return;
     }
+    rows_data = (fallback.data ?? []) as CertExtras[];
+  } else if (error) {
+    console.warn("[trainers] cert verification fetch error:", error.message);
     return;
+  } else {
+    rows_data = (data ?? []) as CertExtras[];
   }
 
-  const byId = new Map<string, { verification_url: string | null; attachment_url: string | null; attachment_filename: string | null }>(
-    (data ?? []).map((c: { id: string; verification_url: string | null; attachment_url: string | null; attachment_filename: string | null; }) => [c.id, c]),
-  );
+  const byId = new Map<string, CertExtras>(rows_data.map((c) => [c.id, c]));
   for (const row of rows) {
     for (const cert of row.certifications) {
       const extras = byId.get(cert.id);
@@ -250,6 +282,7 @@ async function attachCertVerification(
         cert.verification_url = extras.verification_url;
         cert.attachment_url = extras.attachment_url;
         cert.attachment_filename = extras.attachment_filename;
+        cert.verification_status = extras.verification_status ?? null;
       }
     }
   }

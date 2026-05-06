@@ -141,7 +141,9 @@ export default async function StudioProfile() {
     supabase.from("trainer_specializations").select("specialization_id").eq("trainer_id", user.id),
     supabase
       .from("certifications")
-      .select("id, text, verification_url, attachment_url, attachment_filename, position")
+      .select(
+        "id, text, verification_url, attachment_url, attachment_filename, verification_status, reject_reason, position",
+      )
       .eq("trainer_id", user.id)
       .order("position", { ascending: true }),
     supabase
@@ -153,15 +155,40 @@ export default async function StudioProfile() {
   // Certs — same fallback pattern as before for unapplied 014.
   let certs: Certification[] = [];
   if (certsRes.error?.code === "42703") {
-    const certsLegacy = await supabase
+    // 028 (verification_status / reject_reason) not applied — retry with
+    // 014's columns. If 014 is also missing the next fallback hits.
+    const cert014 = await supabase
       .from("certifications")
-      .select("id, text, position")
+      .select("id, text, verification_url, attachment_url, attachment_filename, position")
       .eq("trainer_id", user.id)
       .order("position", { ascending: true });
-    certs = (certsLegacy.data ?? []).map((c: { id: string; text: string }) => ({
-      id: c.id,
-      text: c.text,
-    }));
+    if (cert014.error?.code === "42703") {
+      const certsLegacy = await supabase
+        .from("certifications")
+        .select("id, text, position")
+        .eq("trainer_id", user.id)
+        .order("position", { ascending: true });
+      certs = (certsLegacy.data ?? []).map((c: { id: string; text: string }) => ({
+        id: c.id,
+        text: c.text,
+      }));
+    } else if (cert014.data) {
+      certs = cert014.data.map(
+        (c: {
+          id: string;
+          text: string;
+          verification_url: string | null;
+          attachment_url: string | null;
+          attachment_filename: string | null;
+        }) => ({
+          id: c.id,
+          text: c.text,
+          verificationUrl: c.verification_url ?? undefined,
+          attachmentUrl: c.attachment_url ?? undefined,
+          attachmentFilename: c.attachment_filename ?? undefined,
+        }),
+      );
+    }
   } else if (certsRes.data) {
     certs = certsRes.data.map(
       (c: {
@@ -170,12 +197,16 @@ export default async function StudioProfile() {
         verification_url: string | null;
         attachment_url: string | null;
         attachment_filename: string | null;
+        verification_status: "unverified" | "pending" | "verified" | "rejected" | null;
+        reject_reason: string | null;
       }) => ({
         id: c.id,
         text: c.text,
         verificationUrl: c.verification_url ?? undefined,
         attachmentUrl: c.attachment_url ?? undefined,
         attachmentFilename: c.attachment_filename ?? undefined,
+        verificationStatus: c.verification_status ?? undefined,
+        rejectReason: c.reject_reason ?? undefined,
       }),
     );
   }
