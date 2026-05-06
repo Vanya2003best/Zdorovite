@@ -9,6 +9,7 @@ import type { AiContext } from "./ai-context-actions";
 import QrSection from "./QrSection";
 import BasicForm from "./BasicForm";
 import ProfileSectionNav from "./ProfileSectionNav";
+import ProfileSideRail from "./ProfileSideRail";
 import SpecializationsForm from "./SpecializationsForm";
 import LocationForm from "./LocationForm";
 import SocialForm from "./SocialForm";
@@ -135,7 +136,7 @@ export default async function StudioProfile() {
   }
 
   // --- Specializations (M:N) + lookup table ---------------------------
-  const [{ data: allSpecs }, { data: trainerSpecs }, certsRes] = await Promise.all([
+  const [{ data: allSpecs }, { data: trainerSpecs }, certsRes, galleryRes] = await Promise.all([
     supabase.from("specializations").select("id, label, icon").order("id"),
     supabase.from("trainer_specializations").select("specialization_id").eq("trainer_id", user.id),
     supabase
@@ -143,6 +144,10 @@ export default async function StudioProfile() {
       .select("id, text, verification_url, attachment_url, attachment_filename, position")
       .eq("trainer_id", user.id)
       .order("position", { ascending: true }),
+    supabase
+      .from("gallery_photos")
+      .select("id", { count: "exact", head: true })
+      .eq("trainer_id", user.id),
   ]);
 
   // Certs — same fallback pattern as before for unapplied 014.
@@ -175,6 +180,7 @@ export default async function StudioProfile() {
     );
   }
 
+  const galleryCount = galleryRes.count ?? 0;
   const selectedSpecIds = (trainerSpecs ?? []).map((s) => s.specialization_id);
 
   // --- QR section data (host + branches) ------------------------------
@@ -236,6 +242,17 @@ export default async function StudioProfile() {
     (k) => !!social[k],
   ).length;
 
+  // Completion checklist for the right rail.
+  const completion = computeCompletion({
+    avatar: !!profile?.avatar_url,
+    bio: !!(trainer.tagline ?? "").trim() || !!(trainer.about ?? "").trim(),
+    specs: selectedSpecIds.length >= 3,
+    location: !!(trainer.location ?? "").trim() || !!(trainer.city ?? "").trim(),
+    pricing: false, // wired once a price_from / services count is queried
+    gallery: galleryCount > 0,
+    video: false, // tracked once trainers.video_url is on the row
+  });
+
   const aiContext = (trainer.ai_context ?? {}) as AiContext;
   const aiContextFilled = (
     ["background", "targetAudience", "methodology", "differentiators", "tonePreference"] as const
@@ -263,7 +280,8 @@ export default async function StudioProfile() {
         }}
       />
 
-      <div className="mt-4 space-y-4">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 items-start mt-4">
+        <div className="min-w-0 space-y-4">
           <div id="podstawowe">
             <BasicForm
               avatarUrl={profile?.avatar_url ?? null}
@@ -358,9 +376,36 @@ export default async function StudioProfile() {
           <div id="polityka">
             <PolicyTab slug={trainer.slug} />
           </div>
+        </div>
+
+        {/* Right rail — completion + tip (no public-preview photo card) */}
+        <ProfileSideRail completionPct={completion.pct} completionItems={completion.items} />
       </div>
     </div>
   );
+}
+
+function computeCompletion(flags: {
+  avatar: boolean;
+  bio: boolean;
+  specs: boolean;
+  location: boolean;
+  pricing: boolean;
+  gallery: boolean;
+  video: boolean;
+}): { pct: number; items: { label: string; done: boolean }[] } {
+  const items = [
+    { label: "Zdjęcie profilowe", done: flags.avatar },
+    { label: "Bio i tagline", done: flags.bio },
+    { label: "Specjalizacje (3+)", done: flags.specs },
+    { label: "Lokalizacja", done: flags.location },
+    { label: "Cennik i pakiety", done: flags.pricing },
+    { label: "Galeria zdjęć (0/8)", done: flags.gallery },
+    { label: "Wideo prezentujące", done: flags.video },
+  ];
+  const done = items.filter((i) => i.done).length;
+  const pct = Math.round((done / items.length) * 100);
+  return { pct, items };
 }
 
 function Card({ children }: { children: React.ReactNode }) {
