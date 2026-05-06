@@ -350,16 +350,6 @@ export default async function StudioProfile() {
 
           <div id="certyfikaty">
             <Card>
-              <CardHeader
-                title="Certyfikaty i dokumenty"
-                hint={`${certs.length} ${certs.length === 1 ? "certyfikat" : "certyfikatów"}`}
-                sub="Przesłane PDF/JPG widoczne tylko po weryfikacji. Klienci widzą tylko nazwę i rok."
-              />
-              <p className="text-[12px] text-slate-500 mt-1 mb-4 leading-[1.55] max-w-[640px]">
-                Dodaj swoje certyfikaty z linkiem do publicznego rejestru wystawcy (np. EREPS, AWF) lub załącz
-                skan dyplomu. Na publicznej stronie obok każdego certyfikatu pojawi się badge weryfikacji,
-                który klient może kliknąć.
-              </p>
               <CertificationsEditor certs={certs} />
             </Card>
           </div>
@@ -459,14 +449,24 @@ function Card({ children }: { children: React.ReactNode }) {
   );
 }
 
-function CardHeader({ title, hint, sub }: { title: string; hint?: string; sub?: string }) {
+function CardHeader({
+  title,
+  hint,
+  sub,
+  action,
+}: {
+  title: string;
+  hint?: string;
+  sub?: string;
+  action?: React.ReactNode;
+}) {
   return (
     <div className="flex items-start justify-between gap-4 mb-3">
       <div className="min-w-0">
         <h3 className="text-[15px] font-semibold tracking-[-0.005em] text-slate-900 m-0">{title}</h3>
         {sub && <p className="text-[12px] text-slate-500 mt-1 max-w-[640px] leading-[1.55]">{sub}</p>}
       </div>
-      {hint && <span className="text-[12px] text-slate-500 shrink-0">{hint}</span>}
+      {action ?? (hint && <span className="text-[12px] text-slate-500 shrink-0">{hint}</span>)}
     </div>
   );
 }
