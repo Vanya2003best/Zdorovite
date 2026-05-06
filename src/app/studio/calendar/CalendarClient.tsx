@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -17,6 +17,14 @@ import {
 } from "@/app/studio/bookings/actions";
 import { saveAvailabilityRules } from "@/app/studio/availability/actions";
 import WorkingHoursOverlay from "./WorkingHoursOverlay";
+import {
+  ModeBanner,
+  ModeSwitcher,
+  PatternSaveBar,
+  PatternSummaryPanel,
+  isMode,
+  type CalendarMode,
+} from "./CalendarMode";
 
 export type WorkingHourRule = { dow: number; start: string; end: string };
 
@@ -65,26 +73,96 @@ export default function CalendarClient({
   pendingRescheduleIds: string[];
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const modeParam = searchParams.get("mode");
+  const mode: CalendarMode = isMode(modeParam) ? modeParam : "bookings";
+
   const pendingResSet = useMemo(() => new Set(pendingRescheduleIds), [pendingRescheduleIds]);
   const calRef = useRef<FullCalendar | null>(null);
   /** Wraps the FullCalendar render so WorkingHoursOverlay can reach into FC's
    *  DOM via querySelector to find day columns. */
   const calWrapperRef = useRef<HTMLDivElement | null>(null);
-  /** Local mirror of working-hour rules. Updated optimistically as the user
-   *  drags so the emerald block visually follows their cursor; on pointerup
-   *  we hit saveAvailabilityRules + router.refresh to persist + re-render
-   *  events/headers. Debounced so a fast wiggle doesn't fire a save per pixel. */
+  /** Local mirror of working-hour rules. In bookings + availability modes we
+   *  auto-save each change (existing behaviour). In pattern mode we batch:
+   *  edits stay local until the trainer hits "Zapisz" on the sticky save bar,
+   *  matching design 32's review-before-publish workflow. */
   const [rulesState, setRulesState] = useState(rules);
   useEffect(() => { setRulesState(rules); }, [rules]);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleRulesChange = useCallback((next: WorkingHourRule[]) => {
-    setRulesState(next);
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(async () => {
-      await saveAvailabilityRules(next.map((r) => ({ dow: r.dow, start: r.start, end: r.end })));
-      router.refresh();
-    }, 400);
-  }, [router]);
+  const [savingPattern, setSavingPattern] = useState(false);
+
+  const handleRulesChange = useCallback(
+    (next: WorkingHourRule[]) => {
+      setRulesState(next);
+      // Pattern mode batches saves; the rest auto-save (debounced).
+      if (mode === "pattern") return;
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(async () => {
+        await saveAvailabilityRules(next.map((r) => ({ dow: r.dow, start: r.start, end: r.end })));
+        router.refresh();
+      }, 400);
+    },
+    [mode, router],
+  );
+
+  // "Dirty" only meaningful in pattern mode — count rules that diverge from
+  // the server-side baseline. Cheap because the rule set is tiny.
+  const dirtyCount = useMemo(() => {
+    if (mode !== "pattern") return 0;
+    const sig = (r: WorkingHourRule[]) =>
+      [...r].sort((a, b) => a.dow - b.dow || a.start.localeCompare(b.start)).map((x) => `${x.dow}:${x.start}-${x.end}`).join(",");
+    return sig(rules) === sig(rulesState) ? 0 : Math.max(1, Math.abs(rules.length - rulesState.length) || 1);
+  }, [mode, rules, rulesState]);
+
+  const dirtyDetail = useMemo(() => {
+    if (mode !== "pattern" || dirtyCount === 0) return "";
+    const dows = new Set<number>();
+    rulesState.forEach((r) => {
+      const before = rules.find((x) => x.dow === r.dow && x.start === r.start && x.end === r.end);
+      if (!before) dows.add(r.dow);
+    });
+    rules.forEach((r) => {
+      const after = rulesState.find((x) => x.dow === r.dow && x.start === r.start && x.end === r.end);
+      if (!after) dows.add(r.dow);
+    });
+    const names = ["nd", "pn", "wt", "śr", "cz", "pt", "sb"];
+    return [...dows].map((d) => names[d]).join(" + ");
+  }, [mode, rules, rulesState, dirtyCount]);
+
+  const onSavePattern = useCallback(async () => {
+    setSavingPattern(true);
+    await saveAvailabilityRules(
+      rulesState.map((r) => ({ dow: r.dow, start: r.start, end: r.end })),
+    );
+    setSavingPattern(false);
+    router.refresh();
+  }, [rulesState, router]);
+
+  const onCancelPattern = useCallback(() => {
+    setRulesState(rules);
+  }, [rules]);
+
+  // Free-slot estimate for the availability-mode banner. Same heuristic as
+  // /studio/availability had: weekly-hours × 4 (15-min grid) × 2 weeks
+  // minus the bookings already on the books in that window.
+  const freeSlots14d = useMemo(() => {
+    const weeklyMins = rulesState.reduce((acc, r) => {
+      const [sh, sm] = r.start.split(":").map(Number);
+      const [eh, em] = r.end.split(":").map(Number);
+      return acc + Math.max(0, eh * 60 + em - (sh * 60 + sm));
+    }, 0);
+    const slots = Math.round((weeklyMins / 60) * 2 * 2); // 30-min slots × 2 weeks
+    const futureBookings = bookings.filter((b) => {
+      const t = new Date(b.start).getTime();
+      return t >= Date.now() && t < Date.now() + 14 * 86400000 && b.status !== "cancelled";
+    }).length;
+    return Math.max(0, slots - futureBookings);
+  }, [rulesState, bookings]);
+
+  const futureBookingsCount = useMemo(
+    () => bookings.filter((b) => new Date(b.start).getTime() >= Date.now() && b.status !== "cancelled").length,
+    [bookings],
+  );
   // Mobile gets day-view by default; desktop gets week. SSR safe — start with
   // week and update on mount. Avoids a hydration flash because FullCalendar
   // mounts client-only anyway.
@@ -135,16 +213,21 @@ export default function CalendarClient({
 
   // FullCalendar events: bookings only. Working-hours emerald wash is drawn
   // by the WorkingHoursOverlay (drag-editable), NOT as FC background events.
-  const events: EventInput[] = useMemo(() =>
-    bookings.map((b) => ({
+  // Pattern mode hides events entirely (the trainer is editing rules, not
+  // looking at sessions); availability fades them via a class so they're
+  // visible context but don't compete with the green availability bands.
+  const events: EventInput[] = useMemo(() => {
+    if (mode === "pattern") return [];
+    const fadedClass = mode === "availability" ? "nz-event-faded" : "";
+    return bookings.map((b) => ({
       id: b.id,
       title: b.clientName,
       start: b.start,
       end: b.end,
-      classNames: ["nz-booking", `nz-status-${b.status}`],
+      classNames: ["nz-booking", `nz-status-${b.status}`, fadedClass].filter(Boolean) as string[],
       extendedProps: { booking: b } as { booking: BookingEvent },
-    })),
-  [bookings]);
+    }));
+  }, [bookings, mode]);
 
   const navigate = (dir: "prev" | "next" | "today") => {
     const api = calRef.current?.getApi();
@@ -201,6 +284,8 @@ export default function CalendarClient({
           <h2 className="text-[14px] sm:text-[15px] font-semibold tracking-tight ml-3 tabular-nums">{title}</h2>
         </div>
 
+        <ModeSwitcher mode={mode} bookingsBadge={futureBookingsCount} />
+
         <div className="inline-flex bg-slate-100 rounded-[9px] p-[3px] gap-[2px]">
           {([
             { id: "timeGridDay", label: "Dzień" },
@@ -220,6 +305,12 @@ export default function CalendarClient({
           ))}
         </div>
       </div>
+
+      {/* Mode-contextual banner */}
+      <ModeBanner mode={mode} freeSlots14d={freeSlots14d} />
+
+      {/* Pattern mode 7-day summary above the grid */}
+      {mode === "pattern" && <PatternSummaryPanel rules={rulesState} />}
 
       {/* Calendar */}
       <div
@@ -274,6 +365,12 @@ export default function CalendarClient({
           fcWrapperRef={calWrapperRef}
           viewType={view}
           onChange={handleRulesChange}
+          // Bookings mode hides the green wash entirely (the trainer
+          // wants to see only sessions). Availability mode shows the
+          // wash but read-only — no clicks, no editor dialog. Pattern
+          // mode is the only place where bands are interactive.
+          readOnly={mode === "availability"}
+          hidden={mode === "bookings"}
         />
       </div>
 
@@ -300,6 +397,18 @@ export default function CalendarClient({
             setSelected(null);
             router.refresh();
           }}
+        />
+      )}
+
+      {/* Pattern-mode sticky save bar — only visible when the trainer
+          has touched the rules in this mode. Other modes auto-save. */}
+      {mode === "pattern" && (
+        <PatternSaveBar
+          dirtyCount={dirtyCount}
+          detail={dirtyDetail}
+          saving={savingPattern}
+          onSave={onSavePattern}
+          onCancel={onCancelPattern}
         />
       )}
 
@@ -354,6 +463,10 @@ export default function CalendarClient({
         .fc-event-main { padding: 0 !important; }
         .nz-booking { cursor: pointer; border-radius: 6px; overflow: hidden; }
         .nz-booking:hover { transform: translateY(-1px); transition: transform .15s; box-shadow: 0 4px 12px -2px rgba(2,6,23,0.15); }
+        /* Availability-mode events: faded so the green availability
+           wash reads as primary, but events stay visible as context. */
+        .nz-event-faded { opacity: .35; }
+        .nz-event-faded:hover { opacity: .55; transform: none !important; box-shadow: none !important; }
         /* Now indicator — keep red, slightly thicker for visibility. */
         .fc-now-indicator-line { border-color: #ef4444 !important; border-width: 2px; }
         .fc-now-indicator-arrow { border-color: #ef4444 !important; }

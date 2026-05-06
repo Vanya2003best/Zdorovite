@@ -36,9 +36,25 @@ type Props = {
   fcWrapperRef: React.RefObject<HTMLDivElement | null>;
   viewType: string;
   onChange: (rules: WorkingHourRule[]) => void;
+  /** When true, render the emerald blocks but disable click + the
+   *  "+ Godziny pracy" button + the per-day editor dialog. Used
+   *  by the Calendar's 'availability' mode where the trainer is
+   *  reading their pattern, not editing it. */
+  readOnly?: boolean;
+  /** When true, render nothing at all — used in 'bookings' mode
+   *  where the trainer wants only the sessions in view, no
+   *  green availability wash competing with them. */
+  hidden?: boolean;
 };
 
-export default function WorkingHoursOverlay({ rules, fcWrapperRef, viewType, onChange }: Props) {
+export default function WorkingHoursOverlay({
+  rules,
+  fcWrapperRef,
+  viewType,
+  onChange,
+  readOnly = false,
+  hidden = false,
+}: Props) {
   const [columns, setColumns] = useState<ColInfo[]>([]);
   const [editingDow, setEditingDow] = useState<number | null>(null);
   // Local mirror of rules — updated optimistically when dialog saves so the
@@ -82,6 +98,7 @@ export default function WorkingHoursOverlay({ rules, fcWrapperRef, viewType, onC
   }, [fcWrapperRef, viewType]);
 
   if (viewType !== "timeGridWeek" && viewType !== "timeGridDay") return null;
+  if (hidden) return null;
 
   return (
     <>
@@ -91,19 +108,23 @@ export default function WorkingHoursOverlay({ rules, fcWrapperRef, viewType, onC
 
         if (dayRules.length === 0) {
           // Empty day — clickable "+ Godziny pracy" button at default 09:00.
-          elements.push(
-            <button
-              key={`add-${col.date}`}
-              type="button"
-              onClick={() => setEditingDow(col.dow)}
-              className="absolute left-1 right-1 h-7 rounded-md text-[10px] font-medium text-emerald-700 bg-emerald-50/40 hover:bg-emerald-50 border border-dashed border-emerald-300/60 hover:border-emerald-500 transition pointer-events-auto z-[1] flex items-center justify-center gap-1"
-              style={{ top: `${minToY(9 * 60)}px` }}
-              title="Ustaw godziny pracy"
-            >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
-              Godziny pracy
-            </button>,
-          );
+          // Hidden in read-only mode; the day column simply has no
+          // emerald wash, conveying "no hours" without an action chip.
+          if (!readOnly) {
+            elements.push(
+              <button
+                key={`add-${col.date}`}
+                type="button"
+                onClick={() => setEditingDow(col.dow)}
+                className="absolute left-1 right-1 h-7 rounded-md text-[10px] font-medium text-emerald-700 bg-emerald-50/40 hover:bg-emerald-50 border border-dashed border-emerald-300/60 hover:border-emerald-500 transition pointer-events-auto z-[1] flex items-center justify-center gap-1"
+                style={{ top: `${minToY(9 * 60)}px` }}
+                title="Ustaw godziny pracy"
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
+                Godziny pracy
+              </button>,
+            );
+          }
         } else {
           // Render one emerald block per shift on this day. Each block is
           // clickable → opens the dialog for that day.
@@ -112,30 +133,53 @@ export default function WorkingHoursOverlay({ rules, fcWrapperRef, viewType, onC
             const endMin = timeToMin(rule.end);
             const top = minToY(startMin);
             const height = minToY(endMin) - top;
-            elements.push(
-              <button
-                key={`${col.date}-${idx}`}
-                type="button"
-                onClick={() => setEditingDow(col.dow)}
-                className="nz-hours-block absolute left-0.5 right-0.5 group rounded-sm pointer-events-auto z-[1] hover:ring-2 hover:ring-emerald-500/50 transition cursor-pointer"
-                style={{
-                  top: `${top}px`,
-                  height: `${height}px`,
-                  backgroundColor: "rgba(16, 185, 129, 0.20)",
-                }}
-                title="Kliknij aby edytować godziny pracy"
-              >
-                {height > 30 && (
-                  <span className="absolute top-1 left-1.5 text-[10px] font-semibold text-emerald-900 tabular-nums opacity-80 group-hover:opacity-100 transition pointer-events-none">
-                    {rule.start}–{rule.end}
+            if (readOnly) {
+              elements.push(
+                <div
+                  key={`${col.date}-${idx}`}
+                  className="absolute left-0.5 right-0.5 rounded-sm pointer-events-none z-[1]"
+                  style={{
+                    top: `${top}px`,
+                    height: `${height}px`,
+                    backgroundColor: "rgba(16, 185, 129, 0.18)",
+                    backgroundImage:
+                      "repeating-linear-gradient(45deg, rgba(16,185,129,0.0) 0, rgba(16,185,129,0.0) 6px, rgba(16,185,129,0.08) 6px, rgba(16,185,129,0.08) 12px)",
+                    border: "1px dashed rgba(16,185,129,0.5)",
+                  }}
+                >
+                  {height > 30 && (
+                    <span className="absolute top-1 left-1.5 text-[10px] font-semibold text-emerald-900 tabular-nums opacity-80">
+                      {rule.start}–{rule.end} · wzorzec
+                    </span>
+                  )}
+                </div>,
+              );
+            } else {
+              elements.push(
+                <button
+                  key={`${col.date}-${idx}`}
+                  type="button"
+                  onClick={() => setEditingDow(col.dow)}
+                  className="nz-hours-block absolute left-0.5 right-0.5 group rounded-sm pointer-events-auto z-[1] hover:ring-2 hover:ring-emerald-500/50 transition cursor-pointer"
+                  style={{
+                    top: `${top}px`,
+                    height: `${height}px`,
+                    backgroundColor: "rgba(16, 185, 129, 0.20)",
+                  }}
+                  title="Kliknij aby edytować godziny pracy"
+                >
+                  {height > 30 && (
+                    <span className="absolute top-1 left-1.5 text-[10px] font-semibold text-emerald-900 tabular-nums opacity-80 group-hover:opacity-100 transition pointer-events-none">
+                      {rule.start}–{rule.end}
+                    </span>
+                  )}
+                  {/* Edit pencil icon — appears on hover */}
+                  <span className="absolute top-1 right-1 w-5 h-5 rounded bg-white/90 text-emerald-700 inline-flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow-sm">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                   </span>
-                )}
-                {/* Edit pencil icon — appears on hover */}
-                <span className="absolute top-1 right-1 w-5 h-5 rounded bg-white/90 text-emerald-700 inline-flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow-sm">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-                </span>
-              </button>,
-            );
+                </button>,
+              );
+            }
           });
         }
 

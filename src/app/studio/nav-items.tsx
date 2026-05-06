@@ -8,6 +8,14 @@ import type { ReactNode } from "react";
  */
 export type NavGroup = "top" | "oferta" | "komunikacja" | "profil";
 
+export type StudioNavSubItem = {
+  href: string;
+  label: string;
+  /** Tested against the current `?...` (URLSearchParams). Returns
+   *  true when this sub-link is the active selection. */
+  match: (search: URLSearchParams) => boolean;
+};
+
 export type StudioNavItem = {
   href: string;
   label: string;
@@ -22,6 +30,9 @@ export type StudioNavItem = {
    *  (StudioNavMenu) and the page-title fallback. The desktop
    *  sidebar (design 31) ignores this and renders single-line. */
   description?: string;
+  /** Sub-links rendered under this item (when active). Used for
+   *  Calendar's mode deeplinks: Wzorzec / Wolne sloty. */
+  subItems?: StudioNavSubItem[];
 };
 
 const HomeIcon = (
@@ -71,12 +82,6 @@ const UsersIcon = (
     <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
   </svg>
 );
-const ClockIcon = (
-  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="12" cy="12" r="10" />
-    <path d="M12 6v6l4 2" />
-  </svg>
-);
 const ProfileIcon = (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <circle cx="12" cy="8" r="4" />
@@ -100,15 +105,22 @@ export const STUDIO_NAV: StudioNavItem[] = [
     description: "Sesje, rezerwacje, godziny pracy",
     group: "top",
     icon: CalIcon,
-    match: (p) => p.startsWith("/studio/calendar") || p.startsWith("/studio/bookings"),
-  },
-  {
-    href: "/studio/availability",
-    label: "Dostępność",
-    description: "Godziny pracy, wyjątki, urlopy",
-    group: "top",
-    icon: ClockIcon,
-    match: (p) => p.startsWith("/studio/availability"),
+    match: (p) =>
+      p.startsWith("/studio/calendar") ||
+      p.startsWith("/studio/bookings") ||
+      p.startsWith("/studio/availability"),
+    subItems: [
+      {
+        href: "/studio/calendar?mode=pattern",
+        label: "Wzorzec tygodniowy",
+        match: (search) => search.get("mode") === "pattern",
+      },
+      {
+        href: "/studio/calendar?mode=availability",
+        label: "Wolne sloty (podgląd)",
+        match: (search) => search.get("mode") === "availability",
+      },
+    ],
   },
   {
     href: "/studio/klienci",

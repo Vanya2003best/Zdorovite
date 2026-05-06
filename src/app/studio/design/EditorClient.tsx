@@ -7,7 +7,7 @@ import type { ProfileCustomization, SectionId, TemplateName } from "@/types";
 import { ENABLE_PAGES } from "@/lib/feature-flags";
 import { updateDesign } from "./actions";
 import { togglePublished } from "@/app/trainers/[id]/edit-actions";
-import type { DayRule } from "@/app/studio/availability/page";
+import type { DayRule } from "@/app/studio/availability/types";
 import StudioNavMenu from "../StudioNavMenu";
 import NotificationsBell from "@/components/NotificationsBell";
 import AccountMenu from "@/components/AccountMenu";

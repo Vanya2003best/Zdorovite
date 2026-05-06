@@ -8,7 +8,7 @@ import {
   getUnreadNotificationCount,
 } from "@/lib/db/notifications";
 import EditorClient from "./EditorClient";
-import type { DayRule } from "@/app/studio/availability/page";
+import type { DayRule } from "@/app/studio/availability/types";
 import PremiumProfile from "@/app/trainers/[id]/PremiumProfile";
 import CinematicProfile from "@/app/trainers/[id]/CinematicProfile";
 import SignatureProfile from "@/app/trainers/[id]/SignatureProfile";

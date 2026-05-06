@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import MessagesBadge from "@/app/account/MessagesBadge";
 import { NAV_SECTIONS, STUDIO_NAV, type StudioNavItem } from "./nav-items";
 
@@ -27,6 +27,7 @@ export default function StudioSidebar({
   unreadMessages: number;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const topItems = STUDIO_NAV.filter((i) => i.group === "top");
 
@@ -55,6 +56,7 @@ export default function StudioSidebar({
             key={item.label}
             item={item}
             pathname={pathname}
+            searchParams={searchParams}
             trainerId={trainerId}
             unreadMessages={unreadMessages}
           />
@@ -73,6 +75,7 @@ export default function StudioSidebar({
                   key={item.label}
                   item={item}
                   pathname={pathname}
+                  searchParams={searchParams}
                   trainerId={trainerId}
                   unreadMessages={unreadMessages}
                 />
@@ -105,22 +108,36 @@ export default function StudioSidebar({
 function NavRow({
   item,
   pathname,
+  searchParams,
   trainerId,
   unreadMessages,
 }: {
   item: StudioNavItem;
   pathname: string;
+  searchParams: URLSearchParams;
   trainerId: string;
   unreadMessages: number;
 }) {
   const active = item.match(pathname);
+  // Sub-link "active" only matters when parent matches (otherwise we'd
+  // visually mark the parent as having an active sub-link from
+  // another page entirely).
+  const subItems = active && item.subItems ? item.subItems : [];
+  // Parent is "fully active" only when it matches AND no sub-link is
+  // currently the selected one — same convention as Notion / Linear:
+  // sub picks override the parent's bold state.
+  const subActiveIndex = subItems.findIndex((s) => s.match(searchParams));
+  const parentSelfActive = active && subActiveIndex === -1;
+
   const cls =
     "flex items-center gap-[11px] px-3 py-[9px] rounded-[9px] text-[13.5px] font-medium transition " +
-    (active
+    (parentSelfActive
       ? "bg-emerald-50 text-emerald-700 font-semibold"
       : item.soon
         ? "text-slate-300 cursor-not-allowed"
-        : "text-slate-700 hover:bg-slate-50 hover:text-slate-900");
+        : active
+          ? "text-slate-900"
+          : "text-slate-700 hover:bg-slate-50 hover:text-slate-900");
 
   const inner = (
     <>
@@ -134,10 +151,39 @@ function NavRow({
     </>
   );
 
-  if (item.soon) return <span className={cls}>{inner}</span>;
   return (
-    <Link href={item.href} className={cls}>
-      {inner}
-    </Link>
+    <>
+      {item.soon ? (
+        <span className={cls}>{inner}</span>
+      ) : (
+        <Link href={item.href} className={cls}>
+          {inner}
+        </Link>
+      )}
+      {subItems.map((sub) => {
+        const subOn = sub.match(searchParams);
+        return (
+          <Link
+            key={sub.href}
+            href={sub.href}
+            className={
+              "relative flex items-center pl-8 pr-3 py-[7px] text-[13px] transition " +
+              (subOn
+                ? "text-slate-900 font-semibold"
+                : "text-slate-500 hover:text-slate-900")
+            }
+          >
+            {/* Vertical guide line + active marker */}
+            <span
+              className={
+                "absolute left-[22px] top-0 bottom-0 " +
+                (subOn ? "w-0.5 bg-emerald-500" : "w-px bg-slate-200")
+              }
+            />
+            <span className="truncate">{sub.label}</span>
+          </Link>
+        );
+      })}
+    </>
   );
 }
