@@ -261,6 +261,10 @@ export default function CalendarClient({
     return `${String(hourFloor).padStart(2, "0")}:00:00`;
   }, [rulesState, bookings]);
 
+  // Bottom of the grid is fixed at 22:00 per user direction so an
+  // evening sessions / late-finish rule still reads as "early in the
+  // day" rather than pushing the grid down. Extends past 22:00 only
+  // if a rule or booking actually ends later.
   const slotMaxTime = useMemo(() => {
     const ruleEnds = rulesState.map((r) => {
       const [h, m] = r.end.split(":").map(Number);
@@ -270,8 +274,7 @@ export default function CalendarClient({
       const d = new Date(b.end);
       return d.getHours() * 60 + d.getMinutes();
     });
-    const candidates = [...ruleEnds, ...bookingEnds];
-    if (candidates.length === 0) return "23:00:00";
+    const candidates = [...ruleEnds, ...bookingEnds, 22 * 60];
     const maxMin = Math.max(...candidates);
     const hourCeil = Math.min(24, Math.ceil((maxMin + 30) / 60));
     return `${String(hourCeil).padStart(2, "0")}:00:00`;

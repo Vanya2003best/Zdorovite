@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { WorkingHourRule } from "./CalendarClient";
 import DayHoursDialog from "./DayHoursDialog";
@@ -66,6 +66,121 @@ export default function WorkingHoursOverlay({
   // overlay reflects new shifts immediately, before router.refresh.
   const [localRules, setLocalRules] = useState<WorkingHourRule[]>(rules);
   useEffect(() => { setLocalRules(rules); }, [rules]);
+
+  // Drag-to-edit state. The block is identified by composite key
+  // `${dow}-${origStart}-${origEnd}` so we can find it in localRules
+  // even after pointermoves change the local copy. dragPreview holds
+  // the current pixel-snapped start/end while the pointer is down so
+  // the visual follows the cursor; dragMovedRef gates click — if the
+  // pointer moved more than a few px, pointerup commits the new times
+  // instead of opening the dialog.
+  type DragMode = "move" | "resize-top" | "resize-bot";
+  type DragState = {
+    key: string;
+    dow: number;
+    mode: DragMode;
+    startY: number;
+    origStartMin: number;
+    origEndMin: number;
+  };
+  const dragRef = useRef<DragState | null>(null);
+  const dragMovedRef = useRef(false);
+  const [dragPreview, setDragPreview] = useState<
+    | {
+        key: string;
+        startMin: number;
+        endMin: number;
+      }
+    | null
+  >(null);
+
+  const ruleKey = (r: WorkingHourRule) => `${r.dow}-${r.start}-${r.end}`;
+  const minToHHMM = (min: number) => {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  };
+
+  const onDocPointerMove = useCallback((e: PointerEvent) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const dy = e.clientY - d.startY;
+    if (Math.abs(dy) > 3) dragMovedRef.current = true;
+    // 30-min snap, 56px/hour → 28px/30min.
+    const dminUnsnapped = (dy / SLOT_HEIGHT_PER_HOUR) * 60;
+    const dmin = Math.round(dminUnsnapped / 30) * 30;
+    let newStart = d.origStartMin;
+    let newEnd = d.origEndMin;
+    if (d.mode === "move") {
+      newStart += dmin;
+      newEnd += dmin;
+    } else if (d.mode === "resize-top") {
+      newStart += dmin;
+    } else if (d.mode === "resize-bot") {
+      newEnd += dmin;
+    }
+    // Clamp + minimum 30-min length.
+    if (d.mode === "move") {
+      const span = d.origEndMin - d.origStartMin;
+      if (newStart < 0) {
+        newStart = 0;
+        newEnd = span;
+      }
+      if (newEnd > 24 * 60) {
+        newEnd = 24 * 60;
+        newStart = newEnd - span;
+      }
+    } else if (d.mode === "resize-top") {
+      newStart = Math.max(0, Math.min(newStart, d.origEndMin - 30));
+    } else if (d.mode === "resize-bot") {
+      newEnd = Math.max(d.origStartMin + 30, Math.min(newEnd, 24 * 60));
+    }
+    setDragPreview({ key: d.key, startMin: newStart, endMin: newEnd });
+  }, []);
+
+  const onDocPointerUp = useCallback(() => {
+    const d = dragRef.current;
+    document.removeEventListener("pointermove", onDocPointerMove);
+    document.removeEventListener("pointerup", onDocPointerUp);
+    dragRef.current = null;
+    if (!d) return;
+
+    if (!dragMovedRef.current) {
+      // Treat as a click — open the editor dialog. dragMovedRef has
+      // to reset before the click handler fires; useEffect-style
+      // microtask is enough.
+      setDragPreview(null);
+      setEditingDow(d.dow);
+      return;
+    }
+    const preview = dragPreview;
+    setDragPreview(null);
+    if (!preview) return;
+    const next = localRules.map((r) =>
+      ruleKey(r) === preview.key
+        ? { ...r, start: minToHHMM(preview.startMin), end: minToHHMM(preview.endMin) }
+        : r,
+    );
+    setLocalRules(next);
+    onChange(next);
+  }, [dragPreview, localRules, onChange, onDocPointerMove]);
+
+  const startDrag = (e: React.PointerEvent, rule: WorkingHourRule, mode: DragMode) => {
+    if (readOnly) return;
+    e.stopPropagation();
+    e.preventDefault();
+    dragMovedRef.current = false;
+    dragRef.current = {
+      key: ruleKey(rule),
+      dow: rule.dow,
+      mode,
+      startY: e.clientY,
+      origStartMin: timeToMin(rule.start),
+      origEndMin: timeToMin(rule.end),
+    };
+    document.addEventListener("pointermove", onDocPointerMove);
+    document.addEventListener("pointerup", onDocPointerUp);
+  };
 
   // Discover day columns. FullCalendar renders its grid asynchronously, so we
   // need to react to its DOM mutations rather than measuring once on mount.
@@ -158,29 +273,54 @@ export default function WorkingHoursOverlay({
                 />,
               );
             } else {
+              // Editable block. While the user is dragging this same
+              // block, swap to the live preview position so the green
+              // wash follows the cursor smoothly. On pointerup the
+              // commit logic in onDocPointerUp turns the preview into
+              // the new HH:MM and pushes it to onChange.
+              const k = ruleKey(rule);
+              const isDragging = dragPreview?.key === k;
+              const liveStart = isDragging ? dragPreview!.startMin : startMin;
+              const liveEnd = isDragging ? dragPreview!.endMin : endMin;
+              const liveTop = minToY(liveStart, slotMinHour);
+              const liveHeight = minToY(liveEnd, slotMinHour) - liveTop;
+              const liveStartLabel = minToHHMM(liveStart);
+              const liveEndLabel = minToHHMM(liveEnd);
               elements.push(
-                <button
+                <div
                   key={`${col.date}-${idx}`}
-                  type="button"
-                  onClick={() => setEditingDow(col.dow)}
-                  className="nz-hours-block absolute left-0.5 right-0.5 group rounded-sm pointer-events-auto z-[1] hover:ring-2 hover:ring-emerald-500/50 transition cursor-pointer"
+                  onPointerDown={(e) => startDrag(e, rule, "move")}
+                  className="nz-hours-block absolute left-0.5 right-0.5 group rounded-md pointer-events-auto z-[1] hover:ring-2 hover:ring-emerald-500/60 transition select-none"
                   style={{
-                    top: `${top}px`,
-                    height: `${height}px`,
+                    top: `${liveTop}px`,
+                    height: `${liveHeight}px`,
                     backgroundColor: "rgba(16, 185, 129, 0.20)",
+                    cursor: "grab",
                   }}
-                  title="Kliknij aby edytować godziny pracy"
+                  title="Przeciągnij, aby przesunąć · klik aby edytować dokładnie"
                 >
-                  {height > 30 && (
-                    <span className="absolute top-1 left-1.5 text-[10px] font-semibold text-emerald-900 tabular-nums opacity-80 group-hover:opacity-100 transition pointer-events-none">
-                      {rule.start}–{rule.end}
+                  {liveHeight > 30 && (
+                    <span className="absolute top-1 left-1.5 text-[10px] font-semibold text-emerald-900 tabular-nums opacity-90 pointer-events-none">
+                      {liveStartLabel}–{liveEndLabel}
                     </span>
                   )}
                   {/* Edit pencil icon — appears on hover */}
-                  <span className="absolute top-1 right-1 w-5 h-5 rounded bg-white/90 text-emerald-700 inline-flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow-sm">
+                  <span className="absolute top-1 right-1 w-5 h-5 rounded bg-white/90 text-emerald-700 inline-flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow-sm pointer-events-none">
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                   </span>
-                </button>,
+                  {/* Top resize handle — small green pill, visible on hover. */}
+                  <span
+                    onPointerDown={(e) => startDrag(e, rule, "resize-top")}
+                    className="absolute left-1/2 -translate-x-1/2 -top-1 w-7 h-1.5 rounded bg-emerald-500/80 opacity-0 group-hover:opacity-100 transition cursor-ns-resize"
+                    title="Przeciągnij, aby zmienić godzinę startu"
+                  />
+                  {/* Bottom resize handle */}
+                  <span
+                    onPointerDown={(e) => startDrag(e, rule, "resize-bot")}
+                    className="absolute left-1/2 -translate-x-1/2 -bottom-1 w-7 h-1.5 rounded bg-emerald-500/80 opacity-0 group-hover:opacity-100 transition cursor-ns-resize"
+                    title="Przeciągnij, aby zmienić godzinę końca"
+                  />
+                </div>,
               );
             }
           });
