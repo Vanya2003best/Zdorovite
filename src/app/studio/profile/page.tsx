@@ -6,6 +6,7 @@ import CertificationsEditor from "./CertificationsEditor";
 import AvatarTile from "./AvatarTile";
 import QrSection from "./QrSection";
 import BasicForm from "./BasicForm";
+import ProfileSectionNav from "./ProfileSectionNav";
 import SpecializationsForm from "./SpecializationsForm";
 import LocationForm from "./LocationForm";
 import SocialForm from "./SocialForm";
@@ -244,6 +245,9 @@ export default async function StudioProfile() {
   });
 
   const social = (trainer.social ?? {}) as Record<string, string>;
+  const socialCount = ["instagram", "youtube", "tiktok", "facebook", "website"].filter(
+    (k) => !!social[k],
+  ).length;
 
   // Build the role/specialty subtitle the design shows under the name —
   // "Trener personalny · siłownia + funkcjonalny". Joins up to 2 of the
@@ -258,86 +262,106 @@ export default async function StudioProfile() {
 
   return (
     <div className="mx-auto max-w-[1280px] px-4 sm:px-8 py-5 sm:py-7">
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 items-start">
+      <ProfileSectionNav
+        counts={{
+          specializations: selectedSpecIds.length,
+          certifications: certs.length,
+          social: socialCount,
+        }}
+      />
+
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 items-start mt-4">
         <div className="min-w-0 space-y-4">
-          <BasicForm
-            avatarUrl={profile?.avatar_url ?? null}
-            avatarFocal={profile?.avatar_focal ?? null}
-            displayName={profile?.display_name ?? ""}
-            publicName={trainer.display_name ?? ""}
-            email={user.email ?? ""}
-            tagline={trainer.tagline ?? ""}
-            about={trainer.about ?? ""}
-            mission={trainer.mission ?? ""}
-            location={trainer.location ?? ""}
-            roleLine={roleLine}
-            experience={trainer.experience ?? 0}
-            rating={trainer.rating ?? 0}
-            reviewCount={trainer.review_count ?? 0}
-            avatarSlot={
-              <AvatarTile
-                currentUrl={profile?.avatar_url ?? null}
-                currentFocal={profile?.avatar_focal ?? null}
-                size="lg"
-              />
-            }
-          />
-
-          <SpecializationsForm
-            allSpecs={(allSpecs ?? []) as { id: string; label: string; icon: string }[]}
-            selected={selectedSpecIds}
-            clientGoals={trainer.client_goals ?? []}
-            suggestionSeed={trainer.about ?? trainer.tagline ?? ""}
-          />
-
-          <Card>
-            <CardHeader
-              title="Certyfikaty i dokumenty"
-              hint={`${certs.length} ${certs.length === 1 ? "certyfikat" : "certyfikatów"}`}
-              sub="Przesłane PDF/JPG widoczne tylko po weryfikacji. Klienci widzą tylko nazwę i rok."
+          <div id="podstawowe">
+            <BasicForm
+              avatarUrl={profile?.avatar_url ?? null}
+              avatarFocal={profile?.avatar_focal ?? null}
+              displayName={profile?.display_name ?? ""}
+              publicName={trainer.display_name ?? ""}
+              email={user.email ?? ""}
+              tagline={trainer.tagline ?? ""}
+              about={trainer.about ?? ""}
+              mission={trainer.mission ?? ""}
+              location={trainer.location ?? ""}
+              roleLine={roleLine}
+              experience={trainer.experience ?? 0}
+              rating={trainer.rating ?? 0}
+              reviewCount={trainer.review_count ?? 0}
+              avatarSlot={
+                <AvatarTile
+                  currentUrl={profile?.avatar_url ?? null}
+                  currentFocal={profile?.avatar_focal ?? null}
+                  size="lg"
+                />
+              }
             />
-            <p className="text-[12px] text-slate-500 mt-1 mb-4 leading-[1.55] max-w-[640px]">
-              Dodaj swoje certyfikaty z linkiem do publicznego rejestru wystawcy (np. EREPS, AWF) lub załącz
-              skan dyplomu. Na publicznej stronie obok każdego certyfikatu pojawi się badge weryfikacji,
-              który klient może kliknąć.
-            </p>
-            <CertificationsEditor certs={certs} />
-          </Card>
+          </div>
 
-          <LocationForm
-            location={trainer.location ?? ""}
-            city={trainer.city ?? ""}
-            district={trainer.district ?? ""}
-            workMode={trainer.work_mode ?? "both"}
-            travelRadiusKm={trainer.travel_radius_km ?? 15}
-          />
-
-          <Card>
-            <CardHeader
-              title="QR i udostępnianie"
-              sub="Wydrukuj kod QR na ulotkę, wizytówkę lub plakat w klubie. Każdy QR ma swoje źródło, więc widzisz w analityce skąd przyszedł klient."
+          <div id="specjalizacje">
+            <SpecializationsForm
+              allSpecs={(allSpecs ?? []) as { id: string; label: string; icon: string }[]}
+              selected={selectedSpecIds}
+              clientGoals={trainer.client_goals ?? []}
+              suggestionSeed={trainer.about ?? trainer.tagline ?? ""}
             />
-            <div className="mt-3">
-              <QrSection
-                trainerSlug={trainer.slug}
-                trainerName={profile?.display_name ?? ""}
-                origin={origin}
-                branches={branches}
+          </div>
+
+          <div id="certyfikaty">
+            <Card>
+              <CardHeader
+                title="Certyfikaty i dokumenty"
+                hint={`${certs.length} ${certs.length === 1 ? "certyfikat" : "certyfikatów"}`}
+                sub="Przesłane PDF/JPG widoczne tylko po weryfikacji. Klienci widzą tylko nazwę i rok."
               />
-            </div>
-          </Card>
+              <p className="text-[12px] text-slate-500 mt-1 mb-4 leading-[1.55] max-w-[640px]">
+                Dodaj swoje certyfikaty z linkiem do publicznego rejestru wystawcy (np. EREPS, AWF) lub załącz
+                skan dyplomu. Na publicznej stronie obok każdego certyfikatu pojawi się badge weryfikacji,
+                który klient może kliknąć.
+              </p>
+              <CertificationsEditor certs={certs} />
+            </Card>
+          </div>
 
-          <SocialForm
-            instagram={social.instagram ?? ""}
-            youtube={social.youtube ?? ""}
-            tiktok={social.tiktok ?? ""}
-            facebook={social.facebook ?? ""}
-            website={social.website ?? ""}
-            phone={profile?.phone ?? ""}
-            email={social.email ?? user.email ?? ""}
-          />
+          <div id="lokalizacja" className="space-y-4">
+            <LocationForm
+              location={trainer.location ?? ""}
+              city={trainer.city ?? ""}
+              district={trainer.district ?? ""}
+              workMode={trainer.work_mode ?? "both"}
+              travelRadiusKm={trainer.travel_radius_km ?? 15}
+            />
 
-          <PolicyTab slug={trainer.slug} />
+            <Card>
+              <CardHeader
+                title="QR i udostępnianie"
+                sub="Wydrukuj kod QR na ulotkę, wizytówkę lub plakat w klubie. Każdy QR ma swoje źródło, więc widzisz w analityce skąd przyszedł klient."
+              />
+              <div className="mt-3">
+                <QrSection
+                  trainerSlug={trainer.slug}
+                  trainerName={profile?.display_name ?? ""}
+                  origin={origin}
+                  branches={branches}
+                />
+              </div>
+            </Card>
+          </div>
+
+          <div id="social">
+            <SocialForm
+              instagram={social.instagram ?? ""}
+              youtube={social.youtube ?? ""}
+              tiktok={social.tiktok ?? ""}
+              facebook={social.facebook ?? ""}
+              website={social.website ?? ""}
+              phone={profile?.phone ?? ""}
+              email={social.email ?? user.email ?? ""}
+            />
+          </div>
+
+          <div id="polityka">
+            <PolicyTab slug={trainer.slug} />
+          </div>
         </div>
 
         {/* Right rail */}

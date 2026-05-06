@@ -22,7 +22,7 @@ export default function ProfileSideRail({
   const focal = (avatarFocal ?? "50% 30%").trim() || "50% 30%";
 
   return (
-    <aside className="space-y-4 xl:sticky xl:top-7">
+    <aside className="space-y-4 xl:sticky xl:top-[120px]">
       {/* Public preview tile */}
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
         <div className="px-5 py-3.5 flex items-center justify-between border-b border-slate-200">
