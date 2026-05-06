@@ -136,20 +136,29 @@ export const STUDIO_NAV: StudioNavItem[] = [
   // live preview). The hash triggers scroll-to-section in
   // EditorClient; no separate page state to manage.
   {
-    href: "/studio/design#services",
+    href: "/studio/uslugi",
     label: "Usługi",
     description: "Cennik pojedynczych sesji",
     group: "oferta",
     icon: BoltIcon,
-    match: () => false,
-  },
-  {
-    href: "/studio/design#packages",
-    label: "Pakiety",
-    description: "Wielorazowe pakiety sesji",
-    group: "oferta",
-    icon: PackageIcon,
-    match: () => false,
+    // Same screen as Pakiety + Promocje (mode-switched), so both
+    // entries highlight the same parent — sub-nav distinguishes them.
+    match: (p) =>
+      p.startsWith("/studio/uslugi") ||
+      p.startsWith("/studio/services") ||
+      p.startsWith("/studio/packages"),
+    subItems: [
+      {
+        href: "/studio/uslugi?mode=pakiety",
+        label: "Pakiety",
+        match: (search) => search.get("mode") === "pakiety",
+      },
+      {
+        href: "/studio/uslugi?mode=promocje",
+        label: "Promocje",
+        match: (search) => search.get("mode") === "promocje",
+      },
+    ],
   },
 
   // Komunikacja — messages + reviews.
