@@ -242,6 +242,11 @@ export default async function StudioProfile() {
     (k) => !!social[k],
   ).length;
 
+  const aiContext = (trainer.ai_context ?? {}) as AiContext;
+  const aiContextFilled = (
+    ["background", "targetAudience", "methodology", "differentiators", "tonePreference"] as const
+  ).filter((k) => (aiContext[k] ?? "").trim().length > 0).length;
+
   // Completion checklist for the right rail.
   const completion = computeCompletion({
     avatar: !!profile?.avatar_url,
@@ -251,12 +256,8 @@ export default async function StudioProfile() {
     pricing: false, // wired once a price_from / services count is queried
     gallery: galleryCount > 0,
     video: false, // tracked once trainers.video_url is on the row
+    aiContext: aiContextFilled,
   });
-
-  const aiContext = (trainer.ai_context ?? {}) as AiContext;
-  const aiContextFilled = (
-    ["background", "targetAudience", "methodology", "differentiators", "tonePreference"] as const
-  ).filter((k) => (aiContext[k] ?? "").trim().length > 0).length;
 
   // Build the role/specialty subtitle the design shows under the name —
   // "Trener personalny · siłownia + funkcjonalny". Joins up to 2 of the
@@ -393,6 +394,11 @@ function computeCompletion(flags: {
   pricing: boolean;
   gallery: boolean;
   video: boolean;
+  /** Number of filled AI-context fields out of 5. Threshold of 3+
+   *  marks the row as done — same "enough to be useful" bar that AI
+   *  generators on /studio/design use as a signal that the trainer
+   *  has given them real material to work with. */
+  aiContext: number;
 }): { pct: number; items: { label: string; done: boolean }[] } {
   const items = [
     { label: "Zdjęcie profilowe", done: flags.avatar },
@@ -402,6 +408,10 @@ function computeCompletion(flags: {
     { label: "Cennik i pakiety", done: flags.pricing },
     { label: "Galeria zdjęć (0/8)", done: flags.gallery },
     { label: "Wideo prezentujące", done: flags.video },
+    {
+      label: `Kontekst AI (${flags.aiContext}/5)`,
+      done: flags.aiContext >= 3,
+    },
   ];
   const done = items.filter((i) => i.done).length;
   const pct = Math.round((done / items.length) * 100);
