@@ -85,14 +85,27 @@ export default function WorkingHoursOverlay({
   };
   const dragRef = useRef<DragState | null>(null);
   const dragMovedRef = useRef(false);
-  const [dragPreview, setDragPreview] = useState<
-    | {
-        key: string;
-        startMin: number;
-        endMin: number;
-      }
-    | null
-  >(null);
+  type DragPreview = { key: string; startMin: number; endMin: number };
+  // Two-track state: ref for the document-level pointerup callback
+  // (closures captured when startDrag runs would otherwise see the
+  // initial null and skip the commit), state for triggering re-renders
+  // so the green wash follows the cursor.
+  const dragPreviewRef = useRef<DragPreview | null>(null);
+  const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
+  const setPreview = useCallback((p: DragPreview | null) => {
+    dragPreviewRef.current = p;
+    setDragPreview(p);
+  }, []);
+  // Mirror the freshest localRules into a ref too — same stale-closure
+  // story for the commit step.
+  const localRulesRef = useRef(localRules);
+  useEffect(() => {
+    localRulesRef.current = localRules;
+  }, [localRules]);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   const ruleKey = (r: WorkingHourRule) => `${r.dow}-${r.start}-${r.end}`;
   const minToHHMM = (min: number) => {
@@ -101,42 +114,45 @@ export default function WorkingHoursOverlay({
     return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
   };
 
-  const onDocPointerMove = useCallback((e: PointerEvent) => {
-    const d = dragRef.current;
-    if (!d) return;
-    const dy = e.clientY - d.startY;
-    if (Math.abs(dy) > 3) dragMovedRef.current = true;
-    // 30-min snap, 56px/hour → 28px/30min.
-    const dminUnsnapped = (dy / SLOT_HEIGHT_PER_HOUR) * 60;
-    const dmin = Math.round(dminUnsnapped / 30) * 30;
-    let newStart = d.origStartMin;
-    let newEnd = d.origEndMin;
-    if (d.mode === "move") {
-      newStart += dmin;
-      newEnd += dmin;
-    } else if (d.mode === "resize-top") {
-      newStart += dmin;
-    } else if (d.mode === "resize-bot") {
-      newEnd += dmin;
-    }
-    // Clamp + minimum 30-min length.
-    if (d.mode === "move") {
-      const span = d.origEndMin - d.origStartMin;
-      if (newStart < 0) {
-        newStart = 0;
-        newEnd = span;
+  const onDocPointerMove = useCallback(
+    (e: PointerEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const dy = e.clientY - d.startY;
+      if (Math.abs(dy) > 3) dragMovedRef.current = true;
+      // 30-min snap, 56px/hour → 28px/30min.
+      const dminUnsnapped = (dy / SLOT_HEIGHT_PER_HOUR) * 60;
+      const dmin = Math.round(dminUnsnapped / 30) * 30;
+      let newStart = d.origStartMin;
+      let newEnd = d.origEndMin;
+      if (d.mode === "move") {
+        newStart += dmin;
+        newEnd += dmin;
+      } else if (d.mode === "resize-top") {
+        newStart += dmin;
+      } else if (d.mode === "resize-bot") {
+        newEnd += dmin;
       }
-      if (newEnd > 24 * 60) {
-        newEnd = 24 * 60;
-        newStart = newEnd - span;
+      // Clamp + minimum 30-min length.
+      if (d.mode === "move") {
+        const span = d.origEndMin - d.origStartMin;
+        if (newStart < 0) {
+          newStart = 0;
+          newEnd = span;
+        }
+        if (newEnd > 24 * 60) {
+          newEnd = 24 * 60;
+          newStart = newEnd - span;
+        }
+      } else if (d.mode === "resize-top") {
+        newStart = Math.max(0, Math.min(newStart, d.origEndMin - 30));
+      } else if (d.mode === "resize-bot") {
+        newEnd = Math.max(d.origStartMin + 30, Math.min(newEnd, 24 * 60));
       }
-    } else if (d.mode === "resize-top") {
-      newStart = Math.max(0, Math.min(newStart, d.origEndMin - 30));
-    } else if (d.mode === "resize-bot") {
-      newEnd = Math.max(d.origStartMin + 30, Math.min(newEnd, 24 * 60));
-    }
-    setDragPreview({ key: d.key, startMin: newStart, endMin: newEnd });
-  }, []);
+      setPreview({ key: d.key, startMin: newStart, endMin: newEnd });
+    },
+    [setPreview],
+  );
 
   const onDocPointerUp = useCallback(() => {
     const d = dragRef.current;
@@ -146,24 +162,27 @@ export default function WorkingHoursOverlay({
     if (!d) return;
 
     if (!dragMovedRef.current) {
-      // Treat as a click — open the editor dialog. dragMovedRef has
-      // to reset before the click handler fires; useEffect-style
-      // microtask is enough.
-      setDragPreview(null);
+      // Treat as click — open the dialog for fine HH:MM edits.
+      setPreview(null);
       setEditingDow(d.dow);
       return;
     }
-    const preview = dragPreview;
-    setDragPreview(null);
-    if (!preview) return;
-    const next = localRules.map((r) =>
+    // Read from refs — the function handed to addEventListener back
+    // in startDrag would otherwise close over the initial state values.
+    const preview = dragPreviewRef.current;
+    if (!preview) {
+      setPreview(null);
+      return;
+    }
+    const next = localRulesRef.current.map((r) =>
       ruleKey(r) === preview.key
         ? { ...r, start: minToHHMM(preview.startMin), end: minToHHMM(preview.endMin) }
         : r,
     );
     setLocalRules(next);
-    onChange(next);
-  }, [dragPreview, localRules, onChange, onDocPointerMove]);
+    setPreview(null);
+    onChangeRef.current(next);
+  }, [onDocPointerMove, setPreview]);
 
   const startDrag = (e: React.PointerEvent, rule: WorkingHourRule, mode: DragMode) => {
     if (readOnly) return;

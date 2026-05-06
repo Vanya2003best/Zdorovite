@@ -239,10 +239,10 @@ export default function CalendarClient({
   }, [rulesState]);
 
   // Trim the empty hours above the trainer's earliest band so the
-  // calendar opens at the top of the work day, not at 6:00 with two
-  // hours of unused grid above. Also extends past the latest band if
-  // bookings sit outside the rules. Falls back to 06:00–23:00 if there
-  // are no rules and no bookings yet.
+  // calendar opens at the top of the work day. The first row of the
+  // grid is the hour the earliest rule (or booking) actually starts
+  // — no extra cushion above it. Falls back to 06:00 if there are
+  // no rules and no bookings yet.
   const slotMinTime = useMemo(() => {
     const ruleStarts = rulesState.map((r) => {
       const [h, m] = r.start.split(":").map(Number);
@@ -255,9 +255,7 @@ export default function CalendarClient({
     const candidates = [...ruleStarts, ...bookingStarts];
     if (candidates.length === 0) return "06:00:00";
     const minMin = Math.min(...candidates);
-    // Round down to the previous full hour and back off by 30 min so
-    // the first band has a little breathing room above it.
-    const hourFloor = Math.max(0, Math.floor((minMin - 30) / 60));
+    const hourFloor = Math.max(0, Math.floor(minMin / 60));
     return `${String(hourFloor).padStart(2, "0")}:00:00`;
   }, [rulesState, bookings]);
 
