@@ -230,15 +230,19 @@ export default function CalendarClient({
 
   // Weekly capacity: sum of working-hour minutes ÷ 60-min slot length.
   // Capped at 99% so a sparse week with no rules doesn't read 200%.
-  const weekUtilisation = useMemo(() => {
-    const weeklyMins = rulesState.reduce((acc, r) => {
+  const weeklyHours = useMemo(() => {
+    const mins = rulesState.reduce((acc, r) => {
       const [sh, sm] = r.start.split(":").map(Number);
       const [eh, em] = r.end.split(":").map(Number);
       return acc + Math.max(0, eh * 60 + em - (sh * 60 + sm));
     }, 0);
-    const cap = Math.max(1, Math.round(weeklyMins / 60));
+    return Math.round(mins / 60);
+  }, [rulesState]);
+
+  const weekUtilisation = useMemo(() => {
+    const cap = Math.max(1, weeklyHours);
     return Math.min(99, Math.round((weekBookings.length / cap) * 100));
-  }, [weekBookings.length, rulesState]);
+  }, [weekBookings.length, weeklyHours]);
 
   // Reset html { zoom: 1.1 } (set on >=1500px in globals.css) for the duration
   // of the calendar page. Same trick as /studio/design — without it 100vh-based
@@ -328,16 +332,30 @@ export default function CalendarClient({
     <div className="mx-auto max-w-[1280px] px-4 sm:px-8 pt-5 pb-8 grid gap-3">
       {/* Internal topbar — replaces the studio shell's StudioTopBar
           on /studio/calendar (hidden via StudioTopBarSlot). Title +
-          weekly KPIs on the left, action buttons on the right. */}
+          mode-specific KPI line on the left, action buttons on the
+          right. The primary CTA + subtitle adapt to mode so the
+          screen tells the trainer what they're looking at. */}
       <div className="flex items-start justify-between gap-4 flex-wrap mb-1">
         <div>
           <h1 className="text-[24px] sm:text-[26px] font-semibold tracking-[-0.022em] m-0">
             Kalendarz
           </h1>
           <p className="text-[12.5px] text-slate-500 mt-1">
-            {weekBookings.length} {weekBookings.length === 1 ? "sesja" : weekBookings.length < 5 ? "sesje" : "sesji"} w tym tygodniu
-            {weekRevenue > 0 && ` · ${weekRevenue.toLocaleString("pl-PL")} PLN przychodu`}
-            {weekUtilisation > 0 && ` · ${weekUtilisation}% wypełnienia`}
+            {mode === "pattern" ? (
+              <>
+                {weeklyHours} godz./tydz · profil &quot;Podstawowy&quot; aktywny
+              </>
+            ) : mode === "availability" ? (
+              <>
+                {weeklyHours} godz./tydz · {weekUtilisation}% wypełnienia · {Math.max(0, weeklyHours - weekBookings.length)} wolnych slotów w tygodniu
+              </>
+            ) : (
+              <>
+                {weekBookings.length} {weekBookings.length === 1 ? "sesja" : weekBookings.length < 5 ? "sesje" : "sesji"} w tym tygodniu
+                {weekRevenue > 0 && ` · ${weekRevenue.toLocaleString("pl-PL")} PLN przychodu`}
+                {weekUtilisation > 0 && ` · ${weekUtilisation}% wypełnienia`}
+              </>
+            )}
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -367,13 +385,19 @@ export default function CalendarClient({
           <button
             type="button"
             disabled
-            title="Wkrótce — tworzenie sesji ręcznie z kalendarza"
+            title={
+              mode === "pattern"
+                ? "Wkrótce — wiele okien w jednym dniu"
+                : mode === "availability"
+                  ? "Wkrótce — urlopy, święta, dodatkowe godziny"
+                  : "Wkrótce — tworzenie sesji ręcznie z kalendarza"
+            }
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[9px] bg-slate-900 text-white text-[12.5px] font-semibold disabled:opacity-60"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
               <path d="M12 5v14M5 12h14" />
             </svg>
-            Nowa sesja
+            {mode === "pattern" ? "Nowe okno" : mode === "availability" ? "Dodaj wyjątek" : "Nowa sesja"}
           </button>
         </div>
       </div>
@@ -489,20 +513,15 @@ export default function CalendarClient({
           dayHeaderFormat={{ weekday: "short", day: "numeric" }}
           dayHeaderContent={(arg) => {
             // Custom 3-line day header per design 32: tiny uppercase
-            // dow on top, big day number (today gets a filled circle),
-            // 'X sesje · Y wolne' subtitle. Y is the number of free
-            // hour-slots given the trainer's working hours that day.
+            // dow, big day number (today in a filled circle), and a
+            // mode-aware subtitle. In pattern mode we focus on the
+            // working-hour total ('X godz.') because the trainer is
+            // editing rules, not looking at sessions.
             const day = arg.date;
             const sameDay = (a: Date, b: Date) =>
               a.getFullYear() === b.getFullYear() &&
               a.getMonth() === b.getMonth() &&
               a.getDate() === b.getDate();
-            const sessionCount = bookings.filter(
-              (b) => sameDay(new Date(b.start), day) && b.status !== "cancelled",
-            ).length;
-            // Working-hour minutes for this day-of-week, summed across
-            // all rule windows. Free slots ≈ hours − sessions (assuming
-            // 1 session per hour, which matches design 32's defaults).
             const dow = day.getDay();
             const dayMins = rulesState
               .filter((r) => r.dow === dow)
@@ -511,27 +530,37 @@ export default function CalendarClient({
                 const [eh, em] = r.end.split(":").map(Number);
                 return acc + Math.max(0, eh * 60 + em - (sh * 60 + sm));
               }, 0);
-            const dayCapacity = Math.round(dayMins / 60);
-            const freeSlots = Math.max(0, dayCapacity - sessionCount);
+            const dayHours = Math.round(dayMins / 60);
+            const sessionCount = bookings.filter(
+              (b) => sameDay(new Date(b.start), day) && b.status !== "cancelled",
+            ).length;
+            const freeSlots = Math.max(0, dayHours - sessionCount);
+
             const isToday = sameDay(day, new Date());
             const dowShort = day.toLocaleDateString("pl-PL", { weekday: "short" }).toUpperCase().replace(".", "");
             const dayNum = day.getDate();
-            const sessionLabel =
-              sessionCount === 0
-                ? null
-                : `${sessionCount} ${sessionCount === 1 ? "sesja" : sessionCount < 5 ? "sesje" : "sesji"}`;
-            const freeLabel =
-              freeSlots === 0
-                ? null
-                : `${freeSlots} ${freeSlots === 1 ? "wolny" : freeSlots < 5 ? "wolne" : "wolnych"}`;
-            const subtitle =
-              sessionLabel && freeLabel
-                ? `${sessionLabel} · ${freeLabel}`
-                : sessionLabel
-                  ? sessionLabel
-                  : freeLabel
-                    ? freeLabel
-                    : "wolne";
+
+            let subtitle: string;
+            if (mode === "pattern") {
+              subtitle = dayHours === 0 ? "wolne" : `${dayHours} godz.`;
+            } else {
+              const sessionLabel =
+                sessionCount === 0
+                  ? null
+                  : `${sessionCount} ${sessionCount === 1 ? "sesja" : sessionCount < 5 ? "sesje" : "sesji"}`;
+              const freeLabel =
+                freeSlots === 0
+                  ? null
+                  : `${freeSlots} ${freeSlots === 1 ? "wolny" : freeSlots < 5 ? "wolne" : "wolnych"}`;
+              subtitle =
+                sessionLabel && freeLabel
+                  ? `${sessionLabel} · ${freeLabel}`
+                  : sessionLabel
+                    ? sessionLabel
+                    : freeLabel
+                      ? freeLabel
+                      : "wolne";
+            }
             return (
               <div className="py-1.5 flex flex-col items-center gap-0.5 leading-tight">
                 <span className={"text-[10.5px] font-semibold uppercase tracking-[0.06em] " + (isToday ? "text-slate-900" : "text-slate-500")}>
