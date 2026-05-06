@@ -134,29 +134,21 @@ export default function WorkingHoursOverlay({
             const top = minToY(startMin);
             const height = minToY(endMin) - top;
             if (readOnly) {
-              // Per design 32 .avail-band — clean wash with dashed
-              // top + bottom only (not all four sides), label sitting
-              // at bottom-left in uppercase. No diagonal stripes —
-              // the design relies on subtlety here so faded events
-              // (.35 opacity) read above the band as primary content.
+              // Per user request: no fill, no label — just two dashed
+              // emerald lines marking the start and end of the work
+              // window. The faded events read as primary content; the
+              // boundaries are an unobtrusive hint about availability.
               elements.push(
                 <div
                   key={`${col.date}-${idx}`}
-                  className="absolute left-0 right-0 pointer-events-none z-[1] flex items-end px-1.5 py-1"
+                  className="absolute left-0 right-0 pointer-events-none z-[1]"
                   style={{
                     top: `${top}px`,
                     height: `${height}px`,
-                    backgroundColor: "rgba(16, 185, 129, 0.08)",
-                    borderTop: "1px dashed rgba(16,185,129,0.5)",
-                    borderBottom: "1px dashed rgba(16,185,129,0.5)",
+                    borderTop: "1px dashed rgba(16,185,129,0.55)",
+                    borderBottom: "1px dashed rgba(16,185,129,0.55)",
                   }}
-                >
-                  {height > 24 && (
-                    <span className="text-[9.5px] font-semibold text-emerald-700 tabular-nums uppercase tracking-[0.06em]">
-                      {rule.start} — {rule.end} · wzorzec
-                    </span>
-                  )}
-                </div>,
+                />,
               );
             } else {
               elements.push(

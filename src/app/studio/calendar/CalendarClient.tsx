@@ -432,29 +432,29 @@ export default function CalendarClient({
       </div>
 
       {/* Filter pills — toggle service-type visibility on the grid.
-          Hidden for pattern mode (events suppressed entirely there). */}
+          Hidden for pattern mode (events suppressed entirely there).
+          Style follows design 32 .filt: dot + label only, no inline
+          count (the per-type breakdown lives in 'Tydzień w skrócie'). */}
       {mode !== "pattern" && (
-        <div className="flex items-center gap-2 flex-wrap px-1">
+        <div className="flex items-center gap-1.5 flex-wrap px-1">
           {allTypes.map((t) => {
             const cfg = TYPE_STYLE[t];
             const off = hiddenTypes.has(t);
-            const count = typeCounts[t];
             return (
               <button
                 key={t}
                 type="button"
                 onClick={() => toggleType(t)}
                 className={
-                  "inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-[11.5px] font-medium border transition " +
+                  "inline-flex items-center gap-1.5 h-[30px] px-2.5 rounded-[8px] text-[11.5px] font-medium border transition " +
                   (off
                     ? "bg-white text-slate-400 border-slate-200 line-through decoration-slate-300"
                     : "bg-white text-slate-700 border-slate-200 hover:border-slate-300")
                 }
                 title={off ? `Pokaż ${cfg.label}` : `Ukryj ${cfg.label}`}
               >
-                <span className="w-2 h-2 rounded-full" style={{ background: cfg.border }} />
+                <span className="w-[7px] h-[7px] rounded-full" style={{ background: cfg.border }} />
                 {cfg.label}
-                {count > 0 && <span className="text-slate-400 tabular-nums">{count}</span>}
               </button>
             );
           })}
@@ -484,22 +484,54 @@ export default function CalendarClient({
           slotMaxTime="23:00:00"
           slotDuration="00:30:00"
           slotLabelInterval="01:00"
-          slotLabelFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
+          slotLabelFormat={{ hour: "numeric", minute: "2-digit", hour12: false }}
           nowIndicator
           dayHeaderFormat={{ weekday: "short", day: "numeric" }}
           dayHeaderContent={(arg) => {
             // Custom 3-line day header per design 32: tiny uppercase
             // dow on top, big day number (today gets a filled circle),
-            // and a "X sesji" count below from the actual bookings.
+            // 'X sesje · Y wolne' subtitle. Y is the number of free
+            // hour-slots given the trainer's working hours that day.
             const day = arg.date;
             const sameDay = (a: Date, b: Date) =>
               a.getFullYear() === b.getFullYear() &&
               a.getMonth() === b.getMonth() &&
               a.getDate() === b.getDate();
-            const sessionCount = bookings.filter((b) => sameDay(new Date(b.start), day) && b.status !== "cancelled").length;
+            const sessionCount = bookings.filter(
+              (b) => sameDay(new Date(b.start), day) && b.status !== "cancelled",
+            ).length;
+            // Working-hour minutes for this day-of-week, summed across
+            // all rule windows. Free slots ≈ hours − sessions (assuming
+            // 1 session per hour, which matches design 32's defaults).
+            const dow = day.getDay();
+            const dayMins = rulesState
+              .filter((r) => r.dow === dow)
+              .reduce((acc, r) => {
+                const [sh, sm] = r.start.split(":").map(Number);
+                const [eh, em] = r.end.split(":").map(Number);
+                return acc + Math.max(0, eh * 60 + em - (sh * 60 + sm));
+              }, 0);
+            const dayCapacity = Math.round(dayMins / 60);
+            const freeSlots = Math.max(0, dayCapacity - sessionCount);
             const isToday = sameDay(day, new Date());
             const dowShort = day.toLocaleDateString("pl-PL", { weekday: "short" }).toUpperCase().replace(".", "");
             const dayNum = day.getDate();
+            const sessionLabel =
+              sessionCount === 0
+                ? null
+                : `${sessionCount} ${sessionCount === 1 ? "sesja" : sessionCount < 5 ? "sesje" : "sesji"}`;
+            const freeLabel =
+              freeSlots === 0
+                ? null
+                : `${freeSlots} ${freeSlots === 1 ? "wolny" : freeSlots < 5 ? "wolne" : "wolnych"}`;
+            const subtitle =
+              sessionLabel && freeLabel
+                ? `${sessionLabel} · ${freeLabel}`
+                : sessionLabel
+                  ? sessionLabel
+                  : freeLabel
+                    ? freeLabel
+                    : "wolne";
             return (
               <div className="py-1.5 flex flex-col items-center gap-0.5 leading-tight">
                 <span className={"text-[10.5px] font-semibold uppercase tracking-[0.06em] " + (isToday ? "text-slate-900" : "text-slate-500")}>
@@ -512,9 +544,7 @@ export default function CalendarClient({
                 ) : (
                   <span className="text-[17px] font-semibold tracking-[-0.015em] tabular-nums">{dayNum}</span>
                 )}
-                <span className="text-[10px] text-slate-500">
-                  {sessionCount === 0 ? "wolne" : `${sessionCount} ${sessionCount === 1 ? "sesja" : sessionCount < 5 ? "sesje" : "sesji"}`}
-                </span>
+                <span className="text-[10px] text-slate-500">{subtitle}</span>
               </div>
             );
           }}
