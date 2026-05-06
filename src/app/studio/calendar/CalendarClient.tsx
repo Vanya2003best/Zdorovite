@@ -442,10 +442,11 @@ export default function CalendarClient({
         .fc-event-main { padding: 0 !important; }
         .nz-booking { cursor: pointer; border-radius: 6px; overflow: hidden; }
         .nz-booking:hover { transform: translateY(-1px); transition: transform .15s; box-shadow: 0 4px 12px -2px rgba(2,6,23,0.15); }
-        /* Availability-mode events: faded so the green availability
-           wash reads as primary, but events stay visible as context. */
-        .nz-event-faded { opacity: .35; }
-        .nz-event-faded:hover { opacity: .55; transform: none !important; box-shadow: none !important; }
+        /* Availability-mode events: faded per design 32 (.3 opacity)
+           so the green availability wash reads as primary, but events
+           stay visible as context. */
+        .nz-event-faded { opacity: .3; }
+        .nz-event-faded:hover { opacity: .5; transform: none !important; box-shadow: none !important; }
         /* Now indicator — keep red, slightly thicker for visibility. */
         .fc-now-indicator-line { border-color: #ef4444 !important; border-width: 2px; }
         .fc-now-indicator-arrow { border-color: #ef4444 !important; }

@@ -134,22 +134,26 @@ export default function WorkingHoursOverlay({
             const top = minToY(startMin);
             const height = minToY(endMin) - top;
             if (readOnly) {
+              // Per design 32 .avail-band — clean wash with dashed
+              // top + bottom only (not all four sides), label sitting
+              // at bottom-left in uppercase. No diagonal stripes —
+              // the design relies on subtlety here so faded events
+              // (.35 opacity) read above the band as primary content.
               elements.push(
                 <div
                   key={`${col.date}-${idx}`}
-                  className="absolute left-0.5 right-0.5 rounded-sm pointer-events-none z-[1]"
+                  className="absolute left-0 right-0 pointer-events-none z-[1] flex items-end px-1.5 py-1"
                   style={{
                     top: `${top}px`,
                     height: `${height}px`,
-                    backgroundColor: "rgba(16, 185, 129, 0.18)",
-                    backgroundImage:
-                      "repeating-linear-gradient(45deg, rgba(16,185,129,0.0) 0, rgba(16,185,129,0.0) 6px, rgba(16,185,129,0.08) 6px, rgba(16,185,129,0.08) 12px)",
-                    border: "1px dashed rgba(16,185,129,0.5)",
+                    backgroundColor: "rgba(16, 185, 129, 0.08)",
+                    borderTop: "1px dashed rgba(16,185,129,0.5)",
+                    borderBottom: "1px dashed rgba(16,185,129,0.5)",
                   }}
                 >
-                  {height > 30 && (
-                    <span className="absolute top-1 left-1.5 text-[10px] font-semibold text-emerald-900 tabular-nums opacity-80">
-                      {rule.start}–{rule.end} · wzorzec
+                  {height > 24 && (
+                    <span className="text-[9.5px] font-semibold text-emerald-700 tabular-nums uppercase tracking-[0.06em]">
+                      {rule.start} — {rule.end} · wzorzec
                     </span>
                   )}
                 </div>,
