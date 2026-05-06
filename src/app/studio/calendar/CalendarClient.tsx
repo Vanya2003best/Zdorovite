@@ -18,7 +18,6 @@ import {
 import { saveAvailabilityRules } from "@/app/studio/availability/actions";
 import WorkingHoursOverlay from "./WorkingHoursOverlay";
 import {
-  ModeBanner,
   ModeSwitcher,
   PatternSaveBar,
   PatternSummaryPanel,
@@ -141,23 +140,6 @@ export default function CalendarClient({
   const onCancelPattern = useCallback(() => {
     setRulesState(rules);
   }, [rules]);
-
-  // Free-slot estimate for the availability-mode banner. Same heuristic as
-  // /studio/availability had: weekly-hours × 4 (15-min grid) × 2 weeks
-  // minus the bookings already on the books in that window.
-  const freeSlots14d = useMemo(() => {
-    const weeklyMins = rulesState.reduce((acc, r) => {
-      const [sh, sm] = r.start.split(":").map(Number);
-      const [eh, em] = r.end.split(":").map(Number);
-      return acc + Math.max(0, eh * 60 + em - (sh * 60 + sm));
-    }, 0);
-    const slots = Math.round((weeklyMins / 60) * 2 * 2); // 30-min slots × 2 weeks
-    const futureBookings = bookings.filter((b) => {
-      const t = new Date(b.start).getTime();
-      return t >= Date.now() && t < Date.now() + 14 * 86400000 && b.status !== "cancelled";
-    }).length;
-    return Math.max(0, slots - futureBookings);
-  }, [rulesState, bookings]);
 
   const futureBookingsCount = useMemo(
     () => bookings.filter((b) => new Date(b.start).getTime() >= Date.now() && b.status !== "cancelled").length,
@@ -305,9 +287,6 @@ export default function CalendarClient({
           ))}
         </div>
       </div>
-
-      {/* Mode-contextual banner */}
-      <ModeBanner mode={mode} freeSlots14d={freeSlots14d} />
 
       {/* Pattern mode 7-day summary above the grid */}
       {mode === "pattern" && <PatternSummaryPanel rules={rulesState} />}
