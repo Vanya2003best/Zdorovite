@@ -114,10 +114,13 @@ const ZDROFIT_WROCLAW_BRANCHES = [
 
 async function main() {
   // 1. Upsert chains
+  // status: 'active' — curated seed rows must be publicly readable; the
+  // 'pending' default from migration 022 is for self-registered clubs
+  // awaiting moderation, and RLS hides those from anon.
   for (const chain of CHAINS) {
     const { error } = await admin
       .from("gym_chains")
-      .upsert(chain, { onConflict: "slug" });
+      .upsert({ ...chain, status: "active" }, { onConflict: "slug" });
     if (error) {
       console.error(`✗ chain ${chain.slug}: ${error.message}`);
       continue;
@@ -141,7 +144,7 @@ async function main() {
     const { error } = await admin
       .from("gym_branches")
       .upsert(
-        { ...branch, chain_id: zdrofit.id, city: "Wrocław" },
+        { ...branch, chain_id: zdrofit.id, city: "Wrocław", status: "active" },
         { onConflict: "chain_id,slug" },
       );
     if (error) {
