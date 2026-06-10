@@ -128,21 +128,22 @@ async function loadTrainerContextString(userId: string): Promise<string> {
   // This is the strongest signal we have for tone + audience + angle, so
   // it goes ABOVE the auto-generated about. Generators are explicitly told
   // to prioritise this over guessing from past content.
-  const ai = (trainer?.ai_context ?? {}) as {
+  type AiContext = {
     background?: string;
     targetAudience?: string;
     methodology?: string;
     differentiators?: string;
     tonePreference?: string;
   };
-  const aiLabels: Record<string, string> = {
+  const ai = (trainer?.ai_context ?? {}) as AiContext;
+  const aiLabels: Record<keyof AiContext, string> = {
     background: "HISTORIA / WYKSZTAŁCENIE",
     targetAudience: "GRUPA DOCELOWA",
     methodology: "METODA / JAK WYGLĄDA WSPÓŁPRACA",
     differentiators: "CZYM SIĘ WYRÓŻNIA",
     tonePreference: "STYL / TON KOMUNIKACJI",
   };
-  const aiKeys = Object.keys(aiLabels) as (keyof typeof aiLabels)[];
+  const aiKeys = Object.keys(aiLabels) as (keyof AiContext)[];
   const hasAnyAi = aiKeys.some((k) => (ai[k] ?? "").trim().length > 0);
   if (hasAnyAi) {
     lines.push("");

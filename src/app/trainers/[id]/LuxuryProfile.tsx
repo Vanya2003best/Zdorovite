@@ -221,7 +221,7 @@ export default function LuxuryProfile({
             </div>
             <nav className="hidden @[1024px]:flex gap-8 text-[13px] text-[#3a3730] tracking-[0.02em]">
               <a href="#about" className="hover:text-[#8a7346] transition">{t("navAbout", "Filozofia")}</a>
-              <a href="#cases" className="hover:text-[#8a7346] transition">{t("navCases", "Kejsy")}</a>
+              <a href="#cases" className="hover:text-[#8a7346] transition">{t("navCases", "Cases")}</a>
               <a href="#services" className="hover:text-[#8a7346] transition">{t("navServices", "Usługi")}</a>
               <a href="#packages" className="hover:text-[#8a7346] transition">{t("navPackages", "Programy")}</a>
               <a href="#certifications" className="hover:text-[#8a7346] transition">{t("navCertifications", "Akredytacje")}</a>
@@ -647,7 +647,7 @@ export default function LuxuryProfile({
                       ))}
                     </ul>
                     <Link
-                      href={`/trainers/${trainer.id}/book`}
+                      href={`/trainers/${trainer.id}/checkout/${pkg.id}`}
                       className={`mt-auto inline-flex items-center justify-center h-12 px-6 text-[12px] tracking-[0.18em] uppercase font-medium transition ${
                         featured
                           ? "bg-[#fbf8f1] text-[#1c1a15] hover:bg-[#b39668] hover:text-[#fbf8f1]"

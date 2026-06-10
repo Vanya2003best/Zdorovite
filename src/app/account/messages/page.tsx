@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireClient } from "@/lib/auth";
 import { getRescheduleRequestsByIds, type RescheduleRequest } from "@/lib/db/reschedule";
 import MessagesClient from "./MessagesClient";
+import TrainerContextPanel, { type ActivePackage } from "./TrainerContextPanel";
 import { markThreadRead } from "./actions";
 
 type RawMsg = {
@@ -99,6 +100,23 @@ export default async function MessagesPage(props: {
 
   let conversation: ConversationMessage[] = [];
   let activeOther: { id: string; name: string; avatar: string | null } | null = null;
+  let trainerContext: {
+    slug: string | null;
+    tagline: string | null;
+    location: string | null;
+    rating: number | null;
+    reviewCount: number;
+  } | null = null;
+  let firstBookingAt: string | null = null;
+  let upcoming: {
+    start_time: string;
+    service_name: string | null;
+    package_name: string | null;
+    service: { name: string | null } | null;
+    package: { name: string | null } | null;
+  } | null = null;
+  let totalBookings = 0;
+  let activePackage: ActivePackage | null = null;
   if (withId) {
     const { data: conv } = await supabase
       .from("messages")
@@ -141,13 +159,94 @@ export default async function MessagesPage(props: {
         activeOther = { id: p.id, name: p.display_name, avatar: p.avatar_url };
       }
     }
+
+    // Right-rail context: load trainer profile bits + bookings between us
+    // for the "Twój trener od X · 5 sesji razem · pakiet 4/8" panel.
+    const [{ data: trRow }, { data: bks }, { count }] = await Promise.all([
+      supabase
+        .from("trainers")
+        .select("id, slug, tagline, location, rating, review_count")
+        .eq("id", withId)
+        .maybeSingle(),
+      supabase
+        .from("bookings")
+        .select("start_time, service_name, package_name, package_id, status, service:services(name), package:packages(name, sessions_total, price)")
+        .eq("trainer_id", withId)
+        .eq("client_id", me)
+        .neq("status", "cancelled")
+        .order("start_time", { ascending: true }),
+      supabase
+        .from("bookings")
+        .select("id", { count: "exact", head: true })
+        .eq("trainer_id", withId)
+        .eq("client_id", me)
+        .neq("status", "cancelled"),
+    ]);
+
+    if (trRow) {
+      trainerContext = {
+        slug: trRow.slug ?? null,
+        tagline: trRow.tagline ?? null,
+        location: trRow.location ?? null,
+        rating: Number(trRow.rating ?? 0) || null,
+        reviewCount: Number(trRow.review_count ?? 0),
+      };
+    }
+    totalBookings = count ?? 0;
+
+    type BookRow = {
+      start_time: string;
+      service_name: string | null;
+      package_name: string | null;
+      package_id: string | null;
+      status: string;
+      service: { name: string | null } | null;
+      package: { name: string | null; sessions_total: number | null; price: number } | null;
+    };
+    const bookRows = (bks ?? []) as unknown as BookRow[];
+    if (bookRows.length > 0) {
+      firstBookingAt = bookRows[0].start_time;
+      const nowIso = new Date().toISOString();
+      const next = bookRows.find((b) => b.start_time >= nowIso);
+      if (next) {
+        upcoming = {
+          start_time: next.start_time,
+          service_name: next.service_name,
+          package_name: next.package_name,
+          service: next.service,
+          package: next.package ? { name: next.package.name } : null,
+        };
+      }
+
+      // Active package — pick the package_id with the most bookings.
+      const pkgGroups = new Map<string, { name: string; total: number | null; done: number }>();
+      const DONE = ["completed", "paid"];
+      for (const r of bookRows) {
+        if (!r.package_id || !r.package) continue;
+        const cur = pkgGroups.get(r.package_id);
+        if (cur) {
+          if (DONE.includes(r.status)) cur.done += 1;
+        } else {
+          pkgGroups.set(r.package_id, {
+            name: r.package.name ?? "Pakiet",
+            total: r.package.sessions_total,
+            done: DONE.includes(r.status) ? 1 : 0,
+          });
+        }
+      }
+      const topPkg = Array.from(pkgGroups.values()).sort((a, b) => b.done - a.done)[0];
+      if (topPkg && topPkg.total) {
+        activePackage = { name: topPkg.name, done: topPkg.done, total: topPkg.total };
+      }
+    }
   }
 
   return (
-    <div className="grid md:grid-cols-[360px_1fr] md:max-w-[1280px] md:mx-auto md:my-6 md:px-6 md:gap-5 min-h-[calc(100dvh-64px-96px)] md:min-h-[calc(100dvh-64px-48px)]">
+    <div className="h-[calc(100dvh-64px-84px)] lg:h-[calc(100dvh-56px)] flex flex-col bg-white border-y lg:border border-slate-200 lg:rounded-2xl lg:mx-7 overflow-hidden">
+      <div className="grid sm:grid-cols-[320px_1fr] lg:grid-cols-[320px_1fr_320px] flex-1 min-h-0 overflow-hidden">
       {/* Inbox — hidden on mobile when a thread is open */}
       <aside
-        className={`${withId ? "hidden md:flex" : "flex"} flex-col bg-white md:border md:border-slate-200 md:rounded-2xl overflow-hidden`}
+        className={`${withId ? "hidden sm:flex" : "flex"} flex-col bg-white border-r border-slate-100 overflow-hidden`}
       >
         {/* Inbox top */}
         <header className="px-4 md:px-5 pt-2 md:pt-4 pb-3.5 border-b border-slate-100">
@@ -272,7 +371,7 @@ export default async function MessagesPage(props: {
 
       {/* Conversation panel */}
       <section
-        className={`${withId ? "flex" : "hidden md:flex"} flex-col min-w-0 bg-white md:border md:border-slate-200 md:rounded-2xl overflow-hidden`}
+        className={`${withId ? "flex" : "hidden sm:flex"} min-w-0 flex-col bg-[linear-gradient(180deg,#fafbfc,#fff)]`}
       >
         {activeOther ? (
           <MessagesClient myId={me} other={activeOther} initialMessages={conversation} />
@@ -286,6 +385,24 @@ export default async function MessagesPage(props: {
           </div>
         )}
       </section>
+
+      {/* RIGHT: trainer context (lg+ only, when a thread is active) */}
+      {activeOther && (
+        <TrainerContextPanel
+          trainerSlug={trainerContext?.slug ?? null}
+          name={activeOther.name}
+          avatar={activeOther.avatar}
+          tagline={trainerContext?.tagline ?? null}
+          location={trainerContext?.location ?? null}
+          rating={trainerContext?.rating ?? null}
+          reviewCount={trainerContext?.reviewCount ?? 0}
+          firstBookingAt={firstBookingAt}
+          upcoming={upcoming}
+          totalBookings={totalBookings}
+          activePackage={activePackage}
+        />
+      )}
+      </div>
     </div>
   );
 }

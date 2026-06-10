@@ -60,7 +60,7 @@ const CHAINS = [
     slug: "justgym",
     name: "Just Gym",
     brand_color: "#1a1a1a",
-    website: null,
+    website: "",
   },
 ];
 

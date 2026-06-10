@@ -22,7 +22,7 @@ type Size = "sm" | "lg";
 
 const SIZE_CLASSES: Record<Size, string> = {
   sm: "w-16 h-16 rounded-2xl",
-  lg: "w-[110px] h-[110px] rounded-full",
+  lg: "w-[160px] h-[160px] rounded-full",
 };
 
 export default function AvatarTile({

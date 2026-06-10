@@ -6,21 +6,21 @@ import { getAvailableSlots } from "@/lib/db/availability";
 import { warsawDateOffset } from "@/lib/time";
 import BookingForm from "./BookingForm";
 
-type SP = Promise<{ date?: string; service?: string }>;
+type SP = Promise<{ date?: string; service?: string; package?: string }>;
 
 export default async function BookPage(props: {
   params: Promise<{ id: string }>;
   searchParams: SP;
 }) {
   const { id } = await props.params;
-  const { date: dateParam, service: serviceParam } = await props.searchParams;
+  const { date: dateParam, service: serviceParam, package: packageParam } = await props.searchParams;
 
   const trainer = await getTrainerBySlug(id);
   if (!trainer) notFound();
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect(`/login?next=/trainers/${id}/book`);
+  if (!user) redirect(`/login?next=/trainers/${id}/book${packageParam ? `?package=${packageParam}` : ""}`);
 
   const { data: trainerRow } = await supabase
     .from("trainers")
@@ -39,6 +39,33 @@ export default async function BookPage(props: {
       duration: s.duration,
       price: s.price,
     }));
+
+  // Optional package context — when ?package=<id> is provided we load the
+  // package, render a banner on the booking form, and persist package_id on
+  // the booking row. The trainer can later create more sessions under the
+  // same package via /studio/bookings.
+  let packageContext: {
+    id: string;
+    name: string;
+    sessionsTotal: number | null;
+    pricePerSession: number | null;
+  } | null = null;
+  if (packageParam) {
+    const { data: pkg } = await supabase
+      .from("packages")
+      .select("id, name, price, sessions_total")
+      .eq("id", packageParam)
+      .eq("trainer_id", trainerRow.id)
+      .maybeSingle();
+    if (pkg) {
+      packageContext = {
+        id: pkg.id,
+        name: pkg.name,
+        sessionsTotal: pkg.sessions_total,
+        pricePerSession: pkg.sessions_total && pkg.sessions_total > 0 ? Math.round(pkg.price / pkg.sessions_total) : null,
+      };
+    }
+  }
 
   const today = warsawDateOffset(0);
   const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : today;
@@ -69,6 +96,7 @@ export default async function BookPage(props: {
           initialServiceId={serviceParam && services.some((s) => s.id === serviceParam) ? serviceParam : undefined}
           initialDate={date}
           initialSlots={initialSlots}
+          packageContext={packageContext}
         />
       )}
     </div>

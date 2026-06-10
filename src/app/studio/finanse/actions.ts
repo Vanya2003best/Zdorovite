@@ -5,7 +5,9 @@ import { revalidatePath } from "next/cache";
 
 export type PaymentMethod = "blik" | "cash" | "transfer" | "package" | "platform";
 
-export type ActionResult = { ok: true } | { error: string };
+export type ActionResult = { ok: true; data?: unknown } | { error: string };
+
+const DEFAULT_ERROR = "Coś poszło nie tak. Spróbuj ponownie.";
 
 const VALID_METHODS: ReadonlySet<PaymentMethod> = new Set([
   "blik",
@@ -18,82 +20,102 @@ const VALID_METHODS: ReadonlySet<PaymentMethod> = new Set([
 /**
  * Mark a booking as paid. Trainer-initiated for off-platform methods
  * (BLIK / cash / pakiet); the 'platform' method will be auto-set by
- * the Stripe webhook in P7 — manual marking is allowed there too as
+ * the Stripe webhook in P7 - manual marking is allowed there too as
  * a fallback if the webhook lags.
  *
  * Amount defaults to the booking's stored price (snapshot if available,
  * else live service price). For 'platform' method the trainer mental
- * model still says "I got the price" — the +1 zł lives only on the
+ * model still says "I got the price" - the +1 zl lives only on the
  * client side, doesn't show up here.
  */
 export async function markBookingPaid(
   bookingId: string,
   method: PaymentMethod,
 ): Promise<ActionResult> {
-  if (!VALID_METHODS.has(method)) return { error: "Nieprawidłowa metoda płatności." };
+  try {
+    if (typeof bookingId !== "string" || bookingId.trim().length === 0) {
+      return { error: "Brak id rezerwacji." };
+    }
+    if (typeof method !== "string" || !VALID_METHODS.has(method as PaymentMethod)) {
+      return { error: "Nieprawidłowa metoda płatności." };
+    }
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Niezalogowany." };
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Niezalogowany." };
 
-  // Pull the booking to determine amount. Snapshot fields (migration 018)
-  // preferred — service may have been deleted by the time we mark paid.
-  const { data: booking } = await supabase
-    .from("bookings")
-    .select("id, trainer_id, price, service_price")
-    .eq("id", bookingId)
-    .eq("trainer_id", user.id)
-    .maybeSingle();
+    // Pull the booking to determine amount. Snapshot fields (migration 018)
+    // preferred - service may have been deleted by the time we mark paid.
+    const { data: booking, error: readError } = await supabase
+      .from("bookings")
+      .select("id, trainer_id, price, service_price")
+      .eq("id", bookingId)
+      .eq("trainer_id", user.id)
+      .maybeSingle();
+    if (readError) return { error: readError.message };
 
-  if (!booking) return { error: "Rezerwacja nie istnieje." };
+    if (!booking) return { error: "Rezerwacja nie istnieje." };
 
-  // Reconcile price columns — older bookings have only `price`, newer
-  // ones have snapshot `service_price` from migration 018.
-  type BookingShape = { price?: number; service_price?: number };
-  const b = booking as unknown as BookingShape;
-  const amount = b.service_price ?? b.price ?? 0;
+    // Reconcile price columns - older bookings have only `price`, newer
+    // ones have snapshot `service_price` from migration 018.
+    type BookingShape = { price?: number; service_price?: number };
+    const b = booking as unknown as BookingShape;
+    const amount = b.service_price ?? b.price ?? 0;
 
-  const { error } = await supabase
-    .from("bookings")
-    .update({
-      payment_status: "paid",
-      payment_method: method,
-      paid_at: new Date().toISOString(),
-      payment_amount: amount,
-    })
-    .eq("id", bookingId)
-    .eq("trainer_id", user.id);
-  if (error) return { error: error.message };
+    const { error } = await supabase
+      .from("bookings")
+      .update({
+        payment_status: "paid",
+        payment_method: method,
+        paid_at: new Date().toISOString(),
+        payment_amount: amount,
+      })
+      .eq("id", bookingId)
+      .eq("trainer_id", user.id);
+    if (error) return { error: error.message };
 
-  revalidatePath("/studio/finanse");
-  revalidatePath("/studio");
-  revalidatePath("/studio/bookings");
-  return { ok: true };
+    revalidatePath("/studio/finanse");
+    revalidatePath("/studio");
+    revalidatePath("/studio/bookings");
+    return { ok: true };
+  } catch (err) {
+    console.error("markBookingPaid failed", err);
+    return { error: DEFAULT_ERROR };
+  }
 }
 
 /**
- * Reverse a paid mark — useful if trainer clicked the wrong method or
+ * Reverse a paid mark - useful if trainer clicked the wrong method or
  * the client charged back. Resets to pending; admin can later upgrade
  * to 'refunded' if money actually flowed and went back.
  */
 export async function unmarkBookingPaid(bookingId: string): Promise<ActionResult> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Niezalogowany." };
+  try {
+    if (typeof bookingId !== "string" || bookingId.trim().length === 0) {
+      return { error: "Brak id rezerwacji." };
+    }
 
-  const { error } = await supabase
-    .from("bookings")
-    .update({
-      payment_status: "pending",
-      payment_method: null,
-      paid_at: null,
-      payment_amount: null,
-    })
-    .eq("id", bookingId)
-    .eq("trainer_id", user.id);
-  if (error) return { error: error.message };
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Niezalogowany." };
 
-  revalidatePath("/studio/finanse");
-  revalidatePath("/studio");
-  return { ok: true };
+    const { error } = await supabase
+      .from("bookings")
+      .update({
+        payment_status: "pending",
+        payment_method: null,
+        paid_at: null,
+        payment_amount: null,
+      })
+      .eq("id", bookingId)
+      .eq("trainer_id", user.id);
+    if (error) return { error: error.message };
+
+    revalidatePath("/studio/finanse");
+    revalidatePath("/studio");
+    return { ok: true };
+  } catch (err) {
+    console.error("unmarkBookingPaid failed", err);
+    return { error: DEFAULT_ERROR };
+  }
 }

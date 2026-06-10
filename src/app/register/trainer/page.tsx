@@ -12,7 +12,7 @@ export default async function TrainerRegisterPage() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 min-h-[100dvh] bg-slate-100">
       {/* ============ LEFT: emerald brand panel ============ */}
-      <aside className="relative hidden lg:flex flex-col justify-between p-9 lg:p-11 text-white overflow-hidden bg-[radial-gradient(120%_120%_at_0%_0%,#047857_0%,#065f46_60%,#022c22_100%)]">
+      <aside className="relative hidden lg:flex flex-col p-7 lg:p-8 text-white overflow-hidden lg:sticky lg:top-0 lg:h-[91dvh] lg:self-start bg-[radial-gradient(120%_120%_at_0%_0%,#047857_0%,#065f46_60%,#022c22_100%)]">
         {/* Glow */}
         <div className="pointer-events-none absolute inset-0 [background:radial-gradient(60%_50%_at_80%_30%,rgba(16,185,129,0.4),transparent_70%)]" />
         <div className="pointer-events-none absolute right-[-100px] bottom-[-80px] w-80 h-80 rounded-full [background:radial-gradient(circle,rgba(110,231,183,0.3),transparent_70%)]" />
@@ -27,27 +27,28 @@ export default async function TrainerRegisterPage() {
           </Link>
         </div>
 
-        {/* Middle: pitch */}
+        {/* Middle: pitch — centered in the space between logo and stats. */}
+        <div className="flex-1 flex flex-col justify-center mt-6">
         <div className="relative z-[2] max-w-[440px]">
-          <div className="text-[12px] tracking-[0.12em] uppercase font-semibold opacity-80 mb-3.5">
+          <div className="text-[11px] tracking-[0.12em] uppercase font-semibold opacity-80 mb-2.5">
             Dla trenerów
           </div>
-          <h2 className="text-[32px] sm:text-[36px] leading-[1.08] tracking-[-0.025em] font-semibold m-0 mb-4">
+          <h2 className="text-[26px] sm:text-[30px] leading-[1.08] tracking-[-0.025em] font-semibold m-0 mb-2.5">
             Twój gabinet zawsze otwarty.
           </h2>
-          <p className="text-sm leading-relaxed opacity-85 max-w-[360px] mb-7">
+          <p className="text-[13px] leading-relaxed opacity-85 max-w-[360px] mb-3.5">
             Zbuduj profil w 15 minut. Wybierz jeden z 7 szablonów. Zacznij przyjmować rezerwacje
             jeszcze dziś — bez prowizji od pierwszej sesji.
           </p>
-          <div className="grid gap-3">
+          <div className="grid gap-2.5">
             {[
               ["Bez prowizji przez 30 dni", "Plan Free do 3 klientów. Bez karty."],
               ["6 szablonów profilu", "Premium i Cozy darmowe, Cinematic / Luxury / Studio / Signature w planie PRO."],
               ["Płatności i rezerwacje", "BLIK, karta, Przelewy24. Pieniądze następnego dnia."],
             ].map(([title, desc]) => (
-              <div key={title} className="flex gap-3 items-start text-[13px] leading-[1.45]">
-                <span className="min-w-[26px] h-[26px] rounded-lg bg-white/[0.16] inline-flex items-center justify-center shrink-0">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+              <div key={title} className="flex gap-2.5 items-start text-[12.5px] leading-[1.4]">
+                <span className="min-w-[22px] h-[22px] rounded-lg bg-white/[0.16] inline-flex items-center justify-center shrink-0 mt-px">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
                     <path d="M20 6L9 17l-5-5" />
                   </svg>
                 </span>
@@ -59,20 +60,21 @@ export default async function TrainerRegisterPage() {
             ))}
           </div>
         </div>
+        </div>
 
-        {/* Bottom: stats */}
-        <div className="relative z-[2] flex gap-7 flex-wrap">
+        {/* Bottom: stats — pinned to the bottom of the aside. */}
+        <div className="relative z-[2] flex gap-5 flex-wrap">
           <div>
-            <div className="text-[22px] font-bold tracking-[-0.02em]">2 412</div>
-            <div className="text-[11px] opacity-70 tracking-wider uppercase mt-0.5">Trenerów na platformie</div>
+            <div className="text-[19px] font-bold tracking-[-0.02em]">2 412</div>
+            <div className="text-[10px] opacity-70 tracking-wider uppercase mt-0.5">Trenerów na platformie</div>
           </div>
           <div>
-            <div className="text-[22px] font-bold tracking-[-0.02em]">38k</div>
-            <div className="text-[11px] opacity-70 tracking-wider uppercase mt-0.5">Sesji w 2026</div>
+            <div className="text-[19px] font-bold tracking-[-0.02em]">38k</div>
+            <div className="text-[10px] opacity-70 tracking-wider uppercase mt-0.5">Sesji w 2026</div>
           </div>
           <div>
-            <div className="text-[22px] font-bold tracking-[-0.02em]">4,89★</div>
-            <div className="text-[11px] opacity-70 tracking-wider uppercase mt-0.5">Średnia ocena</div>
+            <div className="text-[19px] font-bold tracking-[-0.02em]">4,89★</div>
+            <div className="text-[10px] opacity-70 tracking-wider uppercase mt-0.5">Średnia ocena</div>
           </div>
         </div>
       </aside>

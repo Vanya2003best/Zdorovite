@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { computeOnboarding } from "./start/onboarding-checklist";
+import StudioPulpitModeBar from "./StudioPulpitModeBar";
+import StudioPulpitEmptyMode from "./StudioPulpitEmptyMode";
+import StudioPulpitGrowthMode from "./StudioPulpitGrowthMode";
+
+type Mode = "empty" | "working" | "growth";
 
 type RecentBooking = {
   id: string;
@@ -32,10 +36,19 @@ type RecentReview = {
   author: { display_name: string | null; avatar_url: string | null } | null;
 };
 
-export default async function StudioHome() {
+export default async function StudioHome({
+  searchParams,
+}: {
+  searchParams?: Promise<{ mode?: string }>;
+}) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio");
+
+  // Mode = explicit ?mode= or auto-pick by trainer state. Computed
+  // after we know the services + bookings counts below, so we keep this
+  // initial value as a sentinel and override later.
+  const requestedMode = (await searchParams)?.mode;
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -48,6 +61,8 @@ export default async function StudioHome() {
     .select("slug, rating, review_count, published")
     .eq("id", user.id)
     .maybeSingle();
+
+  if (!trainer) redirect("/studio/start");
 
   const now = new Date();
   const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
@@ -71,6 +86,8 @@ export default async function StudioHome() {
     unreadMessagesRes,
     recentMessagesRes,
     pendingReviewsRes,
+    pastUnfinalizedRes,
+    reschedulesRes,
   ] = await Promise.all([
     supabase
       .from("bookings")
@@ -157,6 +174,18 @@ export default async function StudioHome() {
       .is("reply_text", null)
       .order("created_at", { ascending: false })
       .limit(2),
+    // Past sessions still in confirmed/paid (need Zakończona / Nieobecność).
+    supabase
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("trainer_id", user.id)
+      .in("status", ["confirmed", "paid"])
+      .lt("end_time", now.toISOString()),
+    // Pending reschedule proposals from clients (where requested_by !== trainer).
+    supabase
+      .from("reschedule_requests")
+      .select(`id, requested_by, booking:bookings!booking_id ( trainer_id )`)
+      .eq("status", "pending"),
   ]);
 
   // === Derive aggregates ===
@@ -202,66 +231,110 @@ export default async function StudioHome() {
   const messages = (recentMessagesRes.data ?? []) as unknown as RecentMessage[];
   const pendingReviews = (pendingReviewsRes.data ?? []) as unknown as RecentReview[];
   const unreadCount = unreadMessagesRes.count ?? 0;
-
-  // Onboarding state
-  const onboarding = await computeOnboarding(user.id);
-
-  // Build "Do zrobienia" todos derived from existing data.
-  type Todo = { id: string; title: string; sub: string; cta: string; href: string; urgent?: boolean };
-  const todos: Todo[] = [];
-  if (pendingCount > 0) {
-    todos.push({
-      id: "pending",
-      title: `${pendingCount} ${pendingCount === 1 ? "nowa rezerwacja czeka" : "nowych rezerwacji czeka"} na potwierdzenie`,
-      sub: "Klient otrzymał automatycznie potwierdzenie na 24h — odpowiedz aby uniknąć anulowania",
-      cta: "Sprawdź teraz",
-      href: "/studio/bookings",
-      urgent: true,
-    });
-  }
-  if (unreadCount > 0) {
-    todos.push({
-      id: "messages",
-      title: `${unreadCount} ${unreadCount === 1 ? "nieprzeczytana wiadomość" : "nieprzeczytanych wiadomości"}`,
-      sub: "Klient czeka na odpowiedź",
-      cta: "Otwórz czat",
-      href: "/studio/messages",
-    });
-  }
-  if (pendingReviews.length > 0) {
-    todos.push({
-      id: "reviews",
-      title: `Odpowiedz na ${pendingReviews.length} ${pendingReviews.length === 1 ? "nową opinię" : "nowych opinii"}`,
-      sub: "Twoja odpowiedź na opinie zwiększa zaufanie klientów",
-      cta: "Odpowiedz",
-      href: "/studio/reviews",
-    });
-  }
-  if (onboarding.percent < 100) {
-    todos.push({
-      id: "onboarding",
-      title: `Profil ${onboarding.percent}% ukończony`,
-      sub: `${onboarding.totalCount - onboarding.doneCount} ${onboarding.totalCount - onboarding.doneCount === 1 ? "punkt" : "punktów"} do uzupełnienia · profile z 90%+ mają 2.3× więcej rezerwacji`,
-      cta: "Uzupełnij",
-      href: "/studio/start",
-    });
-  }
-  if (!trainer?.published && trainer?.slug) {
-    todos.push({
-      id: "publish",
-      title: "Profil w trybie szkicu",
-      sub: "Klienci jeszcze go nie widzą — opublikuj kiedy będzie gotowy",
-      cta: "Opublikuj",
-      href: "/studio/profile",
-    });
-  }
+  const pastUnfinalizedCount = pastUnfinalizedRes.count ?? 0;
+  // Reschedule proposals from clients only — ones we initiated are awaiting
+  // the client's decision, not ours, so they don't belong in our inbox.
+  type ResRow = { requested_by: string; booking: { trainer_id: string } | null };
+  const clientReschedCount = ((reschedulesRes.data ?? []) as unknown as ResRow[]).filter(
+    (r) => r.booking?.trainer_id === user.id && r.requested_by !== user.id,
+  ).length;
+  const inboxTotal = pendingCount + clientReschedCount + pastUnfinalizedCount;
 
   // Spark series for KPI cards — last 7 weekdays of session counts (cheap proxy).
   // For revenue: last 7 months sum from monthBuckets.
   const sparkRevenue = monthBuckets.slice(-7).map((m) => m.sum);
   const maxSparkRevenue = Math.max(...sparkRevenue, 1);
 
+  const reviewCount = trainer?.review_count ?? 0;
+  const rating = trainer?.rating ?? 0;
+
+  // Profile completeness signals for the Empty mode hero. These mirror
+  // what /studio/profile uses for its own completion meter — kept here
+  // as a simple boolean trio so the onboarding hero can show progress.
+  const onboardingDone = {
+    profile: Boolean(profile?.avatar_url && trainer?.published),
+    services: false, // refined below from services count
+    availability: false,
+  };
+  // Cheap follow-up queries for the onboarding signals. Fall back to
+  // false when the tables don't exist (graceful on dev DBs without
+  // every migration applied).
+  try {
+    const [{ count: servicesCount }, { count: rulesCount }] = await Promise.all([
+      supabase
+        .from("services")
+        .select("id", { count: "exact", head: true })
+        .eq("trainer_id", user.id),
+      supabase
+        .from("availability_rules")
+        .select("id", { count: "exact", head: true })
+        .eq("trainer_id", user.id),
+    ]);
+    onboardingDone.services = (servicesCount ?? 0) > 0;
+    onboardingDone.availability = (rulesCount ?? 0) > 0;
+  } catch {
+    /* tables missing on a fresh dev DB — leave both at false */
+  }
+  const profilePct = Math.round(
+    ((onboardingDone.profile ? 1 : 0) +
+     (onboardingDone.services ? 1 : 0) +
+     (onboardingDone.availability ? 1 : 0)) / 3 * 100,
+  );
+
+  // Default = "working". Empty and Growth are opt-in via ?mode= (the
+  // ModeBar buttons drive that). Auto-detection was removed per user
+  // request — felt jarring to land on Empty just because the trainer
+  // hadn't filled their profile yet.
+  const allowed: Mode[] = ["empty", "working", "growth"];
+  const mode: Mode = (allowed as readonly string[]).includes(requestedMode ?? "")
+    ? (requestedMode as Mode)
+    : "working";
+
+  // Right-side status line in the mode bar — varies per mode
+  const modeBarRight =
+    mode === "empty" ? (
+      <>🟢 Konto utworzone <b className="text-[#002f34] font-bold">dzisiaj</b></>
+    ) : mode === "growth" ? (
+      <>🟢 Online · <b className="text-[#002f34] font-bold">{reviewCount}</b> opinii · ★ <b className="text-[#002f34] font-bold">{rating.toFixed(1).replace(".", ",")}</b></>
+    ) : (
+      <>🟢 Online · <b className="text-[#002f34] font-bold">{todayCount}</b> sesji dzisiaj</>
+    );
+
+  // Hide the "Dzień 1" tab once all 3 onboarding steps are done — at
+  // that point the trainer has no use for an onboarding view, and
+  // leaving the tab in place just clutters the switcher.
+  const hideEmpty = onboardingDone.profile && onboardingDone.services && onboardingDone.availability;
+
+  // Empty and Growth modes render alternative bodies; Working keeps the
+  // existing 800-line dashboard intact below.
+  if (mode === "empty") {
+    return (
+      <>
+        <StudioPulpitModeBar mode="empty" rightSlot={modeBarRight} hideEmpty={hideEmpty} />
+        <StudioPulpitEmptyMode
+          displayName={profile?.display_name?.split(" ")[0] ?? "trenerze"}
+          profilePct={profilePct}
+          onboardingDone={onboardingDone}
+        />
+      </>
+    );
+  }
+  if (mode === "growth") {
+    return (
+      <>
+        <StudioPulpitModeBar mode="growth" rightSlot={modeBarRight} hideEmpty={hideEmpty} />
+        <StudioPulpitGrowthMode
+          thisMonthRevenue={thisMonthSum}
+          reviewCount={reviewCount}
+          rating={rating}
+        />
+      </>
+    );
+  }
+
   return (
+    <>
+    <StudioPulpitModeBar mode="working" rightSlot={modeBarRight} hideEmpty={hideEmpty} />
     <div className="mx-auto max-w-[1280px] px-4 sm:px-7 py-5 sm:py-7">
       {/* ============ KPI ROW ============ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -320,24 +393,12 @@ export default async function StudioHome() {
             <RevenueChart buckets={monthBuckets} />
           </Card>
 
-          {/* Do zrobienia */}
-          {todos.length > 0 && (
-            <Card>
-              <CardHeader title="Do zrobienia" right={<span className="text-[12.5px] text-emerald-700 font-medium">{todos.length}</span>} />
-              <div className="grid gap-2.5">
-                {todos.slice(0, 5).map((t) => (
-                  <TodoRow key={t.id} todo={t} />
-                ))}
-              </div>
-            </Card>
-          )}
-
           {/* Najbliższe sesje */}
           <Card>
             <CardHeader
               title="Najbliższe sesje"
               right={
-                <Link href="/studio/bookings" className="text-[12.5px] text-emerald-700 font-medium hover:underline">
+                <Link href="/studio/calendar" className="text-[12.5px] text-emerald-700 font-medium hover:underline">
                   Zobacz wszystkie →
                 </Link>
               }
@@ -358,38 +419,52 @@ export default async function StudioHome() {
 
         {/* RIGHT */}
         <div className="grid gap-5">
-          {/* Profile completion */}
-          <Card className="border-emerald-200 bg-gradient-to-br from-teal-50/60 via-emerald-50/40 to-white">
+          {/* Skrzynka działań — mini-feed showing what needs the trainer's
+              attention. Clicks through to /studio/bookings for full list. */}
+          <Card className={inboxTotal > 0
+            ? "border-amber-200 bg-gradient-to-br from-amber-50/60 via-white to-white"
+            : "border-emerald-200 bg-gradient-to-br from-teal-50/60 via-emerald-50/40 to-white"}>
             <CardHeader
-              title="Twój profil"
-              right={<span className="text-[13px] font-semibold text-emerald-700">{onboarding.percent}%</span>}
+              title="Skrzynka działań"
+              right={
+                inboxTotal > 0 ? (
+                  <Link href="/studio/bookings" className="text-[12.5px] text-emerald-700 font-medium hover:underline">
+                    Otwórz →
+                  </Link>
+                ) : (
+                  <span className="text-[13px]">✓</span>
+                )
+              }
             />
-            <div className="h-1.5 bg-white rounded-full overflow-hidden mb-3">
-              <div
-                className="h-full bg-gradient-to-r from-emerald-500 to-teal-500"
-                style={{ width: `${onboarding.percent}%` }}
-              />
-            </div>
-            <p className="text-[12px] text-slate-700 m-0 mb-2.5">
-              Profile z <strong>90%+</strong> uzupełnienia mają <strong>2.3×</strong> więcej rezerwacji.
-            </p>
-            <ul className="grid gap-1.5">
-              {onboarding.items.slice(0, 6).map((item) => (
-                <li
-                  key={item.id}
-                  className={`flex items-center gap-2 text-[12px] ${item.done ? "text-slate-500 line-through" : "text-slate-800"}`}
-                >
-                  <span
-                    className={`shrink-0 w-3.5 h-3.5 rounded-full inline-flex items-center justify-center text-white text-[8px] font-bold ${
-                      item.done ? "bg-emerald-500" : "bg-slate-300"
-                    }`}
-                  >
-                    {item.done ? "✓" : ""}
-                  </span>
-                  {item.label}
-                </li>
-              ))}
-            </ul>
+            {inboxTotal === 0 ? (
+              <p className="text-[12.5px] text-slate-700 m-0">
+                Wszystko zrobione. Brak rzeczy oczekujących na Twoją reakcję.
+              </p>
+            ) : (
+              <ul className="grid gap-2 m-0">
+                {pendingCount > 0 && (
+                  <InboxRow
+                    dot="amber"
+                    label="Czeka na potwierdzenie"
+                    count={pendingCount}
+                  />
+                )}
+                {clientReschedCount > 0 && (
+                  <InboxRow
+                    dot="blue"
+                    label="Prośba o zmianę terminu"
+                    count={clientReschedCount}
+                  />
+                )}
+                {pastUnfinalizedCount > 0 && (
+                  <InboxRow
+                    dot="slate"
+                    label="Sesje do oznaczenia"
+                    count={pastUnfinalizedCount}
+                  />
+                )}
+              </ul>
+            )}
           </Card>
 
           {/* Quick actions */}
@@ -454,6 +529,7 @@ export default async function StudioHome() {
         </div>
       </div>
     </div>
+    </>
   );
 }
 
@@ -637,42 +713,6 @@ function RevenueChart({ buckets }: { buckets: { label: string; sum: number; isCu
   );
 }
 
-type Todo = { id: string; title: string; sub: string; cta: string; href: string; urgent?: boolean };
-
-function TodoRow({ todo }: { todo: Todo }) {
-  return (
-    <Link
-      href={todo.href}
-      className={`flex items-start gap-3 p-3 rounded-xl border transition ${
-        todo.urgent
-          ? "border-rose-200 bg-rose-50/40 hover:border-rose-300"
-          : "border-slate-200 hover:border-slate-400 hover:shadow-sm"
-      }`}
-    >
-      <div
-        className={`shrink-0 w-5 h-5 rounded-md border-[1.5px] mt-0.5 ${
-          todo.urgent ? "border-rose-400" : "border-slate-300"
-        }`}
-      />
-      <div className="flex-1 min-w-0">
-        <div className={`text-[13.5px] font-semibold ${todo.urgent ? "text-rose-900" : "text-slate-900"}`}>
-          {todo.title}
-        </div>
-        <div className="text-[12px] text-slate-500 mt-0.5">{todo.sub}</div>
-      </div>
-      <span
-        className={`shrink-0 inline-flex items-center text-[12.5px] font-semibold px-2.5 py-1.5 rounded-lg border ${
-          todo.urgent
-            ? "bg-rose-700 text-white border-rose-700"
-            : "bg-white text-emerald-700 border-emerald-200 hover:border-emerald-400"
-        }`}
-      >
-        {todo.cta}
-      </span>
-    </Link>
-  );
-}
-
 function SessionRow({
   booking: b,
   now,
@@ -819,6 +859,29 @@ function ReviewCard({ review: r }: { review: RecentReview }) {
         </Link>
       </div>
     </div>
+  );
+}
+
+function InboxRow({
+  dot,
+  label,
+  count,
+}: {
+  dot: "amber" | "blue" | "slate";
+  label: string;
+  count: number;
+}) {
+  const dotCls = {
+    amber: "bg-amber-500",
+    blue: "bg-blue-500",
+    slate: "bg-slate-400",
+  }[dot];
+  return (
+    <li className="flex items-center gap-2.5 text-[12.5px] text-slate-800">
+      <span className={`shrink-0 w-2 h-2 rounded-full ${dotCls}`} />
+      <span className="flex-1 truncate">{label}</span>
+      <span className="text-[11.5px] font-semibold text-slate-700 tabular-nums">{count}</span>
+    </li>
   );
 }
 

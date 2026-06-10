@@ -9,9 +9,7 @@ import { updateDesign } from "./actions";
 import { togglePublished } from "@/app/trainers/[id]/edit-actions";
 import type { DayRule } from "@/app/studio/availability/types";
 import StudioNavMenu from "../StudioNavMenu";
-import NotificationsBell from "@/components/NotificationsBell";
 import AccountMenu from "@/components/AccountMenu";
-import type { Notification } from "@/lib/db/notifications";
 import { undoCustomization, redoCustomization, resetCinematicCopy } from "@/app/trainers/[id]/cinematic-copy-actions";
 import { EditingPageContext } from "@/app/trainers/[id]/EditingPageContext";
 import { pinScrollFor } from "@/app/trainers/[id]/keep-scroll";
@@ -21,7 +19,6 @@ import { createTrainerPage } from "@/app/studio/pages/actions";
 
 type Props = {
   slug: string;
-  trainerId: string;
   trainerName: string;
   trainerEmail: string | null;
   avatarUrl: string | null;
@@ -31,7 +28,6 @@ type Props = {
   completion: { pct: number; tip: string };
   counts: Partial<Record<SectionId, number>>;
   availabilityByDow: Record<number, DayRule | null>;
-  notifications: { recent: Notification[]; unread: number };
   /** The actual client-facing profile rendered server-side with isEmbed=editMode=true.
    *  We re-fetch via router.refresh() after each debounced save so design changes
    *  reflect in the live preview. */
@@ -82,7 +78,7 @@ const PRO_TEMPLATES: TemplateOption[] = [
 
 const SECTION_LABELS: Record<SectionId, string> = {
   about: "O mnie",
-  cases: "Kejsy",
+  cases: "Cases",
   services: "Usługi",
   packages: "Pakiety",
   gallery: "Galeria",
@@ -91,7 +87,7 @@ const SECTION_LABELS: Record<SectionId, string> = {
 };
 
 
-export default function EditorClient({ slug, trainerId, trainerName, trainerEmail, avatarUrl, avatarFocal, published, initial, completion, counts, availabilityByDow, notifications, previewSlot, historyDepth, redoDepth, hasCinematicCopy, pageId, pages }: Props) {
+export default function EditorClient({ slug, trainerName, trainerEmail, avatarUrl, avatarFocal, published, initial, completion, counts, availabilityByDow, previewSlot, historyDepth, redoDepth, hasCinematicCopy, pageId, pages }: Props) {
   const router = useRouter();
   const [template, setTemplate] = useState<TemplateName>(initial.template);
   const [sections, setSections] = useState(initial.sections);
@@ -309,19 +305,18 @@ export default function EditorClient({ slug, trainerId, trainerName, trainerEmai
     });
   };
 
-  // Reset html { zoom: 1.1 } (set in globals.css for >=1500px viewports) for
-  // the duration of the editor. The editor uses h-[calc(100vh-32px)] which
-  // doesn't compose with zoom: 100vh CSS = 1080 renders at 1188 physical,
-  // leaking ~108 physical px of body bg-slate-50 below the editor as page
-  // scroll. Resetting zoom on the editor route is OK — wide-monitor zoom is a
-  // public-page polish thing, the studio chrome doesn't benefit from it.
-  // (overflow:hidden / overflow:clip on html+body do NOT prevent the scroll
-  // under zoom; only resetting zoom does.)
+  // Track viewport height in JS-pixels — used to size the editor wrapper
+  // instead of `h-screen`. window.innerHeight returns the layout viewport in
+  // CSS px (already divided by html { zoom }), so a div with that pixel
+  // height renders to the full physical viewport without overflow, even
+  // under the wide-monitor zoom: 1.1 from globals.css. This lets the studio
+  // sidebar/chrome keep zoom 1.1 here for parity with the rest of /studio.
+  const [viewportH, setViewportH] = useState<number | null>(null);
   useEffect(() => {
-    const html = document.documentElement;
-    const prev = html.style.zoom;
-    html.style.zoom = "1";
-    return () => { html.style.zoom = prev; };
+    const update = () => setViewportH(window.innerHeight);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
   }, []);
 
   // Mirror the fullscreen flag onto <html> so the global CSS in globals.css can
@@ -554,7 +549,10 @@ export default function EditorClient({ slug, trainerId, trainerName, trainerEmai
 
 
   return (
-    <div className="flex flex-col bg-slate-100 h-screen overflow-hidden">
+    <div
+      className="flex flex-col bg-slate-100 overflow-hidden"
+      style={{ height: viewportH ?? "100vh" }}
+    >
       {/* ===== EDITOR TOP BAR — replaces the layout's StudioTopBar on /studio/design.
           Same h-14 chrome as everywhere else, but the right side carries
           editor-specific actions (viewport toggle / Podgląd / Opublikuj)
@@ -671,12 +669,6 @@ export default function EditorClient({ slug, trainerId, trainerName, trainerEmai
           >
             {pubPending ? "..." : published ? "Cofnij publikację" : "Opublikuj"}
           </button>
-          <NotificationsBell
-            myId={trainerId}
-            initialNotifications={notifications.recent}
-            initialUnreadCount={notifications.unread}
-            messagesLink="/studio/messages"
-          />
           <AccountMenu
             displayName={trainerName}
             email={trainerEmail}

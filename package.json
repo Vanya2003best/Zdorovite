@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "clean": "node -e \"const fs=require('fs');fs.rmSync('.next',{recursive:true,force:true});fs.rmSync('tsconfig.tsbuildinfo',{force:true})\"",
+    "clean:cache": "node -e \"require('fs').rmSync('.next/cache',{recursive:true,force:true})\"",
+    "dev:clean": "npm run clean && next dev"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.20",

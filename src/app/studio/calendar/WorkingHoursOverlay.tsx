@@ -18,17 +18,31 @@ import DayHoursDialog from "./DayHoursDialog";
  *   • Trainer can copy a day's hours to other weekdays in one click
  */
 
-const SLOT_HEIGHT_PER_HOUR = 56; // .fc-timegrid-slot height (28px) × 2
+// FullCalendar now distributes slot heights dynamically from `height={calHeight}`
+// (we removed the CSS height override that made events drift off-grid). So we
+// measure the actual slot height from the rendered DOM each refresh instead of
+// hardcoding it — keeping the green-band positions perfectly aligned with the
+// time gridlines no matter how tall the calendar ends up.
+const FALLBACK_SLOT_HEIGHT_PER_HOUR = 80;
 
 function timeToMin(t: string): number {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
 }
-function minToY(min: number, minHour: number): number {
-  return ((min - minHour * 60) * SLOT_HEIGHT_PER_HOUR) / 60;
+function minToY(min: number, minHour: number, slotHeightPerHour: number): number {
+  return ((min - minHour * 60) * slotHeightPerHour) / 60;
 }
 
 type ColInfo = { dow: number; date: string; frameEl: HTMLElement };
+
+/** Per-date override shape mirrored from availability_overrides table.
+ *  `date` may be present (mirrored from CalendarClient's DateOverrideRow)
+ *  but isn't read here since the map key already encodes it. */
+export type DateOverride = {
+  date?: string;
+  shifts: { start: string; end: string }[];
+  isClosed: boolean;
+};
 
 type Props = {
   rules: WorkingHourRule[];
@@ -49,6 +63,12 @@ type Props = {
    *  trainer's earliest rule. Without it, our minToY math drifts
    *  by however many hours we differ from 06:00. */
   slotMinHour?: number;
+  /** Per-date overrides keyed by YYYY-MM-DD. When a date has an entry
+   *  the rendered blocks come from there instead of the recurring rule. */
+  overrides?: Record<string, DateOverride>;
+  /** Persist a single date's override. shifts === null means closed,
+   *  [] means clear (revert to recurring), non-empty = open hours. */
+  onOverrideChange?: (date: string, shifts: { start: string; end: string }[] | null) => Promise<void> | void;
 };
 
 export default function WorkingHoursOverlay({
@@ -59,9 +79,17 @@ export default function WorkingHoursOverlay({
   readOnly = false,
   hidden = false,
   slotMinHour = 6,
+  overrides,
+  onOverrideChange,
 }: Props) {
   const [columns, setColumns] = useState<ColInfo[]>([]);
-  const [editingDow, setEditingDow] = useState<number | null>(null);
+  // Measured live from FullCalendar's DOM so blocks always line up with the
+  // actual gridlines, even when FC scales slot height to fit the wrapper.
+  const [slotHeightPerHour, setSlotHeightPerHour] = useState<number>(FALLBACK_SLOT_HEIGHT_PER_HOUR);
+  // Editor target — both dow and the specific date the user clicked, so
+  // the dialog can offer the "tylko ten dzień" override scope. dow is
+  // always derivable from date; we store both to avoid recomputing.
+  const [editing, setEditing] = useState<{ dow: number; date: string } | null>(null);
   // Local mirror of rules — updated optimistically when dialog saves so the
   // overlay reflects new shifts immediately, before router.refresh.
   const [localRules, setLocalRules] = useState<WorkingHourRule[]>(rules);
@@ -102,6 +130,20 @@ export default function WorkingHoursOverlay({
   useEffect(() => {
     localRulesRef.current = localRules;
   }, [localRules]);
+  // Same stale-closure protection for slotHeightPerHour: the pointermove
+  // listener is added once at drag start, so it must read the live value
+  // through a ref instead of capturing the initial state.
+  const slotHeightPerHourRef = useRef(slotHeightPerHour);
+  useEffect(() => {
+    slotHeightPerHourRef.current = slotHeightPerHour;
+  }, [slotHeightPerHour]);
+  // Columns mirror — the post-drag click handler needs to look up which
+  // calendar date a dow belongs to, but it runs from a document-level
+  // pointerup that captured `columns` state at drag start.
+  const columnsRef = useRef<ColInfo[]>([]);
+  useEffect(() => {
+    columnsRef.current = columns;
+  }, [columns]);
   const onChangeRef = useRef(onChange);
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -120,8 +162,10 @@ export default function WorkingHoursOverlay({
       if (!d) return;
       const dy = e.clientY - d.startY;
       if (Math.abs(dy) > 3) dragMovedRef.current = true;
-      // 30-min snap, 56px/hour → 28px/30min.
-      const dminUnsnapped = (dy / SLOT_HEIGHT_PER_HOUR) * 60;
+      // 30-min snap. Use the live-measured slot height (via ref to
+      // avoid stale closure) so drags map pointer movement to minutes
+      // accurately regardless of viewport.
+      const dminUnsnapped = (dy / slotHeightPerHourRef.current) * 60;
       const dmin = Math.round(dminUnsnapped / 30) * 30;
       let newStart = d.origStartMin;
       let newEnd = d.origEndMin;
@@ -162,9 +206,12 @@ export default function WorkingHoursOverlay({
     if (!d) return;
 
     if (!dragMovedRef.current) {
-      // Treat as click — open the dialog for fine HH:MM edits.
+      // Treat as click — open the dialog for fine HH:MM edits. We need
+      // the actual date the block belongs to (not just dow) so the
+      // dialog can offer override-scope. Find from columns.
       setPreview(null);
-      setEditingDow(d.dow);
+      const col = columnsRef.current.find((c) => c.dow === d.dow);
+      setEditing({ dow: d.dow, date: col?.date ?? "" });
       return;
     }
     // Read from refs — the function handed to addEventListener back
@@ -217,9 +264,17 @@ export default function WorkingHoursOverlay({
         return { dow, date, frameEl: frame };
       });
       const sig = result.map((c) => c.date).join(",");
-      if (sig === lastSig) return;
-      lastSig = sig;
-      setColumns(result);
+      if (sig !== lastSig) {
+        lastSig = sig;
+        setColumns(result);
+      }
+      // Measure ONE 30-min slot's actual rendered height and double it for
+      // an "hour" so block positions track FC's pixel-per-minute exactly.
+      const slot = wrapper.querySelector<HTMLElement>(".fc-timegrid-slot:not(.fc-timegrid-axis)");
+      if (slot) {
+        const h = slot.getBoundingClientRect().height;
+        if (h > 0) setSlotHeightPerHour(h * 2);
+      }
     };
     refresh();
 
@@ -242,7 +297,17 @@ export default function WorkingHoursOverlay({
   return (
     <>
       {columns.map((col) => {
-        const dayRules = localRules.filter((r) => r.dow === col.dow);
+        // Effective shifts for this column = override layer when set,
+        // otherwise the recurring weekly rule for this dow. Closed-day
+        // override → no blocks rendered (and no "+ Godziny pracy" CTA).
+        const ov = overrides?.[col.date];
+        const isClosedOverride = !!ov?.isClosed;
+        const dayRules = isClosedOverride
+          ? []
+          : ov && !ov.isClosed && ov.shifts.length > 0
+            ? ov.shifts.map((s) => ({ dow: col.dow, start: s.start, end: s.end }))
+            : localRules.filter((r) => r.dow === col.dow);
+        const hasOverride = !!ov;
         const elements: React.ReactNode[] = [];
 
         if (dayRules.length === 0) {
@@ -256,9 +321,9 @@ export default function WorkingHoursOverlay({
               <button
                 key={`add-${col.date}`}
                 type="button"
-                onClick={() => setEditingDow(col.dow)}
-                className="absolute left-1 right-1 h-7 rounded-md text-[10px] font-medium text-emerald-700 bg-emerald-50/40 hover:bg-emerald-50 border border-dashed border-emerald-300/60 hover:border-emerald-500 transition pointer-events-auto z-[1] flex items-center justify-center gap-1"
-                style={{ top: `${minToY(slotMinHour * 60 + 30, slotMinHour)}px` }}
+                onClick={() => setEditing({ dow: col.dow, date: col.date })}
+                className="absolute left-1 right-1 h-7 rounded-md text-[10px] font-medium text-emerald-700 bg-emerald-50/40 hover:bg-emerald-50 border border-dashed border-emerald-300/60 hover:border-emerald-500 transition pointer-events-auto z-[3] flex items-center justify-center gap-1"
+                style={{ top: `${minToY(slotMinHour * 60 + 30, slotMinHour, slotHeightPerHour)}px` }}
                 title="Ustaw godziny pracy"
               >
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
@@ -272,8 +337,8 @@ export default function WorkingHoursOverlay({
           dayRules.forEach((rule, idx) => {
             const startMin = timeToMin(rule.start);
             const endMin = timeToMin(rule.end);
-            const top = minToY(startMin, slotMinHour);
-            const height = minToY(endMin, slotMinHour) - top;
+            const top = minToY(startMin, slotMinHour, slotHeightPerHour);
+            const height = minToY(endMin, slotMinHour, slotHeightPerHour) - top;
             if (readOnly) {
               // Per user request: no fill, no label — just two dashed
               // emerald lines marking the start and end of the work
@@ -282,7 +347,7 @@ export default function WorkingHoursOverlay({
               elements.push(
                 <div
                   key={`${col.date}-${idx}`}
-                  className="absolute left-0 right-0 pointer-events-none z-[1]"
+                  className="absolute left-0 right-0 pointer-events-none z-[3]"
                   style={{
                     top: `${top}px`,
                     height: `${height}px`,
@@ -301,15 +366,15 @@ export default function WorkingHoursOverlay({
               const isDragging = dragPreview?.key === k;
               const liveStart = isDragging ? dragPreview!.startMin : startMin;
               const liveEnd = isDragging ? dragPreview!.endMin : endMin;
-              const liveTop = minToY(liveStart, slotMinHour);
-              const liveHeight = minToY(liveEnd, slotMinHour) - liveTop;
+              const liveTop = minToY(liveStart, slotMinHour, slotHeightPerHour);
+              const liveHeight = minToY(liveEnd, slotMinHour, slotHeightPerHour) - liveTop;
               const liveStartLabel = minToHHMM(liveStart);
               const liveEndLabel = minToHHMM(liveEnd);
               elements.push(
                 <div
                   key={`${col.date}-${idx}`}
                   onPointerDown={(e) => startDrag(e, rule, "move")}
-                  className="nz-hours-block absolute left-0.5 right-0.5 group rounded-md pointer-events-auto z-[1] hover:ring-2 hover:ring-emerald-500/60 transition select-none"
+                  className="nz-hours-block absolute left-0.5 right-0.5 group rounded-md pointer-events-auto z-[3] hover:ring-2 hover:ring-inset hover:ring-emerald-500/60 transition select-none"
                   style={{
                     top: `${liveTop}px`,
                     height: `${liveHeight}px`,
@@ -327,16 +392,19 @@ export default function WorkingHoursOverlay({
                   <span className="absolute top-1 right-1 w-5 h-5 rounded bg-white/90 text-emerald-700 inline-flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow-sm pointer-events-none">
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                   </span>
-                  {/* Top resize handle — small green pill, visible on hover. */}
+                  {/* Top resize handle — sits ON the inner top edge of the
+                      block (positive top, not negative) so it never clips
+                      against the column's overflow boundary when the block
+                      is pinned to t=0 like a 06:00-start rule. */}
                   <span
                     onPointerDown={(e) => startDrag(e, rule, "resize-top")}
-                    className="absolute left-1/2 -translate-x-1/2 -top-1 w-7 h-1.5 rounded bg-emerald-500/80 opacity-0 group-hover:opacity-100 transition cursor-ns-resize"
+                    className="absolute left-1/2 -translate-x-1/2 top-0.5 w-7 h-1.5 rounded bg-emerald-500/80 opacity-0 group-hover:opacity-100 transition cursor-ns-resize z-[20]"
                     title="Przeciągnij, aby zmienić godzinę startu"
                   />
-                  {/* Bottom resize handle */}
+                  {/* Bottom resize handle — same trick at the inner bottom edge. */}
                   <span
                     onPointerDown={(e) => startDrag(e, rule, "resize-bot")}
-                    className="absolute left-1/2 -translate-x-1/2 -bottom-1 w-7 h-1.5 rounded bg-emerald-500/80 opacity-0 group-hover:opacity-100 transition cursor-ns-resize"
+                    className="absolute left-1/2 -translate-x-1/2 bottom-0.5 w-7 h-1.5 rounded bg-emerald-500/80 opacity-0 group-hover:opacity-100 transition cursor-ns-resize z-[20]"
                     title="Przeciągnij, aby zmienić godzinę końca"
                   />
                 </div>,
@@ -348,20 +416,33 @@ export default function WorkingHoursOverlay({
         return <PortalChildren key={col.date} target={col.frameEl}>{elements}</PortalChildren>;
       })}
 
-      {editingDow !== null && (
+      {editing !== null && (
         <DayHoursDialog
-          dow={editingDow}
-          initialShifts={localRules
-            .filter((r) => r.dow === editingDow)
-            .map((r) => ({ start: r.start, end: r.end }))
-            .sort((a, b) => a.start.localeCompare(b.start))}
+          dow={editing.dow}
+          date={editing.date || undefined}
+          hasOverride={!!(editing.date && overrides?.[editing.date])}
+          initialShifts={(() => {
+            const ov = editing.date ? overrides?.[editing.date] : undefined;
+            // Override layer wins as initial shifts when one exists; else fall
+            // back to the recurring rule for that dow.
+            if (ov && !ov.isClosed && ov.shifts.length > 0) return ov.shifts;
+            if (ov && ov.isClosed) return [];
+            return localRules
+              .filter((r) => r.dow === editing.dow)
+              .map((r) => ({ start: r.start, end: r.end }))
+              .sort((a, b) => a.start.localeCompare(b.start));
+          })()}
           allRules={localRules}
-          onClose={() => setEditingDow(null)}
+          onClose={() => setEditing(null)}
           onSave={(newRules) => {
             setLocalRules(newRules);
-            setEditingDow(null);
+            setEditing(null);
             onChange(newRules);
           }}
+          onSaveOverride={onOverrideChange ? async (date, shifts) => {
+            await onOverrideChange(date, shifts);
+            setEditing(null);
+          } : undefined}
         />
       )}
     </>

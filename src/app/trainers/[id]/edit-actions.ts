@@ -54,7 +54,7 @@ export async function updateTrainerField(
   if (before) {
     await pushDeleteTombstone(user.id, {
       kind: "trainerUpdated",
-      before: before as Record<string, unknown>,
+      before: before as unknown as Record<string, unknown>,
       after: patch,
     });
   }
@@ -97,7 +97,7 @@ export async function togglePublished(): Promise<{ ok: true; published: boolean 
     await supabase.from("trainers").update({ published: false }).eq("id", user.id);
     revalidatePath(`/trainers/${trainer.slug}`);
     revalidatePath("/studio/profile");
-    revalidatePath("/trainers");
+    revalidatePath("/");
     return { ok: true, published: false };
   }
 
@@ -128,6 +128,6 @@ export async function togglePublished(): Promise<{ ok: true; published: boolean 
   await supabase.from("trainers").update({ published: true }).eq("id", user.id);
   revalidatePath(`/trainers/${trainer.slug}`);
   revalidatePath("/studio/profile");
-  revalidatePath("/trainers");
+  revalidatePath("/");
   return { ok: true, published: true };
 }

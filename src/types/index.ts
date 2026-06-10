@@ -14,6 +14,9 @@ export interface SpecializationInfo {
   id: Specialization;
   label: string;
   icon: string;
+  /** Thumbnail used in the homepage specializations grid. Optional —
+   *  legacy callers fall back to the emoji icon. */
+  image?: string;
 }
 
 export interface Service {
@@ -156,6 +159,7 @@ export interface LuxuryCopy {
   /** CSS object-position for the hero portrait (e.g. "30% 45%"). */
   heroPhotoFocal?: string;
   navAbout?: string;           // "Filozofia"
+  navCases?: string;           // "Cases"
   navServices?: string;        // "Usługi"
   navPackages?: string;        // "Programy"
   navGallery?: string;         // "Atelier"

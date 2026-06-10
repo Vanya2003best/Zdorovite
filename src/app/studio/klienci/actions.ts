@@ -14,132 +14,190 @@ export type AddClientInput = {
 };
 
 export type ActionResult<T = void> =
-  | (T extends void ? { ok: true } : { ok: true } & T)
+  | (T extends void ? { ok: true; data?: unknown } : ({ ok: true; data?: T } & T))
   | { error: string };
 
+const DEFAULT_ERROR = "Coś poszło nie tak. Spróbuj ponownie.";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^[+\d][\d\s\-()]{6,20}$/;
 
-/**
- * Add a manual client to the trainer's roster — for cash-paying / off-platform
- * clients that never went through the booking flow. profile_id stays null;
- * display_name/email/phone are the canonical contact.
- */
+function validateId(id: string): string | { error: string } {
+  if (typeof id !== "string" || !id.trim()) return { error: "Brak ID." };
+  return id.trim();
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validateOptionalString(value: unknown, fieldName: string): string | undefined | { error: string } {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") return { error: `Nieprawidłowe pole: ${fieldName}.` };
+  return value;
+}
+
 export async function addManualClient(
   input: AddClientInput,
 ): Promise<ActionResult<{ id: string }>> {
-  const displayName = input.displayName.trim();
-  if (!displayName) return { error: "Podaj imię i nazwisko klienta." };
-  if (displayName.length > 80) return { error: "Imię i nazwisko max 80 znaków." };
+  try {
+    if (!isObject(input)) return { error: "Nieprawidłowe dane klienta." };
+    if (typeof input.displayName !== "string") return { error: "Podaj imię i nazwisko klienta." };
 
-  const email = input.email?.trim() || null;
-  const phone = input.phone?.trim() || null;
-  if (email && !EMAIL_RE.test(email)) return { error: "Nieprawidłowy email." };
-  if (phone && !PHONE_RE.test(phone)) return { error: "Nieprawidłowy telefon." };
+    const displayName = input.displayName.trim();
+    if (!displayName) return { error: "Podaj imię i nazwisko klienta." };
+    if (displayName.length > 80) return { error: "Imię i nazwisko max 80 znaków." };
 
-  const goal = input.goal?.trim().slice(0, 200) || null;
-  const notes = input.notes?.trim().slice(0, 4000) || null;
-  const tags = (input.tags ?? [])
-    .map((t) => t.trim())
-    .filter((t) => t.length > 0 && t.length <= 30)
-    .slice(0, 10);
+    const rawEmail = validateOptionalString(input.email, "email");
+    if (typeof rawEmail !== "string" && rawEmail !== undefined) return rawEmail;
+    const rawPhone = validateOptionalString(input.phone, "telefon");
+    if (typeof rawPhone !== "string" && rawPhone !== undefined) return rawPhone;
+    const rawGoal = validateOptionalString(input.goal, "cel");
+    if (typeof rawGoal !== "string" && rawGoal !== undefined) return rawGoal;
+    const rawNotes = validateOptionalString(input.notes, "notatki");
+    if (typeof rawNotes !== "string" && rawNotes !== undefined) return rawNotes;
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Niezalogowany." };
+    if (input.tags !== undefined && (!Array.isArray(input.tags) || input.tags.some((tag) => typeof tag !== "string"))) {
+      return { error: "Nieprawidłowe tagi." };
+    }
 
-  const { data, error } = await supabase
-    .from("trainer_clients")
-    .insert({
-      trainer_id: user.id,
-      profile_id: null,
-      display_name: displayName,
-      email,
-      phone,
-      goal,
-      notes,
-      tags,
-    })
-    .select("id")
-    .single();
+    const email = rawEmail?.trim() || null;
+    const phone = rawPhone?.trim() || null;
+    if (email && !EMAIL_RE.test(email)) return { error: "Nieprawidłowy email." };
+    if (phone && !PHONE_RE.test(phone)) return { error: "Nieprawidłowy telefon." };
 
-  if (error || !data) return { error: error?.message ?? "Nie udało się dodać klienta." };
+    const goal = rawGoal?.trim().slice(0, 200) || null;
+    const notes = rawNotes?.trim().slice(0, 4000) || null;
+    const tags = (input.tags ?? [])
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0 && t.length <= 30)
+      .slice(0, 10);
 
-  revalidatePath("/studio/klienci");
-  return { ok: true, id: data.id };
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Niezalogowany." };
+
+    const { data, error } = await supabase
+      .from("trainer_clients")
+      .insert({
+        trainer_id: user.id,
+        profile_id: null,
+        display_name: displayName,
+        email,
+        phone,
+        goal,
+        notes,
+        tags,
+      })
+      .select("id")
+      .single();
+
+    if (error || !data?.id) return { error: error?.message ?? "Nie udało się dodać klienta." };
+
+    revalidatePath("/studio/klienci");
+    return { ok: true, data: { id: data.id }, id: data.id };
+  } catch (err) {
+    console.error("addManualClient", err);
+    return { error: DEFAULT_ERROR };
+  }
 }
 
-/**
- * Update one or more fields on an existing trainer_clients row. Granular
- * because the detail page edits each field inline (notes / goal / tags
- * / contact) without round-tripping the whole record.
- */
 export async function updateClient(
   id: string,
   patch: Partial<AddClientInput> & { archived?: boolean },
 ): Promise<ActionResult> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Niezalogowany." };
+  try {
+    const clientId = validateId(id);
+    if (typeof clientId !== "string") return clientId;
+    if (!isObject(patch)) return { error: "Nieprawidłowe dane klienta." };
 
-  const update: Record<string, unknown> = {};
-  if (patch.displayName !== undefined) {
-    const v = patch.displayName.trim();
-    if (!v) return { error: "Imię nie może być puste." };
-    if (v.length > 80) return { error: "Max 80 znaków." };
-    update.display_name = v;
-  }
-  if (patch.email !== undefined) {
-    const v = patch.email?.trim() || null;
-    if (v && !EMAIL_RE.test(v)) return { error: "Nieprawidłowy email." };
-    update.email = v;
-  }
-  if (patch.phone !== undefined) {
-    const v = patch.phone?.trim() || null;
-    if (v && !PHONE_RE.test(v)) return { error: "Nieprawidłowy telefon." };
-    update.phone = v;
-  }
-  if (patch.goal !== undefined) {
-    update.goal = patch.goal?.trim().slice(0, 200) || null;
-  }
-  if (patch.notes !== undefined) {
-    update.notes = patch.notes?.trim().slice(0, 4000) || null;
-  }
-  if (patch.tags !== undefined) {
-    update.tags = patch.tags
-      .map((t) => t.trim())
-      .filter((t) => t.length > 0 && t.length <= 30)
-      .slice(0, 10);
-  }
-  if (patch.archived !== undefined) {
-    update.archived_at = patch.archived ? new Date().toISOString() : null;
-  }
-  if (Object.keys(update).length === 0) return { ok: true };
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Niezalogowany." };
 
-  const { error } = await supabase
-    .from("trainer_clients")
-    .update(update)
-    .eq("id", id)
-    .eq("trainer_id", user.id);
-  if (error) return { error: error.message };
+    const update: Record<string, unknown> = {};
+    if (patch.displayName !== undefined) {
+      if (typeof patch.displayName !== "string") return { error: "Nieprawidłowe imię." };
+      const v = patch.displayName.trim();
+      if (!v) return { error: "Imię nie może być puste." };
+      if (v.length > 80) return { error: "Max 80 znaków." };
+      update.display_name = v;
+    }
+    if (patch.email !== undefined) {
+      if (typeof patch.email !== "string") return { error: "Nieprawidłowy email." };
+      const v = patch.email.trim() || null;
+      if (v && !EMAIL_RE.test(v)) return { error: "Nieprawidłowy email." };
+      update.email = v;
+    }
+    if (patch.phone !== undefined) {
+      if (typeof patch.phone !== "string") return { error: "Nieprawidłowy telefon." };
+      const v = patch.phone.trim() || null;
+      if (v && !PHONE_RE.test(v)) return { error: "Nieprawidłowy telefon." };
+      update.phone = v;
+    }
+    if (patch.goal !== undefined) {
+      if (typeof patch.goal !== "string") return { error: "Nieprawidłowy cel." };
+      update.goal = patch.goal.trim().slice(0, 200) || null;
+    }
+    if (patch.notes !== undefined) {
+      if (typeof patch.notes !== "string") return { error: "Nieprawidłowe notatki." };
+      update.notes = patch.notes.trim().slice(0, 4000) || null;
+    }
+    if (patch.tags !== undefined) {
+      if (!Array.isArray(patch.tags) || patch.tags.some((tag) => typeof tag !== "string")) {
+        return { error: "Nieprawidłowe tagi." };
+      }
+      update.tags = patch.tags
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0 && t.length <= 30)
+        .slice(0, 10);
+    }
+    if (patch.archived !== undefined) {
+      if (typeof patch.archived !== "boolean") return { error: "Nieprawidłowy status archiwum." };
+      update.archived_at = patch.archived ? new Date().toISOString() : null;
+    }
+    if (Object.keys(update).length === 0) return { ok: true };
 
-  revalidatePath("/studio/klienci");
-  revalidatePath(`/studio/klienci/${id}`);
-  return { ok: true };
+    const { error } = await supabase
+      .from("trainer_clients")
+      .update(update)
+      .eq("id", clientId)
+      .eq("trainer_id", user.id);
+    if (error) return { error: error.message };
+
+    revalidatePath("/studio/klienci");
+    revalidatePath(`/studio/klienci/${clientId}`);
+    return { ok: true };
+  } catch (err) {
+    console.error("updateClient", err);
+    return { error: DEFAULT_ERROR };
+  }
 }
 
 export async function deleteClient(id: string): Promise<ActionResult> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Niezalogowany." };
+  let shouldRedirect = false;
 
-  const { error } = await supabase
-    .from("trainer_clients")
-    .delete()
-    .eq("id", id)
-    .eq("trainer_id", user.id);
-  if (error) return { error: error.message };
+  try {
+    const clientId = validateId(id);
+    if (typeof clientId !== "string") return clientId;
 
-  revalidatePath("/studio/klienci");
-  redirect("/studio/klienci");
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Niezalogowany." };
+
+    const { error } = await supabase
+      .from("trainer_clients")
+      .delete()
+      .eq("id", clientId)
+      .eq("trainer_id", user.id);
+    if (error) return { error: error.message };
+
+    revalidatePath("/studio/klienci");
+    shouldRedirect = true;
+  } catch (err) {
+    console.error("deleteClient", err);
+    return { error: DEFAULT_ERROR };
+  }
+
+  if (shouldRedirect) redirect("/studio/klienci");
+  return { ok: true };
 }

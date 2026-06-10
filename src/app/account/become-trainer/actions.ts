@@ -1,6 +1,6 @@
 "use server";
 
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
@@ -39,77 +39,93 @@ export async function becomeTrainer(
   if (experienceRaw < 0 || experienceRaw > 60) return { error: "Doświadczenie w latach (0–60)." };
   if (languages.length === 0) return { error: "Wybierz co najmniej jeden język." };
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login?next=/account/become-trainer");
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) redirect("/login?next=/account/become-trainer");
 
-  // Check slug uniqueness
-  const { data: existing } = await supabase
-    .from("trainers")
-    .select("id")
-    .eq("slug", slug)
-    .maybeSingle();
-  if (existing && existing.id !== user.id) {
-    return { error: `Slug "${slug}" jest już zajęty — wybierz inny.` };
-  }
+    // Check slug uniqueness
+    const { data: existing } = await supabase
+      .from("trainers")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (existing && existing.id !== user.id) {
+      return { error: `Slug "${slug}" jest już zajęty — wybierz inny.` };
+    }
 
-  // Insert/update trainer row
-  const { error: trainerErr } = await supabase.from("trainers").upsert(
-    {
-      id: user.id,
-      slug,
-      tagline,
-      about,
-      experience: experienceRaw,
-      price_from: priceFromRaw,
-      location,
-      languages,
-      published: true,
-    },
-    { onConflict: "id" },
-  );
-  if (trainerErr) return { error: trainerErr.message };
-
-  // Update profile.is_trainer
-  const { error: profErr } = await supabase
-    .from("profiles")
-    .update({ role: "trainer" })
-    .eq("id", user.id);
-  if (profErr) return { error: profErr.message };
-
-  // Replace trainer_specializations
-  await supabase.from("trainer_specializations").delete().eq("trainer_id", user.id);
-  const { error: specErr } = await supabase.from("trainer_specializations").insert(
-    specializations.map((s) => ({ trainer_id: user.id, specialization_id: s })),
-  );
-  if (specErr) return { error: specErr.message };
-
-  // Default availability: Mon-Fri 09:00-18:00 (if not already set)
-  const { data: existingRules } = await supabase
-    .from("availability_rules")
-    .select("id")
-    .eq("trainer_id", user.id)
-    .limit(1);
-  if (!existingRules || existingRules.length === 0) {
-    await supabase.from("availability_rules").insert(
-      [1, 2, 3, 4, 5].map((dow) => ({
-        trainer_id: user.id,
-        day_of_week: dow,
-        start_time: "09:00",
-        end_time: "18:00",
-      })),
+    // Insert/update trainer row
+    const { error: trainerErr } = await supabase.from("trainers").upsert(
+      {
+        id: user.id,
+        slug,
+        tagline,
+        about,
+        experience: experienceRaw,
+        price_from: priceFromRaw,
+        location,
+        languages,
+        published: true,
+      },
+      { onConflict: "id" },
     );
+    if (trainerErr) {
+      console.error("[become-trainer] trainers upsert failed:", trainerErr);
+      return { error: "Nie udało się zapisać profilu trenera. Spróbuj ponownie." };
+    }
+
+    // Update profile.is_trainer
+    const { error: profErr } = await supabase
+      .from("profiles")
+      .update({ role: "trainer" })
+      .eq("id", user.id);
+    if (profErr) {
+      console.error("[become-trainer] profile role update failed:", profErr);
+      return { error: "Nie udało się zmienić roli konta. Spróbuj ponownie." };
+    }
+
+    // Replace trainer_specializations
+    await supabase.from("trainer_specializations").delete().eq("trainer_id", user.id);
+    const { error: specErr } = await supabase.from("trainer_specializations").insert(
+      specializations.map((s) => ({ trainer_id: user.id, specialization_id: s })),
+    );
+    if (specErr) {
+      console.error("[become-trainer] specializations insert failed:", specErr);
+      return { error: "Nie udało się zapisać specjalizacji. Spróbuj ponownie." };
+    }
+
+    // Default availability: Mon-Fri 09:00-18:00 (if not already set)
+    const { data: existingRules } = await supabase
+      .from("availability_rules")
+      .select("id")
+      .eq("trainer_id", user.id)
+      .limit(1);
+    if (!existingRules || existingRules.length === 0) {
+      await supabase.from("availability_rules").insert(
+        [1, 2, 3, 4, 5].map((dow) => ({
+          trainer_id: user.id,
+          day_of_week: dow,
+          start_time: "09:00",
+          end_time: "18:00",
+        })),
+      );
+    }
+
+    // Seed placeholder services / packages / gallery so the new trainer
+    // sees a populated profile right away. The function is a no-op if the
+    // trainer already has any data in those tables — only fresh accounts
+    // get the seed. Errors here are non-fatal (account creation already
+    // succeeded; missing placeholders is a degraded state, not a failure).
+    await supabase.rpc("seed_trainer_placeholders", { trainer_id_arg: user.id });
+
+    revalidatePath("/studio/bookings");
+    revalidatePath(`/trainers/${slug}`);
+    revalidatePath("/");
+    redirect("/studio/start?welcome=1");
+  } catch (err) {
+    // redirect()/notFound() throw control-flow errors — let Next handle them.
+    unstable_rethrow(err);
+    console.error("[become-trainer] becomeTrainer crashed:", err);
+    return { error: "Coś poszło nie tak. Spróbuj ponownie." };
   }
-
-  // Seed placeholder services / packages / gallery so the new trainer
-  // sees a populated profile right away. The function is a no-op if the
-  // trainer already has any data in those tables — only fresh accounts
-  // get the seed. Errors here are non-fatal (account creation already
-  // succeeded; missing placeholders is a degraded state, not a failure).
-  await supabase.rpc("seed_trainer_placeholders", { trainer_id_arg: user.id });
-
-  revalidatePath("/studio/bookings");
-  revalidatePath(`/trainers/${slug}`);
-  revalidatePath("/trainers");
-  redirect("/studio/start?welcome=1");
 }

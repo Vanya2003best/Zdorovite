@@ -229,21 +229,22 @@ export async function undoCustomization(pageId?: string): Promise<
     const supabase = await createClient();
     switch (_restoreOnUndo.kind) {
       case "serviceDeleted": {
-        const { error } = await supabase.from("services").insert(_restoreOnUndo.row);
+        const { error } = await supabase.from("services").insert({ ..._restoreOnUndo.row, trainer_id: ctx.userId });
         if (error) return { error: `Nie udało się przywrócić usługi: ${error.message}` };
         break;
       }
       case "serviceCreated": {
         // Reverse of "create" is delete. Cancel any bookings against it
         // first (same FK protection as removeService).
+        const id = _restoreOnUndo.row.id as string;
         await supabase
           .from("bookings")
           .update({ status: "cancelled" })
-          .eq("service_id", _restoreOnUndo.id);
+          .eq("service_id", id);
         const { error } = await supabase
           .from("services")
           .delete()
-          .eq("id", _restoreOnUndo.id)
+          .eq("id", id)
           .eq("trainer_id", ctx.userId);
         if (error) return { error: `Nie udało się cofnąć dodania usługi: ${error.message}` };
         break;
@@ -258,19 +259,20 @@ export async function undoCustomization(pageId?: string): Promise<
         break;
       }
       case "packageDeleted": {
-        const { error } = await supabase.from("packages").insert(_restoreOnUndo.row);
+        const { error } = await supabase.from("packages").insert({ ..._restoreOnUndo.row, trainer_id: ctx.userId });
         if (error) return { error: `Nie udało się przywrócić pakietu: ${error.message}` };
         break;
       }
       case "packageCreated": {
+        const id = _restoreOnUndo.row.id as string;
         await supabase
           .from("bookings")
           .update({ status: "cancelled" })
-          .eq("package_id", _restoreOnUndo.id);
+          .eq("package_id", id);
         const { error } = await supabase
           .from("packages")
           .delete()
-          .eq("id", _restoreOnUndo.id)
+          .eq("id", id)
           .eq("trainer_id", ctx.userId);
         if (error) return { error: `Nie udało się cofnąć dodania pakietu: ${error.message}` };
         break;
@@ -377,7 +379,7 @@ export async function redoCustomization(pageId?: string): Promise<
       }
       case "serviceCreated": {
         // Original was CREATE → redo means insert again.
-        const { error } = await supabase.from("services").insert(_redoAction.row);
+        const { error } = await supabase.from("services").insert({ ..._redoAction.row, trainer_id: ctx.userId });
         if (error) return { error: `Nie udało się powtórzyć dodania usługi: ${error.message}` };
         break;
       }
@@ -404,7 +406,7 @@ export async function redoCustomization(pageId?: string): Promise<
         break;
       }
       case "packageCreated": {
-        const { error } = await supabase.from("packages").insert(_redoAction.row);
+        const { error } = await supabase.from("packages").insert({ ..._redoAction.row, trainer_id: ctx.userId });
         if (error) return { error: `Nie udało się powtórzyć dodania pakietu: ${error.message}` };
         break;
       }

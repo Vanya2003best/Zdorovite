@@ -15,11 +15,11 @@ import {
   markCompleted,
   markNoShow,
 } from "@/app/studio/bookings/actions";
-import { saveAvailabilityRules } from "@/app/studio/availability/actions";
+import { saveAvailabilityRules, saveAvailabilityOverride } from "@/app/studio/availability/actions";
 import WorkingHoursOverlay from "./WorkingHoursOverlay";
+import HolidayPresetButton from "./HolidayPresetButton";
 import {
   ModeSwitcher,
-  PatternSaveBar,
   isMode,
   type CalendarMode,
 } from "./CalendarMode";
@@ -33,7 +33,12 @@ export type BookingEvent = {
   status: "pending" | "paid" | "confirmed" | "completed" | "cancelled" | "no_show";
   price: number;
   note: string | null;
-  title: string;        // service or package name
+  title: string;        // service or package name (display label)
+  /** When non-null, this booking is a session inside a multi-session package
+   *  (the trainer sold "4 weeks of strength" etc.). Drives a distinct
+   *  colour palette on the calendar so the trainer reads "this is a
+   *  package session" at a glance vs a one-off service booking. */
+  packageName: string | null;
   clientName: string;
   clientAvatar: string | null;
 };
@@ -41,6 +46,10 @@ export type BookingEvent = {
 const POL_MONTHS_GEN = [
   "stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca",
   "lipca", "sierpnia", "września", "października", "listopada", "grudnia",
+];
+const POL_MONTHS_GEN_SHORT = [
+  "sty", "lut", "mar", "kwi", "maj", "cze",
+  "lip", "sie", "wrz", "paź", "lis", "gru",
 ];
 const POL_MONTHS_NOM = [
   "Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec",
@@ -61,17 +70,21 @@ const STATUS_STYLE: Record<BookingEvent["status"], { bg: string; border: string;
 
 /** Service-type → palette. Maps onto the design 32 .ev colour
  *  variants. Anything that doesn't match a keyword falls through
- *  to 'siłowy' as the safe default for "1:1 personal training". */
-type ServiceType = "silowy" | "online" | "cardio" | "funkc" | "diag";
+ *  to 'siłowy' as the safe default for "1:1 personal training".
+ *  Package sessions get their own distinct indigo palette so the
+ *  trainer reads "this is a package booking" at a glance, ignoring
+ *  whatever the underlying service-type would have been. */
+type ServiceType = "silowy" | "online" | "cardio" | "funkc" | "diag" | "package";
 const TYPE_STYLE: Record<
   ServiceType,
   { bg: string; border: string; text: string; sub: string; label: string }
 > = {
-  silowy: { bg: "#ecfdf5", border: "#10b981", text: "#064e3b", sub: "#047857", label: "Siłowy" },
-  online: { bg: "#eff6ff", border: "#3b82f6", text: "#1e3a8a", sub: "#1d4ed8", label: "Online" },
-  cardio: { bg: "#fef3c7", border: "#f59e0b", text: "#78350f", sub: "#b45309", label: "Cardio" },
-  funkc:  { bg: "#fae8ff", border: "#a855f7", text: "#581c87", sub: "#7e22ce", label: "Funkc" },
-  diag:   { bg: "#fee2e2", border: "#ef4444", text: "#7f1d1d", sub: "#b91c1c", label: "Diagnostyka" },
+  silowy:  { bg: "#ecfdf5", border: "#10b981", text: "#064e3b", sub: "#047857", label: "Siłowy" },
+  online:  { bg: "#eff6ff", border: "#3b82f6", text: "#1e3a8a", sub: "#1d4ed8", label: "Online" },
+  cardio:  { bg: "#fef3c7", border: "#f59e0b", text: "#78350f", sub: "#b45309", label: "Cardio" },
+  funkc:   { bg: "#fae8ff", border: "#a855f7", text: "#581c87", sub: "#7e22ce", label: "Funkc" },
+  diag:    { bg: "#fee2e2", border: "#ef4444", text: "#7f1d1d", sub: "#b91c1c", label: "Diagnostyka" },
+  package: { bg: "#eef2ff", border: "#6366f1", text: "#312e81", sub: "#4338ca", label: "Pakiet" },
 };
 
 function serviceType(title: string): ServiceType {
@@ -83,15 +96,32 @@ function serviceType(title: string): ServiceType {
   return "silowy";
 }
 
+/** When a booking is part of a package (packageName != null), force the
+ *  indigo palette regardless of what the title text would resolve to. */
+function bookingType(b: BookingEvent): ServiceType {
+  if (b.packageName) return "package";
+  return serviceType(b.title);
+}
+
 type ViewName = "timeGridDay" | "timeGridWeek" | "dayGridMonth";
+
+export type DateOverrideRow = {
+  date: string;            // YYYY-MM-DD
+  shifts: { start: string; end: string }[];
+  isClosed: boolean;
+};
 
 export default function CalendarClient({
   rules,
+  overrides,
   bookings,
   trainerId,
   pendingRescheduleIds,
 }: {
   rules: WorkingHourRule[];
+  /** Per-date exceptions keyed by YYYY-MM-DD. Empty/undefined = trainer
+   *  has no exceptions in the visible window; recurring `rules` apply. */
+  overrides?: DateOverrideRow[];
   bookings: BookingEvent[];
   trainerId: string;
   pendingRescheduleIds: string[];
@@ -106,65 +136,57 @@ export default function CalendarClient({
   /** Wraps the FullCalendar render so WorkingHoursOverlay can reach into FC's
    *  DOM via querySelector to find day columns. */
   const calWrapperRef = useRef<HTMLDivElement | null>(null);
-  /** Local mirror of working-hour rules. In bookings + availability modes we
-   *  auto-save each change (existing behaviour). In pattern mode we batch:
-   *  edits stay local until the trainer hits "Zapisz" on the sticky save bar,
-   *  matching design 32's review-before-publish workflow. */
+  /** Local mirror of working-hour rules. Saves are debounced auto-saves. */
   const [rulesState, setRulesState] = useState(rules);
   useEffect(() => { setRulesState(rules); }, [rules]);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [savingPattern, setSavingPattern] = useState(false);
 
   const handleRulesChange = useCallback(
     (next: WorkingHourRule[]) => {
       setRulesState(next);
-      // Pattern mode batches saves; the rest auto-save (debounced).
-      if (mode === "pattern") return;
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(async () => {
         await saveAvailabilityRules(next.map((r) => ({ dow: r.dow, start: r.start, end: r.end })));
         router.refresh();
       }, 400);
     },
-    [mode, router],
+    [router],
   );
 
-  // "Dirty" only meaningful in pattern mode — count rules that diverge from
-  // the server-side baseline. Cheap because the rule set is tiny.
-  const dirtyCount = useMemo(() => {
-    if (mode !== "pattern") return 0;
-    const sig = (r: WorkingHourRule[]) =>
-      [...r].sort((a, b) => a.dow - b.dow || a.start.localeCompare(b.start)).map((x) => `${x.dow}:${x.start}-${x.end}`).join(",");
-    return sig(rules) === sig(rulesState) ? 0 : Math.max(1, Math.abs(rules.length - rulesState.length) || 1);
-  }, [mode, rules, rulesState]);
+  // Per-date overrides keyed by YYYY-MM-DD for the WorkingHoursOverlay's
+  // lookup. Server-side fetches happen in page.tsx; we mirror locally so
+  // optimistic updates take effect immediately when the trainer saves.
+  const [overridesState, setOverridesState] = useState<Record<string, DateOverrideRow>>(() => {
+    const m: Record<string, DateOverrideRow> = {};
+    for (const o of overrides ?? []) m[o.date] = o;
+    return m;
+  });
+  useEffect(() => {
+    const m: Record<string, DateOverrideRow> = {};
+    for (const o of overrides ?? []) m[o.date] = o;
+    setOverridesState(m);
+  }, [overrides]);
 
-  const dirtyDetail = useMemo(() => {
-    if (mode !== "pattern" || dirtyCount === 0) return "";
-    const dows = new Set<number>();
-    rulesState.forEach((r) => {
-      const before = rules.find((x) => x.dow === r.dow && x.start === r.start && x.end === r.end);
-      if (!before) dows.add(r.dow);
-    });
-    rules.forEach((r) => {
-      const after = rulesState.find((x) => x.dow === r.dow && x.start === r.start && x.end === r.end);
-      if (!after) dows.add(r.dow);
-    });
-    const names = ["nd", "pn", "wt", "śr", "cz", "pt", "sb"];
-    return [...dows].map((d) => names[d]).join(" + ");
-  }, [mode, rules, rulesState, dirtyCount]);
-
-  const onSavePattern = useCallback(async () => {
-    setSavingPattern(true);
-    await saveAvailabilityRules(
-      rulesState.map((r) => ({ dow: r.dow, start: r.start, end: r.end })),
-    );
-    setSavingPattern(false);
-    router.refresh();
-  }, [rulesState, router]);
-
-  const onCancelPattern = useCallback(() => {
-    setRulesState(rules);
-  }, [rules]);
+  const handleOverrideChange = useCallback(
+    async (date: string, shifts: { start: string; end: string }[] | null) => {
+      // Optimistic local update so the overlay re-renders before the
+      // server round-trip completes.
+      setOverridesState((prev) => {
+        const next = { ...prev };
+        if (shifts === null) {
+          next[date] = { date, shifts: [], isClosed: true };
+        } else if (shifts.length === 0) {
+          delete next[date];
+        } else {
+          next[date] = { date, shifts, isClosed: false };
+        }
+        return next;
+      });
+      await saveAvailabilityOverride(date, shifts);
+      router.refresh();
+    },
+    [router],
+  );
 
   const futureBookingsCount = useMemo(
     () => bookings.filter((b) => new Date(b.start).getTime() >= Date.now() && b.status !== "cancelled").length,
@@ -182,7 +204,7 @@ export default function CalendarClient({
   // The pill on/off state filters which events FullCalendar receives,
   // so the count for hidden types stays in the side panel but the
   // grid is uncluttered.
-  const allTypes: ServiceType[] = useMemo(() => ["silowy", "online", "cardio", "funkc", "diag"], []);
+  const allTypes: ServiceType[] = useMemo(() => ["silowy", "online", "cardio", "funkc", "diag", "package"], []);
   const [hiddenTypes, setHiddenTypes] = useState<Set<ServiceType>>(new Set());
   const toggleType = (t: ServiceType) =>
     setHiddenTypes((prev) => {
@@ -222,8 +244,8 @@ export default function CalendarClient({
 
   // Per-type counts for the side panel breakdown.
   const typeCounts = useMemo(() => {
-    const counts: Record<ServiceType, number> = { silowy: 0, online: 0, cardio: 0, funkc: 0, diag: 0 };
-    for (const b of weekBookings) counts[serviceType(b.title)] += 1;
+    const counts: Record<ServiceType, number> = { silowy: 0, online: 0, cardio: 0, funkc: 0, diag: 0, package: 0 };
+    for (const b of weekBookings) counts[bookingType(b)] = (counts[bookingType(b)] ?? 0) + 1;
     return counts;
   }, [weekBookings]);
 
@@ -283,24 +305,46 @@ export default function CalendarClient({
     return Math.min(99, Math.round((weekBookings.length / cap) * 100));
   }, [weekBookings.length, weeklyHours]);
 
-  // Reset html { zoom: 1.1 } (set on >=1500px in globals.css) for the duration
-  // of the calendar page. Same trick as /studio/design — without it 100vh-based
-  // heights render at 110% physical and the page overflows the viewport,
-  // creating an unwanted browser-level scroll. Also lock body overflow so the
-  // page itself never scrolls; trainer scrolls inside the calendar instead.
+  // Lock html/body overflow so the page itself never scrolls — trainer scrolls
+  // inside the calendar instead.
+  //
+  // Also DISABLE the wide-monitor `html { zoom: 1.1 }` from globals.css on
+  // this page only. `zoom` is a non-standard CSS property that scales
+  // visual rendering but desyncs from JS measurements: getBoundingClientRect
+  // returns scaled pixels while offsetTop/offsetHeight return unscaled ones.
+  // FullCalendar mixes both internally to position events absolutely, so
+  // under zoom events drift past their actual time slots.
+  //
+  // To keep the studio sidebar at the same visual size as on every other
+  // /studio page (where it's effectively 1.1×), we COMPENSATE: set the
+  // sidebar's own zoom to 1.1 while html is at 1. Net effect: chrome
+  // (sidebar) stays the same size, calendar grid is now pixel-accurate.
+  // Only kicks in at ≥1500px because that's the breakpoint where the
+  // global rule applies; below it nothing has zoom to begin with.
   useEffect(() => {
     const html = document.documentElement;
     const body = document.body;
-    const prevZoom = html.style.zoom;
     const prevHtmlOverflow = html.style.overflow;
     const prevBodyOverflow = body.style.overflow;
-    html.style.zoom = "1";
     html.style.overflow = "clip";
     body.style.overflow = "clip";
+
+    const apply = () => {
+      const wide = window.innerWidth >= 1500;
+      html.style.zoom = wide ? "1" : "";
+      const sidebar = document.querySelector<HTMLElement>("[data-studio-sidebar]");
+      if (sidebar) sidebar.style.zoom = wide ? "1.1" : "";
+    };
+    apply();
+    window.addEventListener("resize", apply);
+
     return () => {
-      html.style.zoom = prevZoom;
+      window.removeEventListener("resize", apply);
       html.style.overflow = prevHtmlOverflow;
       body.style.overflow = prevBodyOverflow;
+      html.style.zoom = "";
+      const sidebar = document.querySelector<HTMLElement>("[data-studio-sidebar]");
+      if (sidebar) sidebar.style.zoom = "";
     };
   }, []);
 
@@ -324,6 +368,42 @@ export default function CalendarClient({
     return () => mql.removeEventListener("change", apply);
   }, []);
 
+  // Bookings-mode auto-jump: on first land in Rezerwacje, navigate the
+  // calendar to the week containing the trainer's nearest upcoming
+  // booking and scroll the timegrid to its start hour. So the trainer
+  // doesn't have to click `>` to find their next session — they're
+  // already looking at it. Runs once per session-in-bookings; manual
+  // navigation afterwards stays sticky.
+  const didBookingsJumpRef = useRef(false);
+  useEffect(() => {
+    if (didBookingsJumpRef.current) return;
+    if (mode !== "bookings") return;
+    const api = calRef.current?.getApi();
+    if (!api) return;
+
+    const now = Date.now();
+    const upcoming = bookings
+      .filter((b) => new Date(b.start).getTime() >= now && b.status !== "cancelled")
+      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())[0];
+    if (!upcoming) {
+      didBookingsJumpRef.current = true;
+      return;
+    }
+
+    const target = new Date(upcoming.start);
+    api.gotoDate(target);
+    // Scroll timegrid to the booking's start hour so it's visible without
+    // manual scrolling. Subtract a bit so there's context above it.
+    const scrollHour = Math.max(0, target.getHours() - 1);
+    api.scrollToTime({
+      hours: scrollHour,
+      minutes: 0,
+      seconds: 0,
+      milliseconds: 0,
+    });
+    didBookingsJumpRef.current = true;
+  }, [mode, bookings]);
+
   // FullCalendar height has to be a number/string — `height="100%"`
   // works only when the wrapper has a deterministic height, which we
   // don't have in this flex layout. Measure the viewport and subtract
@@ -333,11 +413,7 @@ export default function CalendarClient({
   useEffect(() => {
     if (typeof window === "undefined") return;
     const recompute = () => {
-      // Sum of approximate above-grid heights (topbar 70 + kpi 22 +
-      // toolbar 56 + filter pills 38 + paddings ~36). Tuned so 22:00
-      // fits without scroll on a 1080p viewport, and tall monitors
-      // get even more headroom.
-      const above = 230;
+      const above = 110;
       const h = Math.max(420, window.innerHeight - above);
       setCalHeight(h);
     };
@@ -349,20 +425,21 @@ export default function CalendarClient({
   // FullCalendar events: bookings only. Working-hours emerald wash is drawn
   // by the WorkingHoursOverlay (drag-editable), NOT as FC background events.
   // Pattern mode hides events entirely (the trainer is editing rules, not
-  // looking at sessions); availability fades them via a class so they're
-  // visible context but don't compete with the green availability bands.
-  // Filter pills suppress events of de-selected types.
+  // looking at sessions). Filter pills suppress events of de-selected types.
+  // Cancelled / no-show bookings are EXCLUDED from the calendar grid — they
+  // only live in history/notifications. Past completed ones stay visible
+  // but get a struck-through style so the trainer reads them as "done".
   const events: EventInput[] = useMemo(() => {
     if (mode === "pattern") return [];
-    const fadedClass = mode === "availability" ? "nz-event-faded" : "";
     return bookings
-      .filter((b) => !hiddenTypes.has(serviceType(b.title)))
+      .filter((b) => b.status !== "cancelled" && b.status !== "no_show")
+      .filter((b) => !hiddenTypes.has(bookingType(b)))
       .map((b) => ({
         id: b.id,
         title: b.clientName,
         start: b.start,
         end: b.end,
-        classNames: ["nz-booking", `nz-status-${b.status}`, fadedClass].filter(Boolean) as string[],
+        classNames: ["nz-booking", `nz-status-${b.status}`],
         extendedProps: { booking: b } as { booking: BookingEvent },
       }));
   }, [bookings, mode, hiddenTypes]);
@@ -390,111 +467,55 @@ export default function CalendarClient({
   };
 
   return (
-    <div className="mx-auto max-w-[1280px] px-4 sm:px-8 pt-5 pb-8 grid gap-3">
-      {/* Internal topbar — replaces the studio shell's StudioTopBar
-          on /studio/calendar (hidden via StudioTopBarSlot). Title +
-          mode-specific KPI line on the left, action buttons on the
-          right. The primary CTA + subtitle adapt to mode so the
-          screen tells the trainer what they're looking at. */}
-      <div className="flex items-start justify-between gap-4 flex-wrap mb-1">
-        <div>
-          <h1 className="text-[24px] sm:text-[26px] font-semibold tracking-[-0.022em] m-0">
-            Kalendarz
-          </h1>
-          <p className="text-[12.5px] text-slate-500 mt-1">
-            {mode === "pattern" ? (
-              <>
-                {weeklyHours} godz./tydz · profil &quot;Podstawowy&quot; aktywny
-              </>
-            ) : mode === "availability" ? (
-              <>
-                {weeklyHours} godz./tydz · {weekUtilisation}% wypełnienia · {Math.max(0, weeklyHours - weekBookings.length)} wolnych slotów w tygodniu
-              </>
-            ) : (
-              <>
-                {weekBookings.length} {weekBookings.length === 1 ? "sesja" : weekBookings.length < 5 ? "sesje" : "sesji"} w tym tygodniu
-                {weekRevenue > 0 && ` · ${weekRevenue.toLocaleString("pl-PL")} PLN przychodu`}
-                {weekUtilisation > 0 && ` · ${weekUtilisation}% wypełnienia`}
-              </>
-            )}
-          </p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <button
-            type="button"
-            disabled
-            title="Wkrótce — eksport do iCal"
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[9px] bg-white border border-slate-200 text-[12.5px] font-medium text-slate-500 disabled:opacity-60"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
-            </svg>
-            Eksport .ics
-          </button>
-          <button
-            type="button"
-            disabled
-            title="Wkrótce — synchronizacja z Google Calendar"
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[9px] bg-white border border-slate-200 text-[12.5px] font-medium text-slate-500 disabled:opacity-60"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 6v6l4 2" />
-            </svg>
-            Sync Google
-          </button>
-          <button
-            type="button"
-            disabled
-            title={
-              mode === "pattern"
-                ? "Wkrótce — wiele okien w jednym dniu"
-                : mode === "availability"
-                  ? "Wkrótce — urlopy, święta, dodatkowe godziny"
-                  : "Wkrótce — tworzenie sesji ręcznie z kalendarza"
-            }
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[9px] bg-slate-900 text-white text-[12.5px] font-semibold disabled:opacity-60"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            {mode === "pattern" ? "Nowe okno" : mode === "availability" ? "Dodaj wyjątek" : "Nowa sesja"}
-          </button>
-        </div>
-      </div>
+    <div className="max-w-[1280px] mx-auto px-4 sm:px-8 pt-5 pb-8 grid gap-3">
 
-      {/* Toolbar */}
-      <div className="flex items-center justify-between gap-3 flex-wrap rounded-xl border border-slate-200 bg-white px-3 sm:px-4 py-2.5">
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => navigate("today")}
-            className="h-9 px-3.5 text-[13px] font-medium text-slate-700 rounded-lg border border-slate-200 hover:border-slate-400 hover:bg-slate-50 transition"
-          >
-            Dziś
-          </button>
-          <div className="inline-flex items-center gap-px ml-1">
-            <button
-              type="button"
-              onClick={() => navigate("prev")}
-              aria-label="Poprzedni okres"
-              className="w-9 h-9 inline-flex items-center justify-center rounded-l-lg border border-slate-200 hover:bg-slate-50 transition"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M15 18l-6-6 6-6" /></svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate("next")}
-              aria-label="Następny okres"
-              className="w-9 h-9 inline-flex items-center justify-center rounded-r-lg border border-slate-200 border-l-0 hover:bg-slate-50 transition"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M9 18l6-6-6-6" /></svg>
-            </button>
-          </div>
-          <h2 className="text-[14px] sm:text-[15px] font-semibold tracking-tight ml-3 tabular-nums">{title}</h2>
+      {/* Toolbar — 3-column grid so the date title sits in true horizontal
+          center regardless of how wide the left (mode switcher + filter)
+          and right (view picker) groups grow. */}
+      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <ModeSwitcher mode={mode} bookingsBadge={futureBookingsCount} />
+          {mode !== "pattern" && (
+            <FilterDropdown
+              allTypes={allTypes}
+              hiddenTypes={hiddenTypes}
+              toggleType={toggleType}
+            />
+          )}
+          {mode === "pattern" && (
+            <HolidayPresetButton
+              overrides={overridesState}
+              onApply={async (dates) => {
+                // Batch-write closed-day overrides for each picked date.
+                // Existing handleOverrideChange does optimistic UI + server
+                // call per date — Promise.all so all rows hit the DB in
+                // parallel and the calendar refreshes once at the end.
+                await Promise.all(dates.map((d) => handleOverrideChange(d, null)));
+              }}
+              onRemove={(date) => handleOverrideChange(date, [])}
+            />
+          )}
         </div>
 
-        <ModeSwitcher mode={mode} bookingsBadge={futureBookingsCount} />
+        <div className="flex items-center justify-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => navigate("prev")}
+            aria-label="Poprzedni okres"
+            className="w-9 h-9 inline-flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 transition"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M15 18l-6-6 6-6" /></svg>
+          </button>
+          <h2 className="text-[14px] sm:text-[15px] font-semibold tracking-tight mx-3 tabular-nums">{title}</h2>
+          <button
+            type="button"
+            onClick={() => navigate("next")}
+            aria-label="Następny okres"
+            className="w-9 h-9 inline-flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 transition"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M9 18l6-6-6-6" /></svg>
+          </button>
+        </div>
 
         <div className="inline-flex bg-slate-100 rounded-[9px] p-[3px] gap-[2px]">
           {([
@@ -516,36 +537,6 @@ export default function CalendarClient({
         </div>
       </div>
 
-      {/* Filter pills — toggle service-type visibility on the grid.
-          Hidden for pattern mode (events suppressed entirely there).
-          Style follows design 32 .filt: dot + label only, no inline
-          count (the per-type breakdown lives in 'Tydzień w skrócie'). */}
-      {mode !== "pattern" && (
-        <div className="flex items-center gap-1.5 flex-wrap px-1">
-          {allTypes.map((t) => {
-            const cfg = TYPE_STYLE[t];
-            const off = hiddenTypes.has(t);
-            return (
-              <button
-                key={t}
-                type="button"
-                onClick={() => toggleType(t)}
-                className={
-                  "inline-flex items-center gap-1.5 h-[30px] px-2.5 rounded-[8px] text-[11.5px] font-medium border transition " +
-                  (off
-                    ? "bg-white text-slate-400 border-slate-200 line-through decoration-slate-300"
-                    : "bg-white text-slate-700 border-slate-200 hover:border-slate-300")
-                }
-                title={off ? `Pokaż ${cfg.label}` : `Ukryj ${cfg.label}`}
-              >
-                <span className="w-[7px] h-[7px] rounded-full" style={{ background: cfg.border }} />
-                {cfg.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
       {/* Inline 7-day summary above the grid was redundant — the
           per-day hours already show in the day-headers ('12 godz.')
           and the green bands themselves convey window times. Removed. */}
@@ -553,6 +544,7 @@ export default function CalendarClient({
       {/* Calendar */}
       <div
         ref={calWrapperRef}
+        data-mode={mode}
         className="relative rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-[0_8px_28px_-12px_rgba(2,6,23,0.12),0_2px_4px_-2px_rgba(2,6,23,0.06)]"
       >
         <FullCalendar
@@ -561,6 +553,7 @@ export default function CalendarClient({
           initialView="timeGridWeek"
           headerToolbar={false}
           firstDay={1} // Monday
+          weekends={true}
           locale="pl"
           buttonText={{ today: "Dziś", month: "Mc", week: "Tydz", day: "Dzień" }}
           allDaySlot={false}
@@ -588,14 +581,25 @@ export default function CalendarClient({
               a.getMonth() === b.getMonth() &&
               a.getDate() === b.getDate();
             const dow = day.getDay();
-            const dayMins = rulesState
-              .filter((r) => r.dow === dow)
-              .reduce((acc, r) => {
-                const [sh, sm] = r.start.split(":").map(Number);
-                const [eh, em] = r.end.split(":").map(Number);
-                return acc + Math.max(0, eh * 60 + em - (sh * 60 + sm));
-              }, 0);
+            // YYYY-MM-DD key for override lookup (Warsaw-local).
+            const ymd = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+            const ov = overridesState[ymd];
+            // Effective shifts for the day = override-layer when set, else
+            // the recurring weekly rule. Drives the "X godz." sub-label so
+            // the header reflects what the trainer actually sees on that
+            // specific date.
+            const effectiveShifts = ov
+              ? ov.isClosed
+                ? []
+                : ov.shifts
+              : rulesState.filter((r) => r.dow === dow).map((r) => ({ start: r.start, end: r.end }));
+            const dayMins = effectiveShifts.reduce((acc, s) => {
+              const [sh, sm] = s.start.split(":").map(Number);
+              const [eh, em] = s.end.split(":").map(Number);
+              return acc + Math.max(0, eh * 60 + em - (sh * 60 + sm));
+            }, 0);
             const dayHours = Math.round(dayMins / 60);
+            const isException = !!ov;
             const sessionCount = bookings.filter(
               (b) => sameDay(new Date(b.start), day) && b.status !== "cancelled",
             ).length;
@@ -627,7 +631,17 @@ export default function CalendarClient({
                       : "wolne";
             }
             return (
-              <div className="py-1.5 flex flex-col items-center gap-0.5 leading-tight">
+              <div className="py-1.5 flex flex-col items-center gap-0.5 leading-tight relative">
+                {/* Override marker — small amber dot in the header so the
+                    trainer sees at a glance which dates have a one-off
+                    exception instead of the recurring schedule. Tooltip
+                    via title attr explains the convention. */}
+                {isException && (
+                  <span
+                    className="absolute top-1 right-2 w-1.5 h-1.5 rounded-full bg-amber-500"
+                    title="Wyjątek dla tej daty — różni się od cotygodniowego wzorca"
+                  />
+                )}
                 <span className={"text-[10.5px] font-semibold uppercase tracking-[0.06em] " + (isToday ? "text-slate-900" : "text-slate-500")}>
                   {dowShort}{isToday ? " · dziś" : ""}
                 </span>
@@ -654,9 +668,8 @@ export default function CalendarClient({
           eventContent={(arg) => {
             const booking = (arg.event.extendedProps as { booking?: BookingEvent }).booking;
             if (!booking) return null;
-            const t = TYPE_STYLE[serviceType(booking.title)];
+            const t = TYPE_STYLE[bookingType(booking)];
             const isPending = booking.status === "pending";
-            const isCancelled = booking.status === "cancelled" || booking.status === "no_show";
             const isCompleted = booking.status === "completed";
             return (
               <div
@@ -665,10 +678,10 @@ export default function CalendarClient({
                   backgroundColor: t.bg,
                   borderLeft: `3px ${isPending ? "dashed" : "solid"} ${t.border}`,
                   boxShadow: "0 1px 2px rgba(2,6,23,0.04)",
-                  opacity: isCancelled ? 0.55 : 1,
-                  textDecoration: isCancelled ? "line-through" : undefined,
+                  opacity: isCompleted ? 0.7 : 1,
+                  textDecoration: isCompleted ? "line-through" : undefined,
                   color: t.text,
-                  filter: isCompleted ? "grayscale(0.4)" : undefined,
+                  filter: isCompleted ? "grayscale(0.3)" : undefined,
                 }}
               >
                 <div className="font-semibold truncate text-[11.5px]" style={{ color: "#0f172a" }}>
@@ -689,41 +702,17 @@ export default function CalendarClient({
           fcWrapperRef={calWrapperRef}
           viewType={view}
           onChange={handleRulesChange}
+          overrides={overridesState}
+          onOverrideChange={handleOverrideChange}
           // Bookings mode hides the green wash entirely (the trainer
-          // wants to see only sessions). Availability mode shows the
-          // wash but read-only — no clicks, no editor dialog. Pattern
-          // mode is the only place where bands are interactive.
-          readOnly={mode === "availability"}
+          // wants to see only sessions). Pattern mode is the only place
+          // where the working-hour bands are visible and interactive.
           hidden={mode === "bookings"}
           // Match the dynamic slotMinTime so block positions stay
           // aligned with the rendered grid even when the calendar
           // doesn't start at 06:00.
           slotMinHour={parseInt(slotMinTime.slice(0, 2), 10)}
         />
-      </div>
-
-      {/* Type legend — colors come from the service-type heuristic
-          (siłowy / online / cardio / funkc / diag). Status is implied
-          via dashed border (oczekuje), opacity (anulowane/nieobecność)
-          and grayscale (zakończone) on the cards themselves. */}
-      <div className="flex items-center gap-3 text-[11px] text-slate-500 flex-wrap px-1">
-        {(Object.entries(TYPE_STYLE) as [ServiceType, (typeof TYPE_STYLE)[ServiceType]][]).map(([key, t]) => (
-          <span key={key} className="inline-flex items-center gap-1.5">
-            <span
-              className="w-3 h-3 rounded-[3px]"
-              style={{ background: t.bg, borderLeft: `2px solid ${t.border}` }}
-            />
-            {t.label}
-          </span>
-        ))}
-        <span className="inline-flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-[3px] border-2 border-dashed" style={{ borderColor: "#fb923c" }} />
-          Oczekuje
-        </span>
-        <span className="inline-flex items-center gap-1.5 ml-auto">
-          <span className="w-3 h-3 rounded" style={{ background: "rgba(16,185,129,0.20)" }} />
-          Godziny pracy <span className="text-slate-400">— kliknij aby edytować</span>
-        </span>
       </div>
 
       {/* Selected booking modal */}
@@ -740,29 +729,6 @@ export default function CalendarClient({
         />
       )}
 
-      {/* Pattern-mode sticky save bar — only visible when the trainer
-          has touched the rules in this mode. Other modes auto-save. */}
-      {mode === "pattern" && (
-        <PatternSaveBar
-          dirtyCount={dirtyCount}
-          detail={dirtyDetail}
-          saving={savingPattern}
-          onSave={onSavePattern}
-          onCancel={onCancelPattern}
-        />
-      )}
-
-      {/* Floating week-summary panel (only in bookings mode — the
-          breakdown is meaningless when events are hidden / faded). */}
-      {mode === "bookings" && weekBookings.length > 0 && (
-        <WeekSummaryPanel
-          counts={typeCounts}
-          total={weekBookings.length}
-          revenue={weekRevenue}
-          utilisation={weekUtilisation}
-        />
-      )}
-
       {/* FullCalendar appearance overrides — keep them scoped to .nz-* classes
           we add above. Pulled inline as <style jsx global> to avoid touching
           globals.css. */}
@@ -775,9 +741,19 @@ export default function CalendarClient({
           --fc-today-bg-color: rgba(16, 185, 129, 0.07);
           --fc-page-bg-color: #fafbfc;
         }
-        /* Hour rows have a clearer slate border; half-hour gridlines drop to
-           a near-invisible dotted stroke so the eye locks onto whole hours. */
-        .fc .fc-timegrid-slot { height: 28px !important; border-color: #f1f5f9 !important; }
+        /* Force a fixed 30-min slot height so FullCalendar measures the
+           same height that we render visually. Without the override on
+           every level (row, lane, label) FC computed pixels-per-minute
+           that disagreed with whatever CSS picked, and events drifted
+           past their slots. We pin all three so measurements line up. */
+        .fc .fc-timegrid-slot,
+        .fc .fc-timegrid-slot-lane,
+        .fc .fc-timegrid-slot-label {
+          height: 40px !important;
+          min-height: 40px !important;
+          max-height: 40px !important;
+        }
+        .fc .fc-timegrid-slot { border-color: #f1f5f9 !important; }
         .fc .fc-timegrid-slot-lane.fc-timegrid-slot-minor { border-top-style: dotted; border-top-color: #f1f5f9 !important; }
         .fc .fc-timegrid-slot-lane:not(.fc-timegrid-slot-minor) { border-top: 1px solid #e2e8f0 !important; }
         /* Day-column borders subtly stronger than half-hour borders. */
@@ -787,11 +763,33 @@ export default function CalendarClient({
            (DOW + big number + 'X sesji'), so we just neutralise FC's
            default cushion styling. */
         .fc-col-header { background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+        /* Hide every FullCalendar internal scrollbar (the day-header bar
+           shows two tiny up/down arrows aligned with the body scrollbar
+           by default — visual noise next to the month numbers). Scroll
+           still works via wheel/touch, just no visible track. */
+        .fc-scroller { scrollbar-width: none; -ms-overflow-style: none; }
+        .fc-scroller::-webkit-scrollbar { display: none; width: 0; height: 0; }
+        /* Pin the day-header row below the green availability blocks
+           (z-[3]). FC's sticky header has its own stacking context, and
+           in pattern mode the green wash visually needs to read as the
+           top layer — without an explicit lower z-index the header can
+           sit above the wash and clip the day-numbers visually. */
+        .fc-col-header, .fc-col-header-cell { position: relative; z-index: 0; }
         .fc-col-header-cell-cushion {
           padding: 0 !important;
           color: inherit; text-transform: none; letter-spacing: 0;
           font-weight: inherit; font-size: inherit;
         }
+        /* Allow the 7 day columns to shrink so they all fit on lg screens.
+           Without this FullCalendar's default min-content widths can push
+           Sunday off-screen when the studio sidebar (240px) eats horizontal
+           room. */
+        .fc-col-header-cell, .fc-timegrid-col { min-width: 0 !important; }
+        .fc-col-header-cell-cushion { white-space: normal !important; }
+        /* Compact slot-label gutter on the left. Default is ~40px which is
+           plenty wide for "23:00" — pulling it down gives day columns a few
+           extra px each. */
+        .fc-timegrid-axis, .fc-timegrid-slot-label { width: 36px !important; min-width: 36px !important; }
         /* Today's column gets a very subtle emerald wash so it pops a
            little, but the heavy "this is today" cue is the black circle
            around the date number rendered by dayHeaderContent. */
@@ -811,11 +809,6 @@ export default function CalendarClient({
         .fc-event-main { padding: 0 !important; }
         .nz-booking { cursor: pointer; border-radius: 6px; overflow: hidden; }
         .nz-booking:hover { transform: translateY(-1px); transition: transform .15s; box-shadow: 0 4px 12px -2px rgba(2,6,23,0.15); }
-        /* Availability-mode events: faded per design 32 (.3 opacity)
-           so the green availability wash reads as primary, but events
-           stay visible as context. */
-        .nz-event-faded { opacity: .3; }
-        .nz-event-faded:hover { opacity: .5; transform: none !important; box-shadow: none !important; }
         /* Now indicator — keep red, slightly thicker for visibility. */
         .fc-now-indicator-line { border-color: #ef4444 !important; border-width: 2px; }
         .fc-now-indicator-arrow { border-color: #ef4444 !important; }
@@ -830,6 +823,13 @@ export default function CalendarClient({
           margin: 4px 4px 0 auto;
         }
         .fc-scrollgrid { border-radius: 0; border: none; }
+        /* Force the FullCalendar grid table to fit container width
+           exactly — without this its min-content sizing can push the
+           7th day column (Sunday) past the wrapper's right edge where
+           overflow:hidden then clips it. table-layout:fixed plus a 100%
+           width forces equal-share sizing across all 7 day columns. */
+        .fc-scrollgrid, .fc-scrollgrid table { width: 100% !important; }
+        .fc .fc-col-header, .fc .fc-timegrid-body, .fc .fc-timegrid-body table { table-layout: fixed !important; width: 100% !important; }
       `}</style>
     </div>
   );
@@ -926,14 +926,16 @@ function formatTitle(date: Date, view: ViewName): string {
     const dow = ["Niedziela", "Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota"][date.getDay()];
     return `${dow}, ${d} ${POL_MONTHS_GEN[m]} ${y}`;
   }
-  // Week: show range "27 kwiet – 3 maja 2026"
+  // Week: short range "27 kwi – 3 maj 2026" — using 3-letter month names
+  // (POL_MONTHS_GEN_SHORT) so the title doesn't wrap the toolbar onto
+  // multiple rows when months have long Polish names ("września", "sierpnia").
   const end = new Date(date);
   end.setDate(d + 6);
   const sameMonth = end.getMonth() === m;
   const sameYear = end.getFullYear() === y;
-  const startStr = sameMonth ? `${d}` : `${d} ${POL_MONTHS_GEN[m]}`;
-  const endStr = `${end.getDate()} ${POL_MONTHS_GEN[end.getMonth()]} ${end.getFullYear()}`;
-  return sameYear ? `${startStr} – ${endStr}` : `${d} ${POL_MONTHS_GEN[m]} ${y} – ${endStr}`;
+  const startStr = sameMonth ? `${d}` : `${d} ${POL_MONTHS_GEN_SHORT[m]}`;
+  const endStr = `${end.getDate()} ${POL_MONTHS_GEN_SHORT[end.getMonth()]} ${end.getFullYear()}`;
+  return sameYear ? `${startStr} – ${endStr}` : `${d} ${POL_MONTHS_GEN_SHORT[m]} ${y} – ${endStr}`;
 }
 
 /* ============================================================
@@ -1095,7 +1097,7 @@ function BookingDetail({
 function ActionForm({
   action, bookingId, onDone, children, extraInputName, extraInputValue,
 }: {
-  action: (formData: FormData) => Promise<void>;
+  action: (formData: FormData) => Promise<unknown>;
   bookingId: string;
   onDone: () => void;
   children: React.ReactNode;
@@ -1119,3 +1121,124 @@ function ActionForm({
 }
 
 function pad(n: number) { return String(n).padStart(2, "0"); }
+
+/* ===================== FILTER DROPDOWN ===================== */
+
+function FilterDropdown({
+  allTypes,
+  hiddenTypes,
+  toggleType,
+}: {
+  allTypes: ServiceType[];
+  hiddenTypes: Set<ServiceType>;
+  toggleType: (t: ServiceType) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [open]);
+
+  const activeCount = allTypes.length - hiddenTypes.size;
+  const allOn = hiddenTypes.size === 0;
+
+  return (
+    <div ref={wrapRef} className="relative inline-flex">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="inline-flex items-center gap-2 h-[30px] px-3 rounded-[8px] text-[11.5px] font-medium border bg-white text-slate-700 border-slate-200 hover:border-slate-300 transition"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
+        </svg>
+        Filtry
+        {!allOn && (
+          <>
+            <span className="text-slate-500">·</span>
+            <span className="text-emerald-700 font-semibold">
+              {activeCount}/{allTypes.length}
+            </span>
+          </>
+        )}
+        <svg
+          width="11"
+          height="11"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          className={"text-slate-400 transition-transform " + (open ? "rotate-180" : "")}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-2 w-[240px] bg-white border border-slate-200 rounded-[12px] shadow-[0_20px_40px_-12px_rgba(2,6,23,0.16)] overflow-hidden z-[60]">
+          <div className="px-3 py-2 border-b border-slate-100 flex justify-between items-center">
+            <span className="text-[11px] uppercase tracking-[0.07em] text-slate-500 font-semibold">
+              Typy sesji
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                // Reset: turn everything ON.
+                allTypes.forEach((t) => {
+                  if (hiddenTypes.has(t)) toggleType(t);
+                });
+              }}
+              disabled={allOn}
+              className="text-[11px] text-emerald-700 font-medium hover:underline disabled:text-slate-400 disabled:no-underline"
+            >
+              Pokaż wszystkie
+            </button>
+          </div>
+          <div className="py-1">
+            {allTypes.map((t) => {
+              const cfg = TYPE_STYLE[t];
+              const off = hiddenTypes.has(t);
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => toggleType(t)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[12.5px] text-slate-700 hover:bg-slate-50 transition text-left"
+                >
+                  <span
+                    className={
+                      "w-4 h-4 rounded-[4px] border-[1.5px] inline-flex items-center justify-center shrink-0 " +
+                      (off ? "bg-white border-slate-300" : "bg-emerald-500 border-emerald-500")
+                    }
+                  >
+                    {!off && (
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round">
+                        <path d="M20 6L9 17l-5-5" />
+                      </svg>
+                    )}
+                  </span>
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: cfg.border }} />
+                  <span className="flex-1">{cfg.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

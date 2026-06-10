@@ -157,7 +157,7 @@ export default function BookingSidebar({
 
         {/* Price + submit */}
         <div className="flex justify-between items-baseline pt-3 border-t border-slate-200">
-          <span className="text-[13px] text-slate-500">Do zapłaty</span>
+          <span className="text-[13px] text-slate-500">Cena sesji</span>
           <span className="text-[22px] font-semibold tracking-tight">
             {currentService?.price ?? priceFrom} zł
           </span>
@@ -171,9 +171,8 @@ export default function BookingSidebar({
           {isSubmitting ? "Rezerwuję..." : "Zarezerwuj sesję"}
         </button>
 
-        <div className="flex items-center justify-center gap-1.5 mt-2 text-[11px] text-slate-500">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg>
-          Bezpieczna płatność · anuluj do 24h
+        <div className="text-center mt-2 text-[11px] text-slate-500 leading-snug">
+          Płatność u trenera · anuluj do 24h
         </div>
 
       </form>

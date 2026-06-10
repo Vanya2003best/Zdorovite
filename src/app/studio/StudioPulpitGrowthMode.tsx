@@ -127,7 +127,7 @@ export default function StudioPulpitGrowthMode({
               <h3 className="m-0 text-[14px] text-[#002f34] font-extrabold tracking-[-0.005em]">
                 Twoja pozycja w wynikach
               </h3>
-              <Link href="/studio/analytics/keywords" className="text-[11.5px] text-slate-500 font-semibold hover:text-orange-600">
+              <Link href="/studio/reviews" className="text-[11.5px] text-slate-500 font-semibold hover:text-orange-600">
                 Wszystkie keywordy →
               </Link>
             </div>

@@ -22,18 +22,42 @@ export default function DayHoursDialog({
   dow,
   initialShifts,
   allRules,
+  date,
+  hasOverride,
   onClose,
   onSave,
+  onSaveOverride,
 }: {
   dow: number;
   initialShifts: Shift[];
   allRules: WorkingHourRule[];
+  /** YYYY-MM-DD of the column the trainer clicked. When provided alongside
+   *  onSaveOverride, the dialog offers a "tylko ten dzień" scope toggle so
+   *  the trainer can override hours for a single date without breaking the
+   *  recurring weekly pattern. */
+  date?: string;
+  /** True when this exact `date` already has an entry in
+   *  availability_overrides — drives the "Usuń wyjątek" affordance and
+   *  lets us preselect "tylko ten dzień" so the trainer doesn't fall
+   *  back into recurring-edit mode by accident. */
+  hasOverride?: boolean;
   onClose: () => void;
   onSave: (allRules: WorkingHourRule[]) => void;
+  /** Persists shifts into `availability_overrides` for the given date.
+   *  null = "closed that date", []/non-empty = open hours, omitted = use
+   *  recurring path. */
+  onSaveOverride?: (date: string, shifts: Shift[] | null) => Promise<void> | void;
 }) {
+  const supportsOverride = !!date && !!onSaveOverride;
+  // Default to one-off scope when the trainer is clicking a real date and
+  // already has an override set — they're more likely to be editing the
+  // exception than wanting to repromote it to a recurring rule.
+  const [scope, setScope] = useState<"recurring" | "override">(
+    supportsOverride && hasOverride ? "override" : "recurring",
+  );
   const [closed, setClosed] = useState(initialShifts.length === 0);
   const [shifts, setShifts] = useState<Shift[]>(
-    initialShifts.length > 0 ? initialShifts : [{ start: "09:00", end: "18:00" }],
+    initialShifts.length > 0 ? initialShifts : [{ start: "06:00", end: "18:00" }],
   );
   const [copyTo, setCopyTo] = useState<number[]>([]);
   const [pending, setPending] = useState(false);
@@ -62,7 +86,7 @@ export default function DayHoursDialog({
       const newEnd = Math.min(newStart + 4 * 60, 23 * 60);
       setShifts((prev) => [...prev, { start: minToTime(newStart), end: minToTime(newEnd) }]);
     } else {
-      setShifts([{ start: "09:00", end: "18:00" }]);
+      setShifts([{ start: "06:00", end: "18:00" }]);
     }
   };
 
@@ -86,7 +110,7 @@ export default function DayHoursDialog({
     return null;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const err = validate();
     if (err) {
       setError(err);
@@ -94,8 +118,16 @@ export default function DayHoursDialog({
     }
     setPending(true);
 
-    // Build new rule set: drop existing rules for `dow` and any day in copyTo,
-    // then re-add fresh ones from current shifts (unless closed).
+    // One-off override path: write to availability_overrides for `date` only,
+    // recurring rule untouched. Skip "kopiuj na inne dni" because copying a
+    // one-off doesn't make conceptual sense.
+    if (scope === "override" && date && onSaveOverride) {
+      await onSaveOverride(date, closed ? null : shifts);
+      return;
+    }
+
+    // Recurring path: build new rule set — drop existing rules for `dow` and
+    // any day in copyTo, then re-add fresh ones from current shifts.
     const targetDays = new Set([dow, ...copyTo]);
     const carry = allRules.filter((r) => !targetDays.has(r.dow));
     const fresh: WorkingHourRule[] = [];
@@ -108,6 +140,22 @@ export default function DayHoursDialog({
     }
     onSave([...carry, ...fresh]);
   };
+
+  /** Wipe the override for this date, restoring the recurring rule. */
+  const handleClearOverride = async () => {
+    if (!date || !onSaveOverride) return;
+    setPending(true);
+    await onSaveOverride(date, []);
+  };
+
+  // Pretty date for the override-scope label ("9 maj").
+  const dateLabel = date
+    ? (() => {
+        const d = new Date(`${date}T00:00:00`);
+        const months = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
+        return `${d.getDate()} ${months[d.getMonth()]}`;
+      })()
+    : "";
 
   return (
     <div
@@ -124,6 +172,34 @@ export default function DayHoursDialog({
         </header>
 
         <div className="px-6 py-5 grid gap-4">
+          {/* Scope toggle — only when the column has a real date AND the
+              parent passed an override-save callback. Lets the trainer
+              choose between "this date only" and "every {dow}" without
+              another modal layer. */}
+          {supportsOverride && (
+            <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl text-[12.5px]">
+              <button
+                type="button"
+                onClick={() => setScope("recurring")}
+                className={`py-2 rounded-lg font-medium transition ${
+                  scope === "recurring" ? "bg-white text-slate-900 shadow-[0_1px_3px_rgba(0,0,0,0.08)]" : "text-slate-600"
+                }`}
+              >
+                Każdy {DAY_NAMES_NOM[dow].toLowerCase()}
+              </button>
+              <button
+                type="button"
+                onClick={() => setScope("override")}
+                className={`py-2 rounded-lg font-medium transition inline-flex items-center justify-center gap-1.5 ${
+                  scope === "override" ? "bg-white text-slate-900 shadow-[0_1px_3px_rgba(0,0,0,0.08)]" : "text-slate-600"
+                }`}
+              >
+                Tylko {dateLabel}
+                {hasOverride && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" title="Aktywny wyjątek" />}
+              </button>
+            </div>
+          )}
+
           {/* Open/Closed toggle */}
           <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl">
             <button
@@ -179,20 +255,28 @@ export default function DayHoursDialog({
                   )}
                 </div>
               ))}
+              {/* Prominent CTA — proper dashed-outline button under the
+                  last shift so trainers see the affordance at a glance.
+                  Replaces the old underline-text link that visually read
+                  as a footnote and was easy to miss. */}
               <button
                 type="button"
                 onClick={addShift}
-                className="text-[12px] text-emerald-700 hover:text-emerald-800 font-medium text-left underline-offset-2 hover:underline mt-1"
+                className="mt-1 h-10 w-full rounded-lg border border-dashed border-emerald-300 bg-emerald-50/40 text-[13px] font-semibold text-emerald-700 hover:bg-emerald-50 hover:border-emerald-500 transition inline-flex items-center justify-center gap-1.5"
               >
-                + Dodaj kolejną zmianę
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                Dodaj kolejną zmianę
               </button>
-              <p className="text-[11px] text-slate-500 leading-relaxed mt-1">
+              <p className="text-[11px] text-slate-500 leading-relaxed mt-2">
                 Możesz dodać kilka zmian w jednym dniu — np. <span className="font-mono">06:00–12:00</span> + <span className="font-mono">16:00–22:00</span> z przerwą w środku.
               </p>
             </div>
           )}
 
-          {/* Copy to other days */}
+          {/* Copy to other days — recurring scope only. Copying a one-off
+              override to every other dow doesn't make conceptual sense, so
+              we hide the section in override mode. */}
+          {scope === "recurring" && (
           <div className="grid gap-2 pt-2 border-t border-slate-100">
             <div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-slate-500">Skopiuj na inne dni</div>
             <div className="flex gap-1.5 flex-wrap">
@@ -216,6 +300,19 @@ export default function DayHoursDialog({
               })}
             </div>
           </div>
+          )}
+
+          {/* Clear-override link — only when this date currently has one. */}
+          {supportsOverride && hasOverride && scope === "override" && (
+            <button
+              type="button"
+              onClick={handleClearOverride}
+              disabled={pending}
+              className="text-[12px] text-rose-700 hover:text-rose-800 font-medium text-left underline-offset-2 hover:underline"
+            >
+              Usuń wyjątek — przywróć cotygodniowy wzorzec
+            </button>
+          )}
 
           {error && (
             <div className="text-[12px] text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">

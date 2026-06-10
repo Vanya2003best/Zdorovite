@@ -174,7 +174,7 @@ export default async function PremiumProfile({
           <nav className="hidden @[640px]:flex items-center gap-1.5 text-[13px] text-slate-500 py-5">
             <Link href="/" className="hover:text-slate-900 transition">Strona główna</Link>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6" /></svg>
-            <Link href="/trainers" className="hover:text-slate-900 transition">Trenerzy</Link>
+            <Link href="/" className="hover:text-slate-900 transition">Trenerzy</Link>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6" /></svg>
             <span className="text-slate-900">{trainer.name}</span>
           </nav>
@@ -198,11 +198,11 @@ export default async function PremiumProfile({
           {/* Floating buttons — visible on mobile, also pinned top-right on desktop. */}
           {!isEmbed && (
             <div className="absolute top-4 left-3.5 right-3.5 flex justify-between @[640px]:hidden">
-              <Link href="/trainers" className="w-10 h-10 rounded-full bg-white/92 backdrop-blur-md flex items-center justify-center text-slate-900">
+              <Link href="/" className="w-10 h-10 rounded-full bg-white/92 backdrop-blur-md flex items-center justify-center text-slate-900">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M15 18l-6-6 6-6" /></svg>
               </Link>
               <div className="flex gap-2">
-                <button className="w-10 h-10 rounded-full bg-white/92 backdrop-blur-md flex items-center justify-center text-slate-900">
+                <button aria-label="Udostępnij profil" className="w-10 h-10 rounded-full bg-white/92 backdrop-blur-md flex items-center justify-center text-slate-900">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" /></svg>
                 </button>
                 {isOwner ? (

@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 
 export type FavoriteTrainerBrief = {
+  /** Profile UUID — used for messaging links (?with=<id>). */
+  id: string;
   slug: string;
   name: string;
   avatar: string | null;
@@ -27,7 +29,7 @@ export async function getFavoriteTrainersBrief(clientId: string): Promise<Favori
     .select(`
       created_at,
       trainer:trainers!trainer_id (
-        slug, rating,
+        id, slug, rating,
         profile:profiles!id ( display_name, avatar_url ),
         trainer_specializations ( specialization_id )
       )
@@ -38,6 +40,7 @@ export async function getFavoriteTrainersBrief(clientId: string): Promise<Favori
 
   type Row = {
     trainer: {
+      id: string;
       slug: string;
       rating: number | string;
       profile: { display_name: string; avatar_url: string | null } | null;
@@ -48,6 +51,7 @@ export async function getFavoriteTrainersBrief(clientId: string): Promise<Favori
   return ((data ?? []) as unknown as Row[])
     .filter((r) => r.trainer !== null)
     .map((r) => ({
+      id: r.trainer!.id,
       slug: r.trainer!.slug,
       name: r.trainer!.profile?.display_name ?? "",
       avatar: r.trainer!.profile?.avatar_url ?? null,

@@ -83,17 +83,32 @@ const ITEMS: Item[] = [
   { kind: "divider" },
 ];
 
+const ExternalIcon = (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
+  </svg>
+);
+
 /**
- * Avatar dropdown for the studio top bar — shows display_name + email
- * at the top, then quick links (settings / subscription / help) and
- * the Wyloguj action. Replaces the old "user footer" block at the
- * bottom of the sidebar.
+ * Avatar dropdown — three render variants:
+ *  - "icon": small avatar circle (36px) that opens a dropdown below it.
+ *    Used in compact spots without a label.
+ *  - "chip": OLX-style chip (small avatar + "Twoje konto" label + chevron),
+ *    styled for the dark-teal StudioTopBar. Matches design 35-studio-klienci.
+ *  - "pill": full-width row (avatar + name + email + caret), opens UP.
+ *    Used at the bottom of StudioSidebar / AccountSidebar so the user
+ *    has identity + actions in one persistent place.
+ *
+ * Optional `publicPageHref` adds a "Strona publiczna" item to the menu —
+ * lets us drop the dedicated sidebar-footer link without losing access.
  */
 export default function AccountMenu({
   displayName,
   email,
   avatarUrl,
   avatarFocal,
+  variant = "icon",
+  publicPageHref,
 }: {
   displayName: string;
   email: string | null;
@@ -102,6 +117,8 @@ export default function AccountMenu({
    *  "center" when null/undefined. Comes from profiles.avatar_focal —
    *  set via drag-pan on /studio/profile. */
   avatarFocal?: string | null;
+  variant?: "icon" | "chip" | "pill";
+  publicPageHref?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -124,32 +141,98 @@ export default function AccountMenu({
 
   const initial = (displayName || "?").charAt(0).toUpperCase();
 
+  const isPill = variant === "pill";
+  const isChip = variant === "chip";
+
   return (
     <div ref={wrapRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-label={`Konto: ${displayName}`}
-        aria-expanded={open}
-        className="block w-9 h-9 rounded-full overflow-hidden border border-slate-200 hover:border-slate-400 transition"
-      >
-        {avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={avatarUrl}
-            alt=""
-            className="w-full h-full object-cover"
-            style={{ objectPosition: avatarFocal || "center" }}
-          />
-        ) : (
-          <span className="w-full h-full bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-700 inline-flex items-center justify-center font-semibold text-sm">
-            {initial}
+      {isPill ? (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-label={`Konto: ${displayName}`}
+          aria-expanded={open}
+          className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-[10px] hover:bg-slate-50 transition"
+        >
+          <span className="w-9 h-9 rounded-full overflow-hidden border border-slate-200 shrink-0">
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={avatarUrl}
+                alt=""
+                className="w-full h-full object-cover"
+                style={{ objectPosition: avatarFocal || "center" }}
+              />
+            ) : (
+              <span className="w-full h-full bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-700 inline-flex items-center justify-center font-semibold text-sm">
+                {initial}
+              </span>
+            )}
           </span>
-        )}
-      </button>
+          <span className="flex-1 min-w-0 text-left">
+            <span className="block text-[12.5px] font-semibold text-slate-900 truncate">
+              {displayName}
+            </span>
+            {email && (
+              <span className="block text-[10.5px] text-slate-500 truncate">{email}</span>
+            )}
+          </span>
+          <span className="text-slate-400 shrink-0">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="18 15 12 9 6 15" />
+            </svg>
+          </span>
+        </button>
+      ) : isChip ? (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-label={`Konto: ${displayName}`}
+          aria-expanded={open}
+          className="flex items-center gap-2 px-3 py-2 rounded-[9px] hover:bg-white/10 transition text-white"
+        >
+          {/* OLX-style: user-outline glyph (not avatar) — consistent
+              regardless of whether the trainer has uploaded a photo. */}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20" aria-hidden="true">
+            <circle cx="12" cy="8" r="4" />
+            <path d="M4 21v-1a8 8 0 0116 0v1" />
+          </svg>
+          <span className="text-[14px] font-bold">Twoje konto</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14" aria-hidden="true">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-label={`Konto: ${displayName}`}
+          aria-expanded={open}
+          className="block w-9 h-9 rounded-full overflow-hidden border border-slate-200 hover:border-slate-400 transition"
+        >
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatarUrl}
+              alt=""
+              className="w-full h-full object-cover"
+              style={{ objectPosition: avatarFocal || "center" }}
+            />
+          ) : (
+            <span className="w-full h-full bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-700 inline-flex items-center justify-center font-semibold text-sm">
+              {initial}
+            </span>
+          )}
+        </button>
+      )}
 
       {open && (
-        <div className="absolute right-0 mt-2 w-[300px] max-w-[calc(100vw-24px)] bg-white border border-slate-200 rounded-[14px] shadow-[0_20px_40px_-12px_rgba(2,6,23,0.16)] z-[60] overflow-hidden">
+        <div
+          className={
+            "absolute w-[300px] max-w-[calc(100vw-24px)] bg-white border border-slate-200 rounded-[14px] shadow-[0_20px_40px_-12px_rgba(2,6,23,0.16)] z-[60] overflow-hidden " +
+            (isPill ? "left-0 bottom-full mb-2" : "right-0 mt-2")
+          }
+        >
           {/* Identity */}
           <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-3">
             {avatarUrl ? (
@@ -173,6 +256,26 @@ export default function AccountMenu({
 
           {/* Items */}
           <div className="py-1.5">
+            {publicPageHref && (
+              <Link
+                href={publicPageHref}
+                target="_blank"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-3 px-4 py-2.5 text-slate-700 hover:bg-slate-50 transition"
+              >
+                <span className="w-7 h-7 rounded-[8px] bg-slate-100 text-slate-700 inline-flex items-center justify-center shrink-0">
+                  {ExternalIcon}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[13px] font-semibold leading-tight">Strona publiczna</span>
+                  <span className="block text-[11.5px] text-slate-500 leading-tight mt-0.5">
+                    Zobacz swój profil oczami klientów
+                  </span>
+                </span>
+                <span className="text-slate-400 shrink-0">{ExternalIcon}</span>
+              </Link>
+            )}
+            {publicPageHref && <div className="border-t border-slate-100 my-1" />}
             {ITEMS.map((item, i) => {
               if (item.kind === "divider") {
                 return <div key={`div-${i}`} className="border-t border-slate-100 my-1" />;

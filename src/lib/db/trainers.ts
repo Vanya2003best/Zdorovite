@@ -301,7 +301,35 @@ async function selectTrainersWithFocalFallback(
   return fallback;
 }
 
-export async function getTrainers(): Promise<Trainer[]> {
+/**
+ * Filter set applied to the catalog list (homepage + /trainers route).
+ *
+ * Only filters whose data lives in our schema are honored. The catalog UI
+ * exposes more "popular" chips than we can back today (promo / since /
+ * gender / pro / freeconsult / time-of-day / radius); those URL params are
+ * surfaced as active chips by CatalogClient but ignored here until the
+ * relevant column or table exists. Each TODO below is paired with the
+ * migration that would unblock it, so re-enabling is one-line.
+ */
+export type TrainerFilters = {
+  /** Trainer must have this specialization. */
+  spec?: Specialization;
+  /** Case-insensitive substring match against trainers.location. */
+  city?: string;
+  /** Case-insensitive substring match against profile.display_name. */
+  q?: string;
+  /** Inclusive priceFrom range. Both ends optional. */
+  priceMin?: number;
+  priceMax?: number;
+  /**
+   * - `top` (default): rating desc, review_count desc.
+   * - `price-asc` / `price-desc`: priceFrom.
+   * - `rating`: rating desc only.
+   */
+  sort?: "top" | "price-asc" | "price-desc" | "rating";
+};
+
+export async function getTrainers(filters: TrainerFilters = {}): Promise<Trainer[]> {
   const supabase = await createClient();
   const { data, error } = await selectTrainersWithFocalFallback(supabase, (sel) =>
     supabase
@@ -313,7 +341,48 @@ export async function getTrainers(): Promise<Trainer[]> {
   if (error) throw error;
   const rows = data as unknown as TrainerRow[];
   await attachCertVerification(supabase, rows);
-  return rows.map(mapTrainer);
+  let mapped = rows.map(mapTrainer);
+
+  if (filters.spec) {
+    const s = filters.spec;
+    mapped = mapped.filter((t) => t.specializations.includes(s));
+  }
+  if (filters.city && filters.city.trim().length > 0) {
+    const needle = filters.city.trim().toLowerCase();
+    mapped = mapped.filter((t) => (t.location ?? "").toLowerCase().includes(needle));
+  }
+  if (filters.q && filters.q.trim().length >= 2) {
+    const needle = filters.q.trim().toLowerCase();
+    mapped = mapped.filter((t) => (t.name ?? "").toLowerCase().includes(needle));
+  }
+  if (typeof filters.priceMin === "number") {
+    const min = filters.priceMin;
+    mapped = mapped.filter((t) => t.priceFrom >= min);
+  }
+  if (typeof filters.priceMax === "number") {
+    const max = filters.priceMax;
+    mapped = mapped.filter((t) => t.priceFrom <= max);
+  }
+
+  switch (filters.sort) {
+    case "price-asc":
+      mapped = mapped.sort((a, b) => a.priceFrom - b.priceFrom);
+      break;
+    case "price-desc":
+      mapped = mapped.sort((a, b) => b.priceFrom - a.priceFrom);
+      break;
+    case "rating":
+      mapped = mapped.sort((a, b) => b.rating - a.rating);
+      break;
+    case "top":
+    default:
+      mapped = mapped.sort((a, b) =>
+        b.rating !== a.rating ? b.rating - a.rating : b.reviewCount - a.reviewCount,
+      );
+      break;
+  }
+
+  return mapped;
 }
 
 export async function getTopTrainers(limit = 3): Promise<Trainer[]> {

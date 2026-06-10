@@ -1,277 +1,224 @@
-import Link from "next/link";
 import { requireClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getGoals } from "@/lib/db/goals";
-import { getLatestWeight, getWeightLog, getYearStartWeight, type WeightPoint } from "@/lib/db/weight";
-import { getHealth } from "@/lib/db/health";
-import GoalsEditor from "./GoalsEditor";
-import WeightLogger from "./WeightLogger";
-import HealthEditor from "./HealthEditor";
+import { getWeightLog } from "@/lib/db/weight";
+import Postepy, {
+  type PostepyData,
+  type Goal as ViewGoal,
+  type TrainerNote,
+} from "./Postepy";
 
-const PL_MONTH_SHORT = ["Sty", "Lut", "Mar", "Kwi", "Maj", "Cze", "Lip", "Sie", "Wrz", "Paź", "Lis", "Gru"];
+const PL_MONTHS = [
+  "stycznia",
+  "lutego",
+  "marca",
+  "kwietnia",
+  "maja",
+  "czerwca",
+  "lipca",
+  "sierpnia",
+  "września",
+  "października",
+  "listopada",
+  "grudnia",
+];
 
-type ActivityRow = {
-  id: string;
-  start_time: string;
-  status: string;
-  created_at: string;
-  // Snapshot fields preferred over the JOIN (migration 018).
-  service_name: string | null;
-  package_name: string | null;
-  service: { name: string } | null;
-  package: { name: string } | null;
-  trainer: {
-    profile: { display_name: string } | null;
-  } | null;
-};
-
-function fmtRelative(iso: string) {
-  const d = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffMin = Math.round(diffMs / 60_000);
-  const diffH = Math.round(diffMs / 3_600_000);
-  const diffD = Math.round(diffMs / 86_400_000);
-  if (diffMin < 60) return `${Math.max(1, diffMin)} min temu`;
-  if (diffH < 24) return d.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
-  if (diffD === 1) return "wczoraj";
-  if (diffD < 7) return `${diffD} dni temu`;
-  return `${d.getDate()} ${PL_MONTH_SHORT[d.getMonth()]}`;
-}
-
-function fmtKg(kg: number): string {
-  return `${kg.toFixed(1).replace(".", ",")} kg`;
-}
-
-function fmtDelta(delta: number): string {
-  if (Math.abs(delta) < 0.05) return "±0 kg";
-  const sign = delta < 0 ? "−" : "+";
-  return `${sign}${Math.abs(delta).toFixed(1).replace(".", ",")} kg`;
-}
+const DONE_STATUSES = ["completed", "paid"];
 
 /**
- * Build SVG path coords from weight points. viewBox 320×80; X spaced by date,
- * Y inverted so heavier = lower in the chart. Returns null if there's not
- * enough data (need ≥2 points across ≥1 day).
+ * /account/progress — Postępy (design 37).
+ *
+ * Server orchestrator: pulls weight log, goals, and bookings to compute
+ * the streak / sessions all-time / months-coaching headlines. Pushes
+ * everything to <Postepy/>, which handles the 5-mode UI. Modes that
+ * need data we don't have yet (strength tracking, cardio integration,
+ * body measurements, photos, trainer notes shared with client) render
+ * honest empty states inside the client component.
  */
-function buildWeightSvg(points: WeightPoint[]): {
-  linePath: string;
-  fillPath: string;
-  monthLabels: string[];
-  lastX: number;
-  lastY: number;
-} | null {
-  if (points.length < 2) return null;
-  const W = 320, H = 80;
-
-  const t0 = new Date(points[0].recordedAt).getTime();
-  const tN = new Date(points[points.length - 1].recordedAt).getTime();
-  const span = Math.max(1, tN - t0); // avoid div-by-0
-
-  const min = Math.min(...points.map((p) => p.weightKg));
-  const max = Math.max(...points.map((p) => p.weightKg));
-  const range = Math.max(0.5, max - min); // at least 0.5 kg range so flat lines aren't a thin slit
-
-  const coords = points.map((p) => {
-    const x = ((new Date(p.recordedAt).getTime() - t0) / span) * W;
-    const y = H - ((p.weightKg - min) / range) * (H - 8) - 4; // 4px top/bottom inset
-    return { x, y };
-  });
-
-  const linePath = coords
-    .map((c, i) => `${i === 0 ? "M" : "L"} ${c.x.toFixed(1)} ${c.y.toFixed(1)}`)
-    .join(" ");
-  const fillPath = `${linePath} L ${W} ${H} L 0 ${H} Z`;
-
-  // Month labels — first day of each month encountered.
-  const seen = new Set<number>();
-  const monthLabels: string[] = [];
-  for (const p of points) {
-    const d = new Date(p.recordedAt);
-    const m = d.getMonth();
-    if (!seen.has(m)) {
-      seen.add(m);
-      monthLabels.push(PL_MONTH_SHORT[m]);
-    }
-  }
-
-  const last = coords[coords.length - 1];
-  return { linePath, fillPath, monthLabels, lastX: last.x, lastY: last.y };
-}
-
 export default async function ProgressPage() {
   const { user } = await requireClient("/account/progress");
   const supabase = await createClient();
 
-  const [goals, weightLog, latestWeight, yearStartWeight, health, rawActivity] = await Promise.all([
+  const [goalsRaw, weightLog, { data: bookingsRaw }] = await Promise.all([
     getGoals(user.id),
-    getWeightLog(user.id, 60),
-    getLatestWeight(user.id),
-    getYearStartWeight(user.id),
-    getHealth(user.id),
+    getWeightLog(user.id, 200),
     supabase
       .from("bookings")
-      .select(`
-        id, start_time, status, created_at,
-        service_name, package_name,
-        service:services ( name ),
-        package:packages ( name ),
-        trainer:trainers!trainer_id ( profile:profiles!id ( display_name ) )
-      `)
-      .order("created_at", { ascending: false })
-      .limit(5),
+      .select(
+        `
+        id, trainer_id, start_time, end_time, status, service_duration,
+        service:services ( duration ),
+        trainer:trainers ( profile:profiles!id ( display_name ) )
+      `,
+      )
+      .eq("client_id", user.id)
+      .order("start_time", { ascending: true }),
   ]);
 
-  const activity = ((rawActivity.data ?? []) as unknown as ActivityRow[]);
+  const bookings = (bookingsRaw ?? []) as unknown as Array<{
+    id: string;
+    trainer_id: string;
+    start_time: string;
+    end_time: string;
+    status: string;
+    service_duration: number | null;
+    service: { duration: number } | null;
+    trainer: { profile: { display_name: string | null } | null } | null;
+  }>;
 
-  const weightDelta =
-    latestWeight && yearStartWeight && latestWeight.recordedAt !== yearStartWeight.recordedAt
-      ? latestWeight.weightKg - yearStartWeight.weightKg
-      : null;
-  const chart = buildWeightSvg(weightLog);
+  const now = new Date();
+  const sixMonthsAgo = new Date(now.getTime() - 180 * 86_400_000);
 
-  // Span label "ostatnie X mies." — best-effort, falls back to "od stycznia" if data spans the year.
-  const spanLabel = (() => {
-    if (weightLog.length === 0) return "Brak pomiarów";
-    if (!chart) return "Pierwszy pomiar";
-    const days = Math.round((new Date(weightLog[weightLog.length - 1].recordedAt).getTime() - new Date(weightLog[0].recordedAt).getTime()) / 86_400_000);
-    const months = Math.max(1, Math.round(days / 30));
-    return `Waga · ostatnie ${months} ${months === 1 ? "miesiąc" : months < 5 ? "miesiące" : "miesięcy"}`;
+  // Weight series + 6-month-ago anchor.
+  const weightSeries = weightLog.map((p) => ({ iso: p.recordedAt, kg: p.weightKg }));
+  const latestWeightKg = weightSeries.length > 0 ? weightSeries[weightSeries.length - 1].kg : null;
+  const weightSixMonthsAgoKg = (() => {
+    if (weightSeries.length < 2) return null;
+    const earlier = weightSeries.find((p) => new Date(p.iso) >= sixMonthsAgo);
+    if (earlier && earlier !== weightSeries[weightSeries.length - 1]) return earlier.kg;
+    // Fallback to the oldest point if none past 6mo cutoff.
+    return weightSeries[0].kg !== latestWeightKg ? weightSeries[0].kg : null;
   })();
 
-  return (
-    <div className="mx-auto max-w-[860px] px-4 sm:px-6 py-5 sm:py-8">
-      {/* Mobile header */}
-      <header className="md:hidden mb-4">
-        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-          Twój dziennik
-        </div>
-        <h1 className="text-[18px] font-semibold tracking-[-0.01em]">
-          Postępy {new Date().getFullYear()}
-        </h1>
-      </header>
-      {/* Desktop header */}
-      <header className="hidden md:block mb-6">
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-          Twoje postępy
-        </h1>
-        <p className="text-sm text-slate-600 mt-1.5">
-          Cele długoterminowe, dziennik wagi i historia aktywności.
-        </p>
-      </header>
+  // Try to detect a weight target (e.g. "Schudnąć 5 kg") so we can
+  // render the dashed target line on the chart.
+  let weightTargetKg: number | null = null;
+  for (const g of goalsRaw) {
+    const m = g.title.match(/(?:schud|cel|target).{0,20}?(\d{1,3}(?:[.,]\d)?)\s*kg/i);
+    if (m && latestWeightKg) {
+      const lose = parseFloat(m[1].replace(",", "."));
+      // Only treat it as a "loss target" if the goal title clearly indicates loss.
+      if (/schud|odchud|lose/i.test(g.title)) {
+        weightTargetKg = Math.max(40, latestWeightKg - lose + lose * (1 - g.pct / 100));
+      }
+    }
+  }
 
-      <div className="grid gap-3 md:gap-5 md:grid-cols-2">
-        {/* Weight chart card */}
-        <section className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-[16px] p-4 md:p-6 md:col-span-2">
-          <div className="flex justify-between items-baseline">
-            <div className="text-[11px] opacity-70 uppercase tracking-wider font-semibold">{spanLabel}</div>
-            <WeightLogger latest={latestWeight} />
-          </div>
+  // Sessions all-time + months coaching.
+  const completed = bookings.filter((b) => DONE_STATUSES.includes(b.status) || (b.status === "confirmed" && new Date(b.end_time) < now));
+  const sessionsAllTime = completed.length;
+  const firstBookingDate = bookings[0] ? new Date(bookings[0].start_time) : null;
+  const monthsCoaching = firstBookingDate
+    ? Math.max(0, Math.round(((now.getTime() - firstBookingDate.getTime()) / 86_400_000) / 30))
+    : 0;
 
-          {weightLog.length === 0 ? (
-            <p className="mt-4 text-[13px] text-white/70">
-              Zacznij dziennik wagi — zapisz pierwszy pomiar przyciskiem powyżej, by zobaczyć trend i statystykę „od stycznia".
-            </p>
-          ) : (
-            <>
-              <div className="text-[28px] sm:text-[34px] font-bold tracking-[-0.02em] mt-1.5 mb-3">
-                {fmtKg(latestWeight!.weightKg)}{" "}
-                {weightDelta !== null && (
-                  <span className={`text-[13px] font-medium ${weightDelta < 0 ? "text-emerald-300" : weightDelta > 0 ? "text-rose-300" : "text-white/60"}`}>
-                    {fmtDelta(weightDelta)}
-                  </span>
-                )}
-              </div>
-              {chart ? (
-                <>
-                  <svg width="100%" height="80" viewBox="0 0 320 80" preserveAspectRatio="none" aria-hidden>
-                    <defs>
-                      <linearGradient id="weight-grad" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0" stopColor="#10b981" />
-                        <stop offset="1" stopColor="#10b981" stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-                    <path d={chart.fillPath} fill="url(#weight-grad)" opacity="0.3" />
-                    <path d={chart.linePath} stroke="#10b981" strokeWidth="2.5" fill="none" />
-                    <circle cx={chart.lastX} cy={chart.lastY} r="8" fill="#10b981" opacity="0.25" />
-                    <circle cx={chart.lastX} cy={chart.lastY} r="4" fill="#10b981" />
-                  </svg>
-                  <div className="flex justify-between text-[10px] opacity-50 mt-1">
-                    {chart.monthLabels.map((m) => <span key={m}>{m}</span>)}
-                  </div>
-                </>
-              ) : (
-                <p className="text-[12.5px] text-white/60 mt-2">
-                  Zapisz drugi pomiar (innego dnia), by zobaczyć trend.
-                </p>
-              )}
-            </>
-          )}
-        </section>
+  // Streak — consecutive past weeks with at least one completed session.
+  const weekStart = mondayOf(now);
+  let streakWeeks = 0;
+  for (let i = 0; i < 26; i++) {
+    const ws = mondayOf(new Date(weekStart.getTime() - i * 7 * 86_400_000));
+    const we = new Date(ws.getTime() + 7 * 86_400_000);
+    const has = completed.some((b) => {
+      const t = new Date(b.start_time).getTime();
+      return t >= ws.getTime() && t < we.getTime();
+    });
+    if (has) streakWeeks += 1;
+    else break;
+  }
 
-        {/* Cele długoterminowe — real, with editor */}
-        <section className="bg-white border border-slate-200 rounded-[16px] p-4 md:p-5">
-          <div className="flex justify-between items-baseline mb-3">
-            <h2 className="text-[14px] font-semibold tracking-[-0.01em] m-0">Cele długoterminowe</h2>
-          </div>
-          <GoalsEditor initialGoals={goals} />
-        </section>
+  // This-week metrics — sessions done + minutes done.
+  const weekEnd = new Date(weekStart.getTime() + 7 * 86_400_000);
+  const weekDayCounts = Array.from({ length: 7 }, () => 0);
+  let weekSessionsDone = 0;
+  let weekMinutesDone = 0;
+  for (const b of completed) {
+    const t = new Date(b.start_time);
+    if (t >= weekStart && t < weekEnd) {
+      const dayIdx = (t.getDay() + 6) % 7;
+      weekDayCounts[dayIdx] += 1;
+      weekSessionsDone += 1;
+      weekMinutesDone += b.service_duration ?? b.service?.duration ?? 60;
+    }
+  }
+  // Targets — heuristic. Pick the target as max(this-week, average of last
+  // 4 weeks) clamped to 2..6 sessions and 60..360 minutes. This keeps the
+  // ring "achievable but not trivial" without a separate goal column.
+  const last4WeeksSessions = (() => {
+    let count = 0;
+    for (const b of completed) {
+      const t = new Date(b.start_time).getTime();
+      if (t >= now.getTime() - 28 * 86_400_000) count += 1;
+    }
+    return count;
+  })();
+  const avgWeek = Math.round(last4WeeksSessions / 4) || 2;
+  const weekSessionsTarget = Math.min(6, Math.max(2, Math.max(avgWeek, weekSessionsDone)));
+  const weekMinutesTarget = Math.min(360, Math.max(60, weekSessionsTarget * 60));
 
-        {/* Paszport zdrowia — real, with editor */}
-        <section className="bg-white border border-slate-200 rounded-[16px] p-4 md:p-5">
-          <HealthEditor initial={health} latestWeightKg={latestWeight ? latestWeight.weightKg : null} />
-        </section>
+  // Primary trainer.
+  const trainerCount = new Map<string, number>();
+  for (const b of bookings) trainerCount.set(b.trainer_id, (trainerCount.get(b.trainer_id) ?? 0) + 1);
+  const primaryTrainerId = Array.from(trainerCount.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const primaryRow = primaryTrainerId ? bookings.find((b) => b.trainer_id === primaryTrainerId) : null;
+  const primaryTrainerName = primaryRow?.trainer?.profile?.display_name?.split(" ")[0] ?? null;
 
-        {/* Ostatnia aktywność */}
-        <section className="bg-white border border-slate-200 rounded-[16px] p-4 md:p-5 md:col-span-2">
-          <div className="flex justify-between items-baseline mb-3">
-            <h2 className="text-[14px] font-semibold tracking-[-0.01em] m-0">Ostatnia aktywność</h2>
-            <Link href="/account/bookings?tab=history" className="text-[11.5px] text-emerald-700 font-medium">
-              Pełna historia →
-            </Link>
-          </div>
-          {activity.length === 0 ? (
-            <p className="text-sm text-slate-500">Brak aktywności.</p>
-          ) : (
-            <div>
-              {activity.map((a) => {
-                const completed = a.status === "completed";
-                const trainerName = a.trainer?.profile?.display_name ?? "Trener";
-                const what = a.service_name ?? a.package_name ?? a.service?.name ?? a.package?.name ?? "Sesja";
-                return (
-                  <div key={a.id} className="flex gap-2.5 py-2.5 border-b border-slate-100 last:border-0">
-                    <div
-                      className={`w-7.5 h-7.5 min-w-[30px] h-[30px] rounded-[8px] inline-flex items-center justify-center shrink-0 ${
-                        completed ? "bg-emerald-50 text-emerald-700" : "bg-blue-50 text-blue-700"
-                      }`}
-                    >
-                      {completed ? (
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
-                          <path d="M20 6L9 17l-5-5" />
-                        </svg>
-                      ) : (
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <rect x="3" y="4" width="18" height="18" rx="2" />
-                          <path d="M16 2v4M8 2v4M3 10h18" />
-                        </svg>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[12.5px] font-medium truncate">
-                        {completed ? `Sesja ukończona — ${trainerName}` : `Sesja zarezerwowana — ${trainerName}`}
-                      </div>
-                      <div className="text-[11px] text-slate-500 mt-0.5 truncate">{what}</div>
-                    </div>
-                    <div className="text-[10px] text-slate-400 self-start pt-1 shrink-0">
-                      {fmtRelative(a.created_at)}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      </div>
-    </div>
-  );
+  // Goals — split active vs achieved, format progress label + target date.
+  // getGoals returns pct as 0..1 (direction-agnostic); convert to 0..100.
+  const allGoals: ViewGoal[] = goalsRaw.map((g) => ({
+    id: g.id,
+    title: g.title,
+    pct: Math.max(0, Math.min(100, Math.round(g.pct * 100))),
+    targetDate: g.targetDate ? formatGoalDate(g.targetDate) : null,
+    progressLabel: buildProgressLabel(g),
+  }));
+  const activeGoals = allGoals.filter((g) => g.pct < 100);
+  const achievedGoals = allGoals.filter((g) => g.pct >= 100);
+
+  // Trainer notes shared with client — currently we don't have a
+  // "share with client" flag on bookings.session_notes (it's marked
+  // trainer-private in migration 025). Leave empty until that feature
+  // ships. UI shows an honest empty state.
+  const trainerNotes: TrainerNote[] = [];
+
+  const data: PostepyData = {
+    latestWeightKg,
+    weightSixMonthsAgoKg,
+    weightSeries,
+    weightTargetKg,
+    weekDayCounts,
+    weekSessionsDone,
+    weekSessionsTarget,
+    weekMinutesDone,
+    weekMinutesTarget,
+    goals: activeGoals.concat(achievedGoals),
+    achievedGoals,
+    trainerNotes,
+    streakWeeks,
+    monthsCoaching,
+    sessionsAllTime,
+    primaryTrainerName,
+  };
+
+  return <Postepy data={data} />;
+}
+
+function mondayOf(d: Date): Date {
+  const r = new Date(d);
+  r.setHours(0, 0, 0, 0);
+  const dow = r.getDay();
+  const offset = (dow + 6) % 7;
+  r.setDate(r.getDate() - offset);
+  return r;
+}
+
+function formatGoalDate(iso: string): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  return `${d.getUTCDate()} ${PL_MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
+function buildProgressLabel(g: {
+  currentValue: number;
+  targetValue: number;
+  startValue: number;
+  unit: string | null;
+  pct: number;
+}): string | null {
+  if (g.pct >= 1) return "✓ Osiągnięty";
+  if (Number.isFinite(g.currentValue) && Number.isFinite(g.targetValue)) {
+    const cur = Number(g.currentValue);
+    const tgt = Number(g.targetValue);
+    const u = g.unit ? ` ${g.unit}` : "";
+    return `${cur}${u} / ${tgt}${u}`;
+  }
+  return null;
 }

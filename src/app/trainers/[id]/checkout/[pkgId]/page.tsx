@@ -11,7 +11,7 @@ export default async function PackageCheckoutPage(props: {
   const trainer = await getTrainerBySlug(id);
   if (!trainer) notFound();
 
-  const pkg = trainer.packages.find((p) => p.id === pkgId);
+  const pkg = (trainer.packages ?? []).find((p) => p.id === pkgId);
   if (!pkg) notFound();
 
   const supabase = await createClient();
@@ -19,9 +19,6 @@ export default async function PackageCheckoutPage(props: {
   if (!user) redirect(`/login?next=/trainers/${id}/checkout/${pkgId}`);
 
   const total = pkg.price;
-  const commissionPct = 30;
-  const commission = Math.round((total * commissionPct) / 100);
-  const trainerNet = total - commission;
 
   return (
     <div className="mx-auto max-w-[920px] px-5 sm:px-6 py-8 sm:py-10 pb-24">
@@ -60,14 +57,13 @@ export default async function PackageCheckoutPage(props: {
             </ul>
           </div>
 
-          <div className="mt-7 rounded-2xl bg-amber-50 border border-amber-200 p-4">
+          <div className="mt-7 rounded-2xl bg-emerald-50 border border-emerald-200 p-4">
             <div className="flex items-start gap-3">
-              <span className="text-amber-600 text-lg shrink-0 leading-none mt-0.5">⏳</span>
-              <div className="text-[13px] text-amber-900 leading-relaxed">
-                <strong className="font-semibold">Płatność online — wkrótce.</strong>
-                {" "}Integracja Stripe / Przelewy24 jest w przygotowaniu.
-                Po kliknięciu „Zarezerwuj pakiet" trener otrzyma powiadomienie i skontaktuje się z Tobą,
-                żeby ustalić formę płatności.
+              <span className="text-emerald-600 text-lg shrink-0 leading-none mt-0.5">💬</span>
+              <div className="text-[13px] text-emerald-900 leading-relaxed">
+                <strong className="font-semibold">Płatność u trenera bezpośrednio.</strong>
+                {" "}Po kliknięciu „Zarezerwuj pakiet" otworzymy czat z trenerem — ustalicie formę płatności
+                (BLIK, przelew lub gotówka), a po opłaceniu zaczynacie umawiać sesje.
               </div>
             </div>
           </div>
@@ -97,30 +93,26 @@ export default async function PackageCheckoutPage(props: {
               <span className="text-slate-600">{pkg.name}</span>
               <span className="text-slate-900 font-medium">{total.toLocaleString("pl-PL")} zł</span>
             </div>
-            <div className="flex justify-between text-[12px] text-slate-500">
-              <span>Prowizja platformy ({commissionPct}%)</span>
-              <span>{commission.toLocaleString("pl-PL")} zł</span>
+          </div>
+
+          <div className="mt-5 pt-5 border-t border-slate-200">
+            <div className="flex items-baseline justify-between">
+              <span className="text-[13px] text-slate-600">Cena pakietu</span>
+              <span className="text-[26px] font-semibold tracking-tight text-slate-900">
+                {total.toLocaleString("pl-PL")} zł
+              </span>
             </div>
-            <div className="flex justify-between text-[12px] text-slate-500">
-              <span>Trener otrzyma</span>
-              <span>{trainerNet.toLocaleString("pl-PL")} zł</span>
+            <div className="text-[11px] text-slate-500 mt-1">
+              Płatność u trenera — BLIK, przelew lub gotówka
             </div>
           </div>
 
-          <div className="mt-5 pt-5 border-t border-slate-200 flex items-baseline justify-between">
-            <span className="text-[13px] text-slate-600">Do zapłaty</span>
-            <span className="text-[26px] font-semibold tracking-tight text-slate-900">
-              {total.toLocaleString("pl-PL")} zł
-            </span>
-          </div>
-
-          <button
-            disabled
-            className="mt-5 w-full py-3.5 px-4 bg-slate-900 text-white rounded-full text-[14px] font-semibold opacity-50 cursor-not-allowed"
-            title="Integracja płatności wkrótce"
+          <Link
+            href={`/trainers/${id}/book-package/${pkg.id}`}
+            className="mt-5 block w-full py-3.5 px-4 bg-slate-900 text-white rounded-full text-[14px] font-semibold hover:bg-black transition text-center"
           >
-            Zarezerwuj pakiet — wkrótce
-          </button>
+            Zarezerwuj pakiet
+          </Link>
 
           <Link
             href={`/trainers/${id}#packages`}

@@ -20,9 +20,9 @@ function LoginFormFallback() {
 
 export default function LoginPage() {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 min-h-[100dvh] bg-slate-100">
+    <div className="grid grid-cols-1 lg:grid-cols-2 lg:fixed lg:inset-0 lg:h-[100dvh] lg:overflow-hidden min-h-[100dvh] bg-slate-100">
       {/* ============ LEFT: brand panel ============ */}
-      <aside className="relative hidden lg:flex flex-col justify-between p-9 lg:p-11 text-white overflow-hidden bg-slate-950">
+      <aside className="relative hidden lg:flex flex-col justify-between p-8 lg:p-9 text-white overflow-hidden bg-slate-950">
         {/* Glow + decorative circles */}
         <div className="pointer-events-none absolute inset-0 opacity-40 [background:radial-gradient(80%_60%_at_70%_30%,rgba(16,185,129,0.3),transparent_60%)]" />
         <div className="pointer-events-none absolute left-10 bottom-10 w-[220px] h-[220px] rounded-full border border-white/[0.06]" />
@@ -40,13 +40,13 @@ export default function LoginPage() {
 
         {/* Middle: eyebrow + testimonial */}
         <div className="relative z-[1] max-w-[440px]">
-          <div className="text-[12px] tracking-[0.12em] uppercase font-semibold opacity-80 mb-3.5">
+          <div className="text-[11px] tracking-[0.12em] uppercase font-semibold opacity-80 mb-2.5">
             Witaj z powrotem
           </div>
-          <h2 className="text-[34px] sm:text-[36px] leading-[1.08] tracking-[-0.025em] font-semibold m-0">
+          <h2 className="text-[28px] sm:text-[32px] leading-[1.08] tracking-[-0.025em] font-semibold m-0">
             „NaZdrow! zmieniło sposób, w jaki pracuję z klientami. Mniej Excela, więcej treningu."
           </h2>
-          <div className="flex items-center gap-3 mt-6">
+          <div className="flex items-center gap-3 mt-5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="https://images.unsplash.com/photo-1594381898411-846e7d193883?w=120&h=120&fit=crop&crop=faces"
@@ -60,8 +60,8 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Bottom: stats */}
-        <div className="relative z-[1] flex gap-7">
+        {/* Bottom: stats — raised from very bottom */}
+        <div className="relative z-[1] mb-16 flex gap-7">
           <div>
             <div className="text-[22px] font-bold tracking-[-0.02em]">8 sek.</div>
             <div className="text-[11px] opacity-70 tracking-wider uppercase mt-0.5">Średni czas logowania</div>
@@ -74,9 +74,9 @@ export default function LoginPage() {
       </aside>
 
       {/* ============ RIGHT: form panel ============ */}
-      <section className="flex flex-col bg-white p-6 sm:p-9 lg:p-11">
+      <section className="flex flex-col bg-white p-6 sm:p-8 lg:p-9">
         {/* Mobile-only logo */}
-        <Link href="/" className="lg:hidden inline-flex items-center gap-2.5 mb-8">
+        <Link href="/" className="lg:hidden inline-flex items-center gap-2.5 mb-6">
           <span className="w-8 h-8 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 inline-flex items-center justify-center text-white font-bold text-sm shadow-[0_10px_30px_rgba(16,185,129,0.18)]">
             Z
           </span>
@@ -96,26 +96,16 @@ export default function LoginPage() {
           </span>
         </div>
 
-        <h1 className="text-[28px] tracking-[-0.025em] font-semibold mt-0 mb-2">Zaloguj się</h1>
-        <p className="text-sm text-slate-600 mb-7 leading-relaxed max-w-[440px]">
-          Wpisz email i hasło. Tę samą drogę używają trenerzy i klienci — rozpoznamy Cię automatycznie po roli konta.
-        </p>
+        <div className="flex-1 flex flex-col justify-center max-w-[440px] w-full">
+          <h1 className="text-[28px] tracking-[-0.025em] font-semibold mt-0 mb-2">Zaloguj się</h1>
+          <p className="text-sm text-slate-600 mb-7 leading-relaxed">
+            Wpisz email i hasło. Tę samą drogę używają trenerzy i klienci — rozpoznamy Cię automatycznie po roli konta.
+          </p>
 
-        <Suspense fallback={<LoginFormFallback />}>
-          <LoginForm />
-        </Suspense>
-
-        <p className="text-[13px] text-slate-600 text-center mt-auto pt-4">
-          Logując się akceptujesz{" "}
-          <Link href="#" className="text-emerald-700 font-semibold">
-            Regulamin
-          </Link>{" "}
-          i{" "}
-          <Link href="#" className="text-emerald-700 font-semibold">
-            Politykę prywatności
-          </Link>
-          .
-        </p>
+          <Suspense fallback={<LoginFormFallback />}>
+            <LoginForm />
+          </Suspense>
+        </div>
       </section>
     </div>
   );

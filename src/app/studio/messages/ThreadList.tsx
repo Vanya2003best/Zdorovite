@@ -77,9 +77,9 @@ export default function ThreadList({
 
       <div className="flex-1 overflow-y-auto px-2 py-2">
         {visible.length === 0 ? (
-          <p className="text-center text-[12px] text-slate-500 py-12 px-4">
-            {threads.length === 0 ? "Nie masz jeszcze rozmów." : "Brak wyników."}
-          </p>
+          // Intentionally empty — no "you have no conversations yet" copy.
+          // The filter pills above already convey state via their counts.
+          <div />
         ) : (
           <ul>
             {visible.map((t) => {

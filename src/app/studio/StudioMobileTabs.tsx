@@ -26,11 +26,15 @@ const ChatIcon = (
     <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
   </svg>
 );
+// Mobile bottom tabs — sidebar mirror. Five sections is the cap for a
+// readable bottom bar at thumb reach; we drop the standalone Profil entry
+// on mobile (still reachable from header avatar + Pulpit shortcuts) and
+// keep the four most-used: Pulpit / Kalendarz / Klienci / Design.
 const TABS = [
-  { href: "/studio",          label: "Pulpit",     match: (p: string) => p === "/studio",           icon: HomeIcon, hasUnread: false },
-  { href: "/studio/bookings", label: "Rezerwacje", match: (p: string) => p.startsWith("/studio/bookings"), icon: CalIcon,  hasUnread: false },
-  { href: "/studio/design",   label: "Profil",     match: (p: string) => p.startsWith("/studio/design") || p.startsWith("/studio/profile"), icon: PaintIcon, hasUnread: false },
-  { href: "/studio/messages", label: "Czat",       match: (p: string) => p.startsWith("/studio/messages"), icon: ChatIcon, hasUnread: true },
+  { href: "/studio",          label: "Pulpit",    match: (p: string) => p === "/studio" || p.startsWith("/studio/bookings"), icon: HomeIcon,  hasUnread: false },
+  { href: "/studio/calendar", label: "Kalendarz", match: (p: string) => p.startsWith("/studio/calendar") || p.startsWith("/studio/availability"), icon: CalIcon, hasUnread: false },
+  { href: "/studio/klienci",  label: "Klienci",   match: (p: string) => p.startsWith("/studio/klienci") || p.startsWith("/studio/messages"), icon: ChatIcon, hasUnread: true },
+  { href: "/studio/design",   label: "Design",    match: (p: string) => p.startsWith("/studio/design") || p.startsWith("/studio/profile") || p.startsWith("/studio/reviews") || p.startsWith("/studio/uslugi"), icon: PaintIcon, hasUnread: false },
 ];
 
 export default function StudioMobileTabs({

@@ -305,7 +305,7 @@ export default function SignatureProfile({
           <nav className="hidden @[1024px]:flex gap-9 text-[13px] text-[#3d362f] tracking-[0.02em]">
             <a href="#manifesto" className="hover:text-[#7d1f1f] transition">Manifesto</a>
             <a href="#letter" className="hover:text-[#7d1f1f] transition">Metoda</a>
-            <a href="#cases" className="hover:text-[#7d1f1f] transition">Kejsy</a>
+            <a href="#cases" className="hover:text-[#7d1f1f] transition">Cases</a>
             <a href="#book" className="hover:text-[#7d1f1f] transition">Usługi</a>
             <a href="#membership" className="hover:text-[#7d1f1f] transition">Członkostwo</a>
             <a href="#certifications" className="hover:text-[#7d1f1f] transition">Certyfikaty</a>

@@ -61,6 +61,8 @@ export type ActivePackage = {
 };
 
 export type SpotlightTrainer = {
+  /** Profile UUID — used for the Czat link (/account/messages?with=<id>). */
+  id: string;
   slug: string;
   name: string;
   avatar: string | null;
@@ -175,7 +177,7 @@ function Topbar({ firstName, next }: { firstName: string; next: NextSession | nu
       </div>
       <div className="flex gap-2 flex-wrap">
         <Link
-          href="/trainers"
+          href="/"
           className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[9px] bg-white border border-slate-200 text-[12.5px] font-medium text-slate-700 hover:border-slate-300"
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -218,7 +220,7 @@ function NextSessionHero({ next }: { next: NextSession | null }) {
           </p>
         </div>
         <Link
-          href="/trainers"
+          href="/"
           className="inline-flex items-center gap-2 h-10 px-4 rounded-[10px] bg-white text-emerald-900 text-[12.5px] font-semibold w-fit"
         >
           Znajdź trenera →
@@ -767,7 +769,7 @@ function TrainerCard({ trainer }: { trainer: SpotlightTrainer }) {
       )}
       <div className="grid grid-cols-2 gap-2">
         <Link
-          href={`/account/messages?with=${trainer.slug}`}
+          href={`/account/messages?with=${trainer.id}`}
           className="h-9 rounded-[9px] bg-slate-900 text-white text-[12px] font-semibold inline-flex items-center justify-center gap-1.5"
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -925,7 +927,7 @@ function RecommendedCard({ items }: { items: RecommendedTrainer[] }) {
     <div className="bg-white border border-slate-200 rounded-[14px] p-5">
       <div className="flex items-center justify-between mb-3.5">
         <h3 className="text-[14px] font-bold text-slate-900 m-0">Polecane</h3>
-        <Link href="/trainers" className="text-[12px] text-emerald-700 font-semibold">
+        <Link href="/" className="text-[12px] text-emerald-700 font-semibold">
           Wszyscy →
         </Link>
       </div>

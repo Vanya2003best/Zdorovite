@@ -54,7 +54,7 @@ export async function toggleFavorite(slug: string): Promise<ToggleFavoriteResult
 
   // Refresh anywhere the favorite state is rendered.
   revalidatePath(`/trainers/${slug}`);
-  revalidatePath("/trainers");
+  revalidatePath("/");
   revalidatePath("/account");
 
   return { isFavorite: newState };

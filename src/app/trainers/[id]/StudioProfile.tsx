@@ -176,7 +176,7 @@ export default function StudioProfile({
           </Link>
           <div className="hidden @[1024px]:flex gap-7 text-[14px] font-medium text-[#3d3d3a]">
             <a href="#about" className="hover:text-[#ff5722] transition">O mnie</a>
-            <a href="#cases" className="hover:text-[#ff5722] transition">Kejsy</a>
+            <a href="#cases" className="hover:text-[#ff5722] transition">Cases</a>
             <a href="#services" className="hover:text-[#ff5722] transition">Usługi</a>
             <a href="#packages" className="hover:text-[#ff5722] transition">Pakiety</a>
             <a href="#certifications" className="hover:text-[#ff5722] transition">Akredytacje</a>
@@ -898,7 +898,7 @@ export default function StudioProfile({
                         ))}
                       </ul>
                       <Link
-                        href={`/trainers/${trainer.id}/book?package=${pkg.id}`}
+                        href={`/trainers/${trainer.id}/checkout/${pkg.id}`}
                         className={`mt-auto inline-flex justify-center items-center h-11 px-5 rounded-full text-[14px] font-medium transition ${
                           featured
                             ? "bg-[#ff5722] text-white border border-[#ff5722] hover:bg-white hover:text-[#141413] hover:border-white"

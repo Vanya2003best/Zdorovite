@@ -302,7 +302,7 @@ export default async function StudioProfile() {
     specLabels.length > 0 ? `Trener personalny · ${specLabels.join(" + ")}` : "Trener personalny";
 
   return (
-    <div className="mx-auto max-w-[1280px] px-4 sm:px-8 py-5 sm:py-7">
+    <div className="mx-auto max-w-[1280px] px-4 sm:px-8 pt-2 sm:pt-3 pb-5 sm:pb-7">
       <ProfileSectionNav
         counts={{
           specializations: selectedSpecIds.length,
@@ -312,7 +312,7 @@ export default async function StudioProfile() {
         }}
       />
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 items-start mt-4">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 items-start mt-2">
         <div className="min-w-0 space-y-4">
           <div id="podstawowe">
             <BasicForm

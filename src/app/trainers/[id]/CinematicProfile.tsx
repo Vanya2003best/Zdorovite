@@ -184,7 +184,7 @@ export default function CinematicProfile({
           </Link>
           <nav className="hidden md:flex gap-8 text-[13px] text-white/70">
             <a href="#about" className="hover:text-white transition">O mnie</a>
-            <a href="#cases" className="hover:text-white transition">Kejsy</a>
+            <a href="#cases" className="hover:text-white transition">Cases</a>
             <a href="#services" className="hover:text-white transition">Sposoby</a>
             <a href="#packages" className="hover:text-white transition">Pakiety</a>
             <a href="#certifications" className="hover:text-white transition">Certyfikaty</a>
@@ -856,7 +856,7 @@ export default function CinematicProfile({
                     ))}
                   </ul>
                   <Link
-                    href={`/trainers/${trainer.id}/book`}
+                    href={`/trainers/${trainer.id}/checkout/${pkg.id}`}
                     className={`mt-auto inline-flex items-center justify-center gap-2 h-12 px-5 rounded-full text-[14px] font-medium transition ${
                       pkg.featured
                         ? "bg-[#d4ff00] text-[#0a0a0c] font-semibold hover:brightness-110"

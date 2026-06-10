@@ -99,7 +99,7 @@ export default function BasicForm({
   return (
     <>
       <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-        <div className="mb-4">
+        <div className="mb-3">
           <h3 className="text-[15px] font-semibold tracking-[-0.005em] m-0">Profil podstawowy</h3>
           <p className="text-[12px] text-slate-500 mt-1">
             Zdjęcie, imię, krótkie bio i misja — najczęściej oglądana sekcja.

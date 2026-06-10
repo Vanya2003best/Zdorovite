@@ -17,6 +17,15 @@ type Props = {
   initialServiceId?: string;
   initialDate: string;
   initialSlots: Slot[];
+  /** Set when arriving via /book?package=<id>. Drives the package banner +
+   *  is forwarded to createBooking so the saved booking row links back to
+   *  the package (bookings.package_id). */
+  packageContext?: {
+    id: string;
+    name: string;
+    sessionsTotal: number | null;
+    pricePerSession: number | null;
+  } | null;
 };
 
 function shiftDate(date: string, days: number): string {
@@ -48,6 +57,7 @@ export default function BookingForm({
   initialServiceId,
   initialDate,
   initialSlots,
+  packageContext,
 }: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [date, setDate] = useState(initialDate);
@@ -88,12 +98,21 @@ export default function BookingForm({
       <input type="hidden" name="service_id" value={selectedService} />
       <input type="hidden" name="start_iso" value={selectedSlot} />
       <input type="hidden" name="note" value={note} />
+      {packageContext && (
+        <input type="hidden" name="package_id" value={packageContext.id} />
+      )}
 
       {/* Top: trainer mini + stepper */}
       <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
         <div>
-          <h1 className="text-[22px] sm:text-[28px] font-semibold tracking-tight">Zarezerwuj sesję</h1>
-          <p className="text-[13px] sm:text-[14px] text-slate-600 mt-1">Trzy proste kroki. Zajmie około 2 minut.</p>
+          <h1 className="text-[22px] sm:text-[28px] font-semibold tracking-tight">
+            {packageContext ? "Zarezerwuj pakiet" : "Zarezerwuj sesję"}
+          </h1>
+          <p className="text-[13px] sm:text-[14px] text-slate-600 mt-1">
+            {packageContext
+              ? `Wybierz termin pierwszej sesji z pakietu „${packageContext.name}". Pozostałe sesje zaplanujesz po opłaceniu pakietu u trenera.`
+              : "Trzy proste kroki. Zajmie około 2 minut."}
+          </p>
         </div>
         <div className="inline-flex items-center gap-3 px-3.5 py-2 bg-white border border-slate-200 rounded-xl">
           <img
@@ -108,6 +127,27 @@ export default function BookingForm({
           </div>
         </div>
       </div>
+
+      {packageContext && (
+        <div className="mb-4 rounded-[14px] bg-emerald-50 border border-emerald-200 px-4 py-3 flex items-start gap-3 text-[12.5px] text-emerald-900">
+          <span className="w-7 h-7 rounded-[8px] bg-emerald-500 text-white inline-flex items-center justify-center shrink-0">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M20 7L12 3 4 7v10l8 4 8-4V7z" />
+            </svg>
+          </span>
+          <div>
+            <b className="font-semibold">
+              Pakiet „{packageContext.name}"
+              {packageContext.sessionsTotal ? ` · ${packageContext.sessionsTotal} sesji` : ""}
+              {packageContext.pricePerSession ? ` · ${packageContext.pricePerSession} PLN/sesja` : ""}
+            </b>
+            <div className="text-emerald-800/80 mt-0.5">
+              Pierwsza sesja z pakietu — pozostałe terminy ustalisz z trenerem na czacie po opłaceniu.
+              Płatność u trenera (BLIK / przelew / gotówka).
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stepper */}
       <Stepper step={step} />
@@ -376,10 +416,9 @@ function Summary({
       <div className="p-4 bg-slate-50 border-t border-slate-200">
         <div className="flex justify-between items-baseline">
           <div>
-            <div className="text-[13px] text-slate-600">Do zapłaty</div>
-            <div className="text-[11px] text-slate-500 mt-1 inline-flex items-center gap-1.5">
-              <Lock />
-              Płatność zabezpieczona
+            <div className="text-[13px] text-slate-600">Cena sesji</div>
+            <div className="text-[11px] text-slate-500 mt-1 leading-snug">
+              Płatność u trenera — gotówką, BLIK-iem lub przelewem
             </div>
           </div>
           <div className="text-[22px] font-semibold tracking-tight tabular-nums">{price} zł</div>
@@ -406,4 +445,3 @@ const Star = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" s
 const Cal  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>;
 const Clock = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>;
 const Pin  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1118 0z" /><circle cx="12" cy="10" r="3" /></svg>;
-const Lock = () => <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg>;

@@ -3,10 +3,6 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { ProfileCustomization, SectionId, TemplateName } from "@/types";
 import { getTrainerBySlug } from "@/lib/db/trainers";
-import {
-  getRecentNotifications,
-  getUnreadNotificationCount,
-} from "@/lib/db/notifications";
 import EditorClient from "./EditorClient";
 import type { DayRule } from "@/app/studio/availability/types";
 import PremiumProfile from "@/app/trainers/[id]/PremiumProfile";
@@ -131,13 +127,10 @@ export default async function DesignDashboard(props: PageProps<"/studio/design">
     };
   });
 
-  // Notifications for the editor's own top bar (the layout's TopBar is hidden on /studio/design).
-  // Page-scoped customization fetch (when ?page={id}) is in this same batch so
-  // the secondary-page swap doesn't add an extra round-trip on top of the
-  // already-parallelised trainer-level queries above.
-  const [recentNotifs, unreadNotifs, trainerPages, pageScopedRow] = await Promise.all([
-    getRecentNotifications(user.id, 12),
-    getUnreadNotificationCount(user.id),
+  // Page-scoped customization fetch (when ?page={id}) is alongside the
+  // pages-list query — the editor's own bell/menu is gone (sidebar handles
+  // notifications) so we no longer need recent/unread notif fetches here.
+  const [trainerPages, pageScopedRow] = await Promise.all([
     listTrainerPages(user.id),
     pageId ? getTrainerPageById(pageId) : Promise.resolve(null),
   ]);
@@ -249,7 +242,6 @@ export default async function DesignDashboard(props: PageProps<"/studio/design">
   return (
     <EditorClient
       slug={trainer.slug}
-      trainerId={user.id}
       trainerName={profile?.display_name ?? "Twój profil"}
       trainerEmail={user.email ?? null}
       avatarUrl={profile?.avatar_url ?? null}
@@ -259,7 +251,6 @@ export default async function DesignDashboard(props: PageProps<"/studio/design">
       completion={completion}
       counts={counts}
       availabilityByDow={availabilityByDow}
-      notifications={{ recent: recentNotifs, unread: unreadNotifs }}
       previewSlot={previewSlot}
       historyDepth={historyDepth}
       redoDepth={redoDepth}

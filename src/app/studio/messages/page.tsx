@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import EmptyState from "@/components/states/EmptyState";
 import { getRescheduleRequestsByIds, type RescheduleRequest } from "@/lib/db/reschedule";
 import MessagesClient from "./MessagesClient";
 import ClientContextPanel from "./ClientContextPanel";
 import ThreadList from "./ThreadList";
+import BodyOverflowLock from "./BodyOverflowLock";
 import { markThreadRead } from "./actions";
 
 type RawMsg = {
@@ -190,7 +190,8 @@ export default async function MessagesPage(props: {
   }
 
   return (
-    <div className="h-[calc(100vh-56px-84px)] lg:h-[calc(100vh-56px)] flex flex-col bg-white border-b border-slate-200 overflow-hidden">
+    <div className="h-[calc(100dvh-56px-84px)] lg:h-[100dvh] flex flex-col bg-white overflow-hidden">
+      <BodyOverflowLock />
       <div className="grid sm:grid-cols-[320px_1fr] lg:grid-cols-[320px_1fr_320px] flex-1 min-h-0 overflow-hidden">
         {/* LEFT: thread list */}
         <ThreadList
@@ -208,26 +209,7 @@ export default async function MessagesPage(props: {
               initialMessages={conversation}
             />
           ) : (
-            <div className="flex-1 flex items-center justify-center px-6">
-              {threads.length === 0 ? (
-                <EmptyState
-                  icon={
-                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></svg>
-                  }
-                  title="Cisza — to dobrze"
-                  description="Brak nowych wiadomości od klientów. Wracamy z powiadomieniem, gdy ktoś napisze."
-                  actions={[{ label: "Strona publiczna", href: "/studio", primary: false }]}
-                />
-              ) : (
-                <EmptyState
-                  icon={
-                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
-                  }
-                  title="Wybierz rozmowę"
-                  description="Kliknij konwersację z lewej, żeby zobaczyć wątek i dane klienta."
-                />
-              )}
-            </div>
+            <div className="flex-1" />
           )}
         </section>
 

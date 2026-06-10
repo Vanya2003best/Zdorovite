@@ -42,11 +42,19 @@ export default function NotificationsBell({
   /** Where the dropdown's footer "Zobacz wszystkie wiadomości →" link goes.
    *  Defaults to /account/messages; trainer studio passes /studio/messages. */
   messagesLink = "/account/messages",
+  /** Which side of the trigger to anchor the dropdown to.
+   *  - "right" (default): dropdown extends LEFT from the trigger's right edge.
+   *    Right when bell is on the right side of the viewport.
+   *  - "left": dropdown extends RIGHT from the trigger's left edge.
+   *    Use when bell is near the LEFT side (e.g. inside StudioSidebar header)
+   *    so the panel doesn't overflow off-screen. */
+  align = "right",
 }: {
   myId: string;
   initialNotifications: Notification[];
   initialUnreadCount: number;
   messagesLink?: string;
+  align?: "left" | "right";
 }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[]>(initialNotifications);
@@ -154,7 +162,12 @@ export default function NotificationsBell({
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-[340px] sm:w-[360px] max-w-[calc(100vw-24px)] bg-white border border-slate-200 rounded-[14px] shadow-[0_20px_40px_-12px_rgba(2,6,23,0.16)] overflow-hidden z-[60]">
+        <div
+          className={
+            "absolute mt-2 w-[340px] sm:w-[360px] max-w-[calc(100vw-24px)] bg-white border border-slate-200 rounded-[14px] shadow-[0_20px_40px_-12px_rgba(2,6,23,0.16)] overflow-hidden z-[60] " +
+            (align === "left" ? "left-0" : "right-0")
+          }
+        >
           <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center">
             <div className="text-[14px] font-semibold tracking-[-0.01em]">Powiadomienia</div>
             <button

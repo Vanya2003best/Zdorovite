@@ -11,9 +11,11 @@ export type NavGroup = "top" | "oferta" | "komunikacja" | "profil";
 export type StudioNavSubItem = {
   href: string;
   label: string;
-  /** Tested against the current `?...` (URLSearchParams). Returns
-   *  true when this sub-link is the active selection. */
-  match: (search: URLSearchParams) => boolean;
+  /** Tested against the current `?...` AND pathname. Returns true when
+   *  this sub-link is the active selection. The two inputs let sub-items
+   *  point either to a query-mode of the same page (`?mode=foo`) or to a
+   *  separate sub-route (`/studio/parent/child`). */
+  match: (search: URLSearchParams, pathname: string) => boolean;
 };
 
 export type StudioNavItem = {
@@ -52,29 +54,6 @@ const CalIcon = (
     <path d="M16 2v4M8 2v4M3 10h18" />
   </svg>
 );
-const ChatIcon = (
-  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-  </svg>
-);
-const StarIcon = (
-  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-  </svg>
-);
-const BoltIcon = (
-  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M20 7L12 3 4 7v10l8 4 8-4V7z" />
-  </svg>
-);
-const PackageIcon = (
-  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <rect x="3" y="3" width="7" height="7" />
-    <rect x="14" y="3" width="7" height="7" />
-    <rect x="14" y="14" width="7" height="7" />
-    <rect x="3" y="14" width="7" height="7" />
-  </svg>
-);
 const UsersIcon = (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
@@ -96,8 +75,11 @@ export const STUDIO_NAV: StudioNavItem[] = [
     label: "Pulpit",
     description: "Statystyki, najbliższe sesje",
     group: "top",
+    // Inbox lives only as a Pulpit widget — no separate sidebar entry. So
+    // /studio/bookings (the full Skrzynka działań page) is treated as a
+    // sub-context of Pulpit and keeps it highlighted when visited.
     icon: HomeIcon,
-    match: (p) => p === "/studio",
+    match: (p) => p === "/studio" || p.startsWith("/studio/bookings"),
   },
   {
     href: "/studio/calendar",
@@ -107,100 +89,79 @@ export const STUDIO_NAV: StudioNavItem[] = [
     icon: CalIcon,
     match: (p) =>
       p.startsWith("/studio/calendar") ||
-      p.startsWith("/studio/bookings") ||
       p.startsWith("/studio/availability"),
     subItems: [
       {
         href: "/studio/calendar?mode=pattern",
-        label: "Wzorzec tygodniowy",
+        label: "Dostępność",
         match: (search) => search.get("mode") === "pattern",
-      },
-      {
-        href: "/studio/calendar?mode=availability",
-        label: "Wolne sloty (podgląd)",
-        match: (search) => search.get("mode") === "availability",
       },
     ],
   },
   {
     href: "/studio/klienci",
     label: "Klienci",
-    description: "Roster, notatki, cele",
+    description: "Roster, czat, opinie",
     group: "top",
     icon: UsersIcon,
-    match: (p) => p.startsWith("/studio/klienci"),
-  },
-
-  // Oferta — services + packages. Both are deep-links into
-  // /studio/design (single source of truth — inline editing in the
-  // live preview). The hash triggers scroll-to-section in
-  // EditorClient; no separate page state to manage.
-  {
-    href: "/studio/uslugi",
-    label: "Usługi",
-    description: "Cennik pojedynczych sesji",
-    group: "oferta",
-    icon: BoltIcon,
-    // Same screen as Pakiety + Promocje (mode-switched), so both
-    // entries highlight the same parent — sub-nav distinguishes them.
-    match: (p) =>
-      p.startsWith("/studio/uslugi") ||
-      p.startsWith("/studio/services") ||
-      p.startsWith("/studio/packages"),
+    // Klienci absorbs Wiadomości as a sub-link, so the section highlights
+    // for either route (the chat is conceptually "talk to your clients").
+    match: (p) => p.startsWith("/studio/klienci") || p.startsWith("/studio/messages"),
     subItems: [
       {
-        href: "/studio/uslugi?mode=pakiety",
-        label: "Pakiety",
-        match: (search) => search.get("mode") === "pakiety",
-      },
-      {
-        href: "/studio/uslugi?mode=promocje",
-        label: "Promocje",
-        match: (search) => search.get("mode") === "promocje",
+        href: "/studio/messages",
+        label: "Wiadomości",
+        match: (_search, pathname) => pathname.startsWith("/studio/messages"),
       },
     ],
   },
 
-  // Komunikacja — messages + reviews.
-  {
-    href: "/studio/messages",
-    label: "Wiadomości",
-    description: "Czat z klientami",
-    group: "komunikacja",
-    icon: ChatIcon,
-    match: (p) => p.startsWith("/studio/messages"),
-    hasUnreadBadge: true,
-  },
-  {
-    href: "/studio/reviews",
-    label: "Opinie",
-    description: "Co mówią klienci",
-    group: "komunikacja",
-    icon: StarIcon,
-    match: (p) => p.startsWith("/studio/reviews"),
-  },
-
-  // Profil — public-data editor + visual designer.
+  // Profil — public data + reputation + promo. Usługi/pakiety removed
+  // per user spec (still routable at /studio/uslugi but hidden from nav).
+  // Design stron lifted to its own top-level section since it's a heavy,
+  // distinct workflow (visual editor) that deserves first-class entry.
   {
     href: "/studio/profile",
     label: "Profil",
-    description: "Dane, certyfikaty, ustawienia",
-    group: "profil",
+    description: "Dane publiczne, kupony, opinie",
+    group: "top",
     icon: ProfileIcon,
-    match: (p) => p.startsWith("/studio/profile"),
+    match: (p) =>
+      p.startsWith("/studio/profile") ||
+      p.startsWith("/studio/reviews") ||
+      p.startsWith("/studio/kupony"),
+    subItems: [
+      {
+        href: "/studio/kupony",
+        label: "Kupony",
+        match: (_search, pathname) => pathname.startsWith("/studio/kupony"),
+      },
+      {
+        href: "/studio/reviews",
+        label: "Opinie",
+        match: (_search, pathname) => pathname.startsWith("/studio/reviews"),
+      },
+    ],
   },
+
+  // Design stron — own top-level entry. Visual page editor is involved
+  // enough (templates, sections, drag-around-preview) to deserve its own
+  // section rather than burying under Profil.
   {
     href: "/studio/design",
-    label: "Design profilu",
+    label: "Design stron",
     description: "Treść + szablon · live preview",
-    group: "profil",
+    group: "top",
     icon: PaletteIcon,
-    match: (p) => p.startsWith("/studio/design"),
+    match: (p) =>
+      p.startsWith("/studio/design") ||
+      p.startsWith("/studio/uslugi") ||
+      p.startsWith("/studio/services") ||
+      p.startsWith("/studio/packages"),
   },
 ];
 
-export const NAV_SECTIONS: { group: Exclude<NavGroup, "top">; label: string }[] = [
-  { group: "oferta", label: "Oferta" },
-  { group: "komunikacja", label: "Komunikacja" },
-  { group: "profil", label: "Profil" },
-];
+// Top-only structure now — all former groups (Oferta/Komunikacja/Profil)
+// fold into the four top-level sections via subItems. Keep the export
+// for backward compat; sidebar renders nothing when empty.
+export const NAV_SECTIONS: { group: Exclude<NavGroup, "top">; label: string }[] = [];

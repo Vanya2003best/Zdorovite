@@ -3,28 +3,39 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import MessagesBadge from "@/app/account/MessagesBadge";
+import AccountMenu from "@/components/AccountMenu";
+import NotificationsBell from "@/components/NotificationsBell";
+import type { Notification } from "@/lib/db/notifications";
 import { NAV_SECTIONS, STUDIO_NAV, type StudioNavItem } from "./nav-items";
-
-const ExternalIcon = (
-  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
-  </svg>
-);
 
 /**
  * Studio sidebar — design 31 layout. 240px wide, single-line links
  * grouped by sections (Oferta / Komunikacja / Profil). Brand area
  * at the top with role badge ("Trener") next to the name. Bottom
- * keeps the public-profile shortcut from before.
+ * shows the AccountMenu pill (avatar + name + dropdown) — replaces
+ * the old "Strona publiczna" footer link, with that link merged into
+ * the dropdown so we don't lose access.
  */
 export default function StudioSidebar({
   trainerId,
   trainerSlug,
   unreadMessages,
+  displayName,
+  email,
+  avatarUrl,
+  avatarFocal,
+  recentNotifs,
+  unreadNotifs,
 }: {
   trainerId: string;
   trainerSlug: string | null;
   unreadMessages: number;
+  displayName: string;
+  email: string | null;
+  avatarUrl: string | null;
+  avatarFocal: string | null;
+  recentNotifs: Notification[];
+  unreadNotifs: number;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -36,17 +47,25 @@ export default function StudioSidebar({
       data-studio-sidebar
       className="hidden lg:flex fixed left-0 top-0 bottom-0 w-[240px] bg-white border-r border-slate-200 flex-col z-40"
     >
-      {/* Brand */}
-      <div className="px-4 pt-5 pb-3">
-        <Link href="/studio" className="flex items-center gap-2.5">
+      {/* Brand + bell — bell replaces the "Trener" badge per design feedback.
+          Single render: sidebar is `hidden lg:flex` but components inside
+          still mount on mobile (CSS-only hiding). Putting a second bell in
+          the topbar would double-subscribe to the same Supabase realtime
+          channel, so it's removed from there. */}
+      <div className="px-4 pt-5 pb-3 flex items-center gap-2.5">
+        <Link href="/studio" className="flex items-center gap-2.5 min-w-0 flex-1">
           <span className="w-[30px] h-[30px] rounded-[9px] bg-gradient-to-br from-emerald-500 to-teal-500 inline-flex items-center justify-center text-white font-bold text-sm shadow-[0_10px_30px_rgba(16,185,129,0.18)]">
             N
           </span>
-          <span className="font-bold text-[16px] tracking-[-0.01em]">NaZdrow!</span>
-          <span className="ml-auto text-[11px] font-medium text-slate-500 px-[7px] py-[3px] bg-slate-50 rounded-md">
-            Trener
-          </span>
+          <span className="font-bold text-[16px] tracking-[-0.01em] truncate">NaZdrow!</span>
         </Link>
+        <NotificationsBell
+          myId={trainerId}
+          initialNotifications={recentNotifs}
+          initialUnreadCount={unreadNotifs}
+          messagesLink="/studio/messages"
+          align="left"
+        />
       </div>
 
       {/* Nav */}
@@ -85,22 +104,18 @@ export default function StudioSidebar({
         })}
       </nav>
 
-      {/* Footer — public-profile shortcut */}
-      {trainerSlug && (
-        <div className="border-t border-slate-100 p-[14px] pt-3">
-          <Link
-            href={`/trainers/${trainerSlug}`}
-            target="_blank"
-            className="flex items-center gap-[11px] px-3 py-[9px] rounded-[9px] text-slate-700 hover:bg-slate-50 transition"
-          >
-            <span className="w-[17px] h-[17px] inline-flex items-center justify-center shrink-0 text-slate-500">
-              {ExternalIcon}
-            </span>
-            <span className="flex-1 text-[13.5px] font-medium">Strona publiczna</span>
-            <span className="text-slate-400">{ExternalIcon}</span>
-          </Link>
-        </div>
-      )}
+      {/* Footer — account pill (avatar + name + dropdown). Public-profile
+          link is now an item inside the dropdown (publicPageHref). */}
+      <div className="border-t border-slate-100 p-2">
+        <AccountMenu
+          variant="pill"
+          displayName={displayName}
+          email={email}
+          avatarUrl={avatarUrl}
+          avatarFocal={avatarFocal}
+          publicPageHref={trainerSlug ? `/trainers/${trainerSlug}` : null}
+        />
+      </div>
     </aside>
   );
 }
@@ -126,7 +141,7 @@ function NavRow({
   // Parent is "fully active" only when it matches AND no sub-link is
   // currently the selected one — same convention as Notion / Linear:
   // sub picks override the parent's bold state.
-  const subActiveIndex = subItems.findIndex((s) => s.match(searchParams));
+  const subActiveIndex = subItems.findIndex((s) => s.match(searchParams, pathname));
   const parentSelfActive = active && subActiveIndex === -1;
 
   const cls =
@@ -161,7 +176,7 @@ function NavRow({
         </Link>
       )}
       {subItems.map((sub) => {
-        const subOn = sub.match(searchParams);
+        const subOn = sub.match(searchParams, pathname);
         return (
           <Link
             key={sub.href}

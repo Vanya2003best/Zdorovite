@@ -1,7 +1,12 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getPendingRescheduleMap } from "@/lib/db/reschedule";
-import CalendarClient, { type BookingEvent, type WorkingHourRule } from "./CalendarClient";
+import { getAvailabilityOverridesInRange } from "@/lib/db/availability-overrides";
+import CalendarClient, {
+  type BookingEvent,
+  type DateOverrideRow,
+  type WorkingHourRule,
+} from "./CalendarClient";
 
 /**
  * /studio/calendar — read-only Google-Calendar-style view of the trainer's
@@ -72,6 +77,9 @@ export default async function StudioCalendarPage() {
     const svc = Array.isArray(row.service) ? row.service[0] : row.service;
     const pkg = Array.isArray(row.package) ? row.package[0] : row.package;
     const cli = Array.isArray(row.client) ? row.client[0] : row.client;
+    // Package presence drives a distinct calendar palette. Snapshot first,
+    // JOIN fallback — same precedence rule as the existing title resolver.
+    const packageName = row.package_name ?? pkg?.name ?? null;
     return {
       id: row.id,
       start: row.start_time,
@@ -79,8 +87,8 @@ export default async function StudioCalendarPage() {
       status: row.status as BookingEvent["status"],
       price: row.price,
       note: row.note,
-      // Snapshot first, JOIN as legacy fallback.
-      title: row.service_name ?? row.package_name ?? svc?.name ?? pkg?.name ?? "Sesja",
+      title: row.service_name ?? packageName ?? svc?.name ?? "Sesja",
+      packageName,
       clientName: cli?.display_name ?? "Klient",
       clientAvatar: cli?.avatar_url ?? null,
     };
@@ -91,9 +99,35 @@ export default async function StudioCalendarPage() {
   const pendingResMap = await getPendingRescheduleMap(bookings.map((b) => b.id));
   const pendingRescheduleIds = Object.keys(pendingResMap);
 
+  // Per-date overrides for a window matching the bookings range — covers
+  // any week the trainer can navigate to without an extra fetch on the
+  // client. Falls back to [] silently if migration 030 isn't applied yet.
+  const fromDate = rangeStart.slice(0, 10);
+  const toDate = rangeEnd.slice(0, 10);
+  const ovList = await getAvailabilityOverridesInRange(user.id, fromDate, toDate);
+  // Collapse multi-shift dates into one row each — the calendar overlay
+  // only needs (date, [{start,end}], isClosed). Keep map order stable.
+  const overrideMap = new Map<string, DateOverrideRow>();
+  for (const o of ovList) {
+    const existing = overrideMap.get(o.date);
+    if (o.isClosed) {
+      overrideMap.set(o.date, { date: o.date, shifts: [], isClosed: true });
+    } else if (existing && !existing.isClosed) {
+      existing.shifts.push({ start: o.start, end: o.end ?? "23:59" });
+    } else {
+      overrideMap.set(o.date, {
+        date: o.date,
+        shifts: [{ start: o.start, end: o.end ?? "23:59" }],
+        isClosed: false,
+      });
+    }
+  }
+  const overrides: DateOverrideRow[] = Array.from(overrideMap.values());
+
   return (
     <CalendarClient
       rules={rules}
+      overrides={overrides}
       bookings={bookings}
       trainerId={user.id}
       pendingRescheduleIds={pendingRescheduleIds}

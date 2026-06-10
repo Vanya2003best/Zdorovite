@@ -160,7 +160,7 @@ export default function SectionAICasesButton({
     <div className="mb-6 rounded-2xl border-2 border-violet-200 bg-violet-50/40 p-5 sm:p-6">
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div className="font-mono text-[10px] tracking-[0.18em] uppercase text-violet-700">
-          ✨ AI · Kejsy
+          ✨ AI · Cases
         </div>
         {phase === "preview" && (
           <div className="flex items-center gap-1 flex-wrap">

@@ -228,6 +228,7 @@ export default async function AccountDashboardPage() {
   const fav = favorites[0];
   if (fav) {
     spotlightTrainer = {
+      id: fav.id,
       slug: fav.slug,
       name: fav.name,
       avatar: fav.avatar ?? null,
@@ -243,6 +244,7 @@ export default async function AccountDashboardPage() {
     if (lastBooked?.trainer) {
       const t = lastBooked.trainer;
       spotlightTrainer = {
+        id: lastBooked.trainer_id,
         slug: t.slug,
         name: t.profile?.display_name ?? "Trener",
         avatar: t.profile?.avatar_url ?? null,

@@ -9,9 +9,9 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 min-h-[100dvh] bg-slate-100">
+    <div className="grid grid-cols-1 lg:grid-cols-2 lg:fixed lg:inset-0 lg:h-[100dvh] lg:overflow-hidden min-h-[100dvh] bg-slate-100">
       {/* ============ LEFT: photo brand panel ============ */}
-      <aside className="relative hidden lg:flex flex-col justify-between p-9 lg:p-11 text-white overflow-hidden bg-slate-900">
+      <aside className="relative hidden lg:flex flex-col justify-between p-8 lg:p-9 text-white overflow-hidden bg-slate-900">
         {/* Background photo */}
         <div className="absolute inset-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -35,17 +35,17 @@ export default function RegisterPage() {
 
         {/* Middle: pitch */}
         <div className="relative z-[3] max-w-[440px]">
-          <div className="text-[12px] tracking-[0.12em] uppercase font-semibold opacity-80 mb-3.5">
+          <div className="text-[11px] tracking-[0.12em] uppercase font-semibold opacity-80 mb-2.5">
             Dla klientów
           </div>
-          <h2 className="text-[32px] sm:text-[36px] leading-[1.08] tracking-[-0.025em] font-semibold m-0 mb-4">
+          <h2 className="text-[28px] sm:text-[32px] leading-[1.08] tracking-[-0.025em] font-semibold m-0 mb-3">
             Trener, który Cię rozumie. W 5 minut.
           </h2>
-          <p className="text-sm leading-relaxed opacity-85 max-w-[360px] mb-7">
+          <p className="text-[13px] leading-snug opacity-85 max-w-[360px] mb-5">
             Powiedz nam o sobie, a my dobierzemy 3 trenerów dopasowanych do celu, dostępności i budżetu.
             Pierwsza sesja — zwrot pieniędzy w 7 dni jeśli nie pasuje.
           </p>
-          <div className="grid gap-3">
+          <div className="grid gap-2.5">
             {[
               ["★", "Tylko zweryfikowani trenerzy", "Sprawdzamy certyfikaty i opinie. 4,89 średnia ocena."],
               ["↻", "Gwarancja zwrotu", "Pierwsza sesja Cię nie przekonała? Zwracamy 100% w 7 dni."],
@@ -64,8 +64,8 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        {/* Bottom: avatar row */}
-        <div className="relative z-[3] flex gap-2.5 items-center">
+        {/* Avatar row — bottom of column, raised by mb cushion */}
+        <div className="relative z-[3] mb-16 flex gap-2.5 items-center">
           <div className="flex">
             {[
               "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=60&h=60&fit=crop&crop=faces",
@@ -88,16 +88,16 @@ export default function RegisterPage() {
       </aside>
 
       {/* ============ RIGHT: form panel ============ */}
-      <section className="flex flex-col bg-white p-6 sm:p-9 lg:p-11">
+      <section className="flex flex-col bg-white p-6 sm:p-8 lg:p-9">
         {/* Mobile-only logo */}
-        <Link href="/" className="lg:hidden inline-flex items-center gap-2.5 mb-8">
+        <Link href="/" className="lg:hidden inline-flex items-center gap-2.5 mb-6">
           <span className="w-8 h-8 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 inline-flex items-center justify-center text-white font-bold text-sm shadow-[0_10px_30px_rgba(16,185,129,0.18)]">
             Z
           </span>
           <span className="font-semibold text-[17px] tracking-[-0.01em]">NaZdrow!</span>
         </Link>
 
-        <div className="flex justify-between text-[13px] text-slate-500 mb-6">
+        <div className="flex justify-between text-[13px] text-slate-500 mb-5">
           <span>Klient</span>
           <span>
             Masz konto?{" "}
@@ -108,7 +108,7 @@ export default function RegisterPage() {
         </div>
 
         {/* Role toggle */}
-        <div className="inline-flex p-1 bg-slate-100 rounded-full mb-6 self-start">
+        <div className="inline-flex p-1 bg-slate-100 rounded-full mb-5 self-start">
           <Link
             href="/register/trainer"
             className="px-4 py-[7px] rounded-full text-[13px] font-medium text-slate-600 hover:text-slate-900 transition"
@@ -120,8 +120,8 @@ export default function RegisterPage() {
           </span>
         </div>
 
-        <h1 className="text-[28px] tracking-[-0.025em] font-semibold mt-0 mb-2">Cześć! Zaczynamy?</h1>
-        <p className="text-sm text-slate-600 mb-7 leading-relaxed max-w-[440px]">
+        <h1 className="text-[26px] tracking-[-0.025em] font-semibold mt-0 mb-2">Cześć! Zaczynamy?</h1>
+        <p className="text-sm text-slate-600 mb-5 leading-relaxed max-w-[440px]">
           Konto zajmie 30 sekund. Resztę dopowiesz w krótkim quizie po rejestracji.
         </p>
 
@@ -178,10 +178,10 @@ export default function RegisterPage() {
                 )}
               </button>
             </div>
-            <p className="text-[11.5px] text-slate-500 mt-1.5">Min. 8 znaków.</p>
+            <p className="text-[12px] text-slate-500 mt-1.5">Min. 8 znaków.</p>
           </div>
 
-          <label className="flex gap-2.5 items-start text-[12.5px] text-slate-700 leading-[1.45] mt-1">
+          <label className="flex gap-2.5 items-start text-[13px] text-slate-700 leading-[1.45] mt-1">
             <input
               type="checkbox"
               required
@@ -201,7 +201,7 @@ export default function RegisterPage() {
             </span>
           </label>
 
-          <label className="flex gap-2.5 items-start text-[12.5px] text-slate-600 leading-[1.45]">
+          <label className="flex gap-2.5 items-start text-[13px] text-slate-600 leading-[1.45]">
             <input type="checkbox" className="w-4 h-4 mt-0.5 accent-emerald-500 shrink-0" />
             <span>Chcę dostawać porady wellness na maila (1 wiadomość / tyg., max).</span>
           </label>
@@ -220,15 +220,11 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={pending}
-            className="w-full h-12 mt-1 rounded-[10px] bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold shadow-[0_8px_24px_-8px_rgba(16,185,129,0.4)] inline-flex items-center justify-center gap-2 hover:brightness-105 transition disabled:opacity-60"
+            className="w-full h-12 mt-1.5 rounded-[10px] bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold shadow-[0_8px_24px_-8px_rgba(16,185,129,0.4)] inline-flex items-center justify-center gap-2 hover:brightness-105 transition disabled:opacity-60"
           >
             {pending ? "Tworzenie konta..." : "Zarejestruj się →"}
           </button>
         </form>
-
-        <p className="text-[13px] text-slate-600 text-center mt-auto pt-4 max-w-[440px] leading-relaxed">
-          Klikając „Zarejestruj się" akceptujesz nasze warunki. Zwrot pieniędzy gwarantowany przez 7 dni od pierwszej sesji.
-        </p>
       </section>
     </div>
   );

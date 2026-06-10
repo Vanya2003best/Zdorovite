@@ -1,294 +1,382 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireClient } from "@/lib/auth";
-import { getPendingRescheduleMap, type RescheduleRequest } from "@/lib/db/reschedule";
-import RescheduleDialog from "@/components/RescheduleDialog";
-import { cancelMyBooking } from "./actions";
+import { getPendingRescheduleMap } from "@/lib/db/reschedule";
+import MojeTreningi, {
+  type Booking,
+  type ActivePackage,
+  type ServiceOption,
+  type MojeTreningiData,
+} from "./MojeTreningi";
 
-type SP = Promise<{ booked?: string; tab?: string }>;
+/**
+ * /account/bookings — Moje treningi (design 36).
+ *
+ * Server orchestrator: bundles upcoming/history/cancelled bookings,
+ * the active package, the primary trainer's services for the Book
+ * panel, and a few aggregate metrics (hours, longest streak, avg
+ * rating given by this client, pending reviews).
+ */
 
-type BookingRow = {
+const PL_MONTHS = [
+  "stycznia",
+  "lutego",
+  "marca",
+  "kwietnia",
+  "maja",
+  "czerwca",
+  "lipca",
+  "sierpnia",
+  "września",
+  "października",
+  "listopada",
+  "grudnia",
+];
+const PL_MONTHS_NOM = [
+  "styczeń",
+  "luty",
+  "marzec",
+  "kwiecień",
+  "maj",
+  "czerwiec",
+  "lipiec",
+  "sierpień",
+  "wrzesień",
+  "październik",
+  "listopad",
+  "grudzień",
+];
+
+const DONE_STATUSES = ["completed", "paid"];
+
+type RawBooking = {
   id: string;
   trainer_id: string;
   start_time: string;
   end_time: string;
   status: string;
   price: number;
-  note: string | null;
-  // Snapshot fields — written at booking creation, survive deletion of
-  // the source service/package. Prefer over the joined relations.
+  package_id: string | null;
   service_name: string | null;
   service_duration: number | null;
   package_name: string | null;
-  service: { name: string; duration: number } | null;
-  package: { name: string } | null;
+  service: { id: string; name: string; duration: number } | null;
+  package: {
+    name: string;
+    sessions_total: number | null;
+  } | null;
   trainer: {
     slug: string;
-    profile: { display_name: string; avatar_url: string | null } | null;
     location: string;
+    profile: { display_name: string | null } | null;
   } | null;
 };
 
-const PL_DAY_SHORT = ["Nd", "Pn", "Wt", "Śr", "Cz", "Pt", "So"];
-const STATUS_LABEL: Record<string, string> = {
-  pending: "Oczekuje",
-  confirmed: "Potwierdzone",
-  paid: "Opłacone",
-  completed: "Ukończona",
-  cancelled: "Anulowane",
-  no_show: "Nie przybył/a",
-};
-
-function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
-}
-
-export default async function BookingsPage(props: { searchParams: SP }) {
-  const { booked, tab } = await props.searchParams;
-  const showHistory = tab === "history";
+export default async function BookingsPage() {
   const { user } = await requireClient("/account/bookings");
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("bookings")
-    .select(`
-      id, trainer_id, start_time, end_time, status, price, note,
+    .select(
+      `
+      id, trainer_id, start_time, end_time, status, price, package_id,
       service_name, service_duration, package_name,
-      service:services ( name, duration ),
-      package:packages ( name ),
+      service:services ( id, name, duration ),
+      package:packages ( name, sessions_total ),
       trainer:trainers (
         slug, location,
-        profile:profiles!id ( display_name, avatar_url )
+        profile:profiles!id ( display_name )
       )
-    `)
+    `,
+    )
     .eq("client_id", user.id)
     .order("start_time", { ascending: true });
 
   if (error) throw error;
-  const bookings = (data ?? []) as unknown as BookingRow[];
 
+  const rows = (data ?? []) as unknown as RawBooking[];
   const now = new Date();
-  const upcoming = bookings.filter((b) => new Date(b.start_time) > now && b.status !== "cancelled");
-  const past = bookings
-    .filter((b) => new Date(b.start_time) <= now || b.status === "cancelled")
-    .reverse();
 
-  const visible = showHistory ? past : upcoming;
-  const nextId = upcoming[0]?.id;
+  // Reschedule pending → drives the "Czeka na zmianę" tag on each card.
+  const pendingResMap = await getPendingRescheduleMap(rows.map((r) => r.id));
 
-  // Pending reschedule requests for upcoming bookings — drives the "czeka na zmianę" badge
-  // and hides the "Przenieś" button (one open request at a time).
-  const pendingResMap = await getPendingRescheduleMap(upcoming.map((b) => b.id));
+  // Buckets — upcoming = future + not cancelled, history = past completed,
+  // cancelled = anything cancelled (regardless of date).
+  const upcoming: Booking[] = [];
+  const history: Booking[] = [];
+  const cancelled: Booking[] = [];
 
-  return (
-    <div className="mx-auto max-w-[860px] px-4 sm:px-6 py-5 sm:py-8">
-      {/* Mobile header — page title */}
-      <header className="md:hidden mb-4">
-        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-          Wszystkie sesje
-        </div>
-        <h1 className="text-[18px] font-semibold tracking-[-0.01em]">
-          {upcoming.length} zaplanowanych
-        </h1>
-      </header>
-      {/* Desktop header */}
-      <header className="hidden md:block mb-6">
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Twoje sesje</h1>
-        <p className="text-sm text-slate-600 mt-1.5">
-          {upcoming.length} nadchodzących · {past.length} w historii
-        </p>
-      </header>
+  for (const r of rows) {
+    const b = mapBooking(r, pendingResMap.has(r.id));
+    if (r.status === "cancelled") {
+      cancelled.push(b);
+    } else if (new Date(r.start_time) > now) {
+      upcoming.push(b);
+    } else if (DONE_STATUSES.includes(r.status)) {
+      history.push(b);
+    } else if (r.status === "confirmed" && new Date(r.end_time) < now) {
+      // Past confirmed sessions never explicitly marked completed —
+      // treat them as completed for display purposes.
+      history.push(b);
+    }
+  }
+  history.reverse(); // newest first
 
-      {booked && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 mb-5 flex items-start gap-3">
-          <span className="w-6 h-6 rounded-full bg-emerald-500 text-white inline-flex items-center justify-center shrink-0 mt-0.5">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-              <path d="M20 6L9 17l-5-5" />
-            </svg>
-          </span>
-          <div>
-            <p className="font-semibold text-emerald-900">Rezerwacja potwierdzona</p>
-            <p className="text-sm text-emerald-800 mt-0.5">Trener otrzymał Twoje zgłoszenie.</p>
-          </div>
-        </div>
-      )}
+  // Active package — pick the one with most bookings (mirrors /account dashboard).
+  const pkgGroups = new Map<
+    string,
+    { name: string; done: number; total: number | null }
+  >();
+  for (const r of rows) {
+    if (!r.package_id || !r.package) continue;
+    const existing = pkgGroups.get(r.package_id);
+    if (existing) {
+      if (DONE_STATUSES.includes(r.status)) existing.done += 1;
+    } else {
+      pkgGroups.set(r.package_id, {
+        name: r.package.name,
+        done: DONE_STATUSES.includes(r.status) ? 1 : 0,
+        total: r.package.sessions_total,
+      });
+    }
+  }
+  const activePackageRaw = Array.from(pkgGroups.values()).sort((a, b) => b.done - a.done)[0] ?? null;
 
-      {/* Segmented control */}
-      <div className="inline-flex p-[3px] bg-slate-100 rounded-full mb-4 text-xs">
-        <Link
-          href="/account/bookings"
-          className={`px-3.5 py-1.5 rounded-full font-medium transition ${
-            !showHistory
-              ? "bg-white text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
-              : "text-slate-600 hover:text-slate-900"
-          }`}
-        >
-          Nadchodzące · {upcoming.length}
-        </Link>
-        <Link
-          href="/account/bookings?tab=history"
-          className={`px-3.5 py-1.5 rounded-full font-medium transition ${
-            showHistory
-              ? "bg-white text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
-              : "text-slate-600 hover:text-slate-900"
-          }`}
-        >
-          Historia · {past.length}
-        </Link>
-      </div>
+  // Compute pace: how many sessions per week the client has been doing
+  // in the last 4 weeks of the package (rough heuristic).
+  let perWeek: number | null = null;
+  let finishEtaLabel: string | null = null;
+  if (activePackageRaw && activePackageRaw.total) {
+    const fourWeeksAgo = new Date(now.getTime() - 28 * 86_400_000);
+    const recentDone = history.filter((h) => new Date(h.startIso) >= fourWeeksAgo).length;
+    if (recentDone > 0) {
+      perWeek = recentDone / 4;
+      const remaining = Math.max(0, activePackageRaw.total - activePackageRaw.done);
+      const weeks = perWeek > 0 ? Math.ceil(remaining / perWeek) : 0;
+      const eta = new Date(now.getTime() + weeks * 7 * 86_400_000);
+      finishEtaLabel = `${eta.getDate()}.${String(eta.getMonth() + 1).padStart(2, "0")}`;
+    }
+  }
 
-      {visible.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-slate-300 py-12 text-center">
-          <p className="text-base font-medium text-slate-500">
-            {showHistory ? "Brak sesji w historii." : "Nie masz zaplanowanych sesji."}
-          </p>
-          {!showHistory && (
-            <Link
-              href="/trainers"
-              className="mt-3 inline-block text-sm font-medium text-emerald-600 hover:text-emerald-700"
-            >
-              Znajdź trenera →
-            </Link>
-          )}
-        </div>
-      ) : (
-        <div className="grid gap-2.5">
-          {visible.map((b) => (
-            <SessionCard
-              key={b.id}
-              booking={b}
-              isPast={showHistory}
-              isNext={b.id === nextId}
-              pendingReschedule={pendingResMap.get(b.id) ?? null}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+  const activePackage: ActivePackage | null =
+    activePackageRaw && activePackageRaw.total
+      ? {
+          name: activePackageRaw.name,
+          done: activePackageRaw.done,
+          total: activePackageRaw.total,
+          // packages.valid_until column doesn't exist yet — once added,
+          // surface it here as `formatPLDate(activePackageRaw.validUntil)`.
+          validUntilLabel: null,
+          perWeek,
+          finishEtaLabel,
+        }
+      : null;
+
+  // Category counts — used by the filter chips.
+  const catCount = new Map<string, number>();
+  for (const b of [...upcoming, ...history]) {
+    catCount.set(b.category, (catCount.get(b.category) ?? 0) + 1);
+  }
+  const categoryCounts = Array.from(catCount.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+
+  // History hours + longest streak + first booking date.
+  const historyHours = Math.round(
+    history.reduce((acc, h) => acc + h.durationMin / 60, 0),
   );
+  const firstBookingDateLabel =
+    history.length > 0
+      ? formatPLDate(history[history.length - 1].startIso.slice(0, 10))
+      : null;
+
+  let longestStreakWeeks = 0;
+  if (history.length > 0) {
+    const weekKeys = new Set(history.map((h) => weekKey(new Date(h.startIso))));
+    let cur = 0,
+      best = 0;
+    let cursor = mondayOf(new Date(history[history.length - 1].startIso));
+    const lastMonday = mondayOf(now);
+    while (cursor.getTime() <= lastMonday.getTime()) {
+      if (weekKeys.has(weekKey(cursor))) {
+        cur += 1;
+        best = Math.max(best, cur);
+      } else {
+        cur = 0;
+      }
+      cursor = new Date(cursor.getTime() + 7 * 86_400_000);
+    }
+    longestStreakWeeks = best;
+  }
+
+  // Reviews this client wrote — drives the avg-rating-given card and the
+  // pending-reviews count (history items without a corresponding review).
+  const { data: reviewsRaw } = await supabase
+    .from("reviews")
+    .select("trainer_id, rating, booking_id")
+    .eq("author_id", user.id);
+  const myReviews = reviewsRaw ?? [];
+  const avgRatingGiven =
+    myReviews.length > 0
+      ? Number(
+          (myReviews.reduce((a, r) => a + (r.rating ?? 0), 0) / myReviews.length).toFixed(2),
+        )
+      : null;
+  const reviewedBookingIds = new Set(myReviews.map((r) => r.booking_id).filter(Boolean));
+  const pendingReviews = history.filter((h) => !reviewedBookingIds.has(h.id)).length;
+
+  // Bookable services from the most-frequent trainer this client books with.
+  const trainerCount = new Map<string, number>();
+  for (const r of rows) {
+    if (!r.trainer_id) continue;
+    trainerCount.set(r.trainer_id, (trainerCount.get(r.trainer_id) ?? 0) + 1);
+  }
+  const primaryTrainerId = Array.from(trainerCount.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  let primaryTrainerName: string | null = null;
+  let bookableServices: ServiceOption[] = [];
+  if (primaryTrainerId) {
+    const primaryRow = rows.find((r) => r.trainer_id === primaryTrainerId);
+    primaryTrainerName = primaryRow?.trainer?.profile?.display_name ?? null;
+    const slug = primaryRow?.trainer?.slug ?? "";
+    const { data: svcRaw } = await supabase
+      .from("services")
+      .select("id, name, description, duration, price")
+      .eq("trainer_id", primaryTrainerId)
+      .order("price", { ascending: true });
+    bookableServices = (svcRaw ?? []).map((s) => ({
+      id: s.id,
+      trainerSlug: slug,
+      name: s.name,
+      description: s.description ?? "",
+      durationMin: s.duration,
+      price: s.price,
+      emoji: pickEmoji(s.name),
+      // Treat the matching service as "from package" if its name appears
+      // in the active package's bookings — covers the design's "Z pakietu"
+      // visual without a dedicated services<->packages join table.
+      fromPackage: !!activePackage && rows.some((r) => r.package_id && r.service?.id === s.id),
+    }));
+  }
+
+  // Mini-cal — current month, count per day.
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const monthSessions: { day: number; count: number }[] = [];
+  for (let d = 1; d <= monthEnd.getDate(); d++) {
+    monthSessions.push({ day: d, count: 0 });
+  }
+  for (const r of rows) {
+    const t = new Date(r.start_time);
+    if (t >= monthStart && t <= monthEnd && r.status !== "cancelled") {
+      monthSessions[t.getDate() - 1].count += 1;
+    }
+  }
+  const monthTotal = monthSessions.reduce((a, s) => a + s.count, 0);
+  const monthLabel = `${PL_MONTHS_NOM[now.getMonth()]} ${now.getFullYear()}`;
+
+  // Cancellations this month.
+  const cancelsThisMonth = cancelled.filter((c) => {
+    const t = new Date(c.startIso);
+    return t >= monthStart && t <= monthEnd;
+  }).length;
+
+  const dataOut: MojeTreningiData = {
+    upcoming,
+    history,
+    cancelled,
+    activePackage,
+    categoryCounts,
+    historyHours,
+    longestStreakWeeks,
+    avgRatingGiven,
+    pendingReviews,
+    firstBookingDateLabel,
+    bookableServices,
+    primaryTrainerName,
+    monthSessions,
+    monthLabel,
+    monthTotal,
+    today: now.getDate(),
+    cancelsThisMonth,
+    cancelLimit: 3,
+  };
+
+  return <MojeTreningi data={dataOut} />;
 }
 
-function SessionCard({
-  booking: b,
-  isPast,
-  isNext,
-  pendingReschedule,
-}: {
-  booking: BookingRow;
-  isPast: boolean;
-  isNext: boolean;
-  pendingReschedule: RescheduleRequest | null;
-}) {
-  const d = new Date(b.start_time);
-  const trainerName = b.trainer?.profile?.display_name ?? "Trener";
-  // Snapshot fields are written at booking creation (migration 018) and
-  // survive deletion of the source service/package. Prefer them; fall
-  // back to the JOIN for legacy rows that pre-date the migration.
-  const what = b.package_name ?? b.package?.name
-    ?? b.service_name ?? b.service?.name ?? "Sesja";
-  const completed = b.status === "completed";
-  const cancelled = b.status === "cancelled";
+function mapBooking(r: RawBooking, pendingReschedule: boolean): Booking {
+  const serviceName =
+    r.service_name ?? r.service?.name ?? r.package_name ?? r.package?.name ?? "Sesja";
+  const trainerName = r.trainer?.profile?.display_name ?? "Trener";
+  const initials = trainerName
+    .split(" ")
+    .map((s) => s[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+  const nameLower = serviceName.toLowerCase();
+  let category = "Inne";
+  if (/siłow/i.test(nameLower)) category = "1:1 siłowy";
+  else if (/cardio|outdoor|bieg|rower/i.test(nameLower)) category = "Cardio outdoor";
+  else if (/online|zoom|konsultac/i.test(nameLower)) category = "Online";
+  else if (/diagnost|fms/i.test(nameLower)) category = "Diagnostyka";
+  else if (/grupow|funkcjon/i.test(nameLower)) category = "Grupowy";
 
-  return (
-    <div className={`bg-white border border-slate-200 rounded-[14px] p-3.5 grid grid-cols-[64px_1fr] gap-3 ${isPast ? "opacity-90" : ""}`}>
-      {/* Date tile */}
-      <div className={`rounded-[10px] text-center py-2 ${
-        isNext ? "bg-emerald-50" : isPast ? "bg-slate-100" : "bg-slate-50"
-      }`}>
-        <div className={`text-[9px] uppercase font-bold tracking-wider ${
-          isNext ? "text-emerald-700" : "text-slate-500"
-        }`}>
-          {PL_DAY_SHORT[d.getDay()]} {d.getDate()}
-        </div>
-        <div className={`text-[22px] font-bold tracking-[-0.02em] leading-tight my-0.5 ${
-          isPast && !isNext ? "text-slate-700" : "text-slate-900"
-        }`}>
-          {d.getDate()}
-        </div>
-        <div className="text-[10px] text-slate-700 font-semibold">{fmtTime(b.start_time)}</div>
-      </div>
+  let variant: "studio" | "outdoor" | "online" = "studio";
+  if (/online|zoom|konsultac/i.test(nameLower)) variant = "online";
+  else if (/cardio|outdoor|bieg|park/i.test(nameLower)) variant = "outdoor";
 
-      {/* Info */}
-      <div className="flex flex-col min-w-0">
-        <div className="text-[13px] font-semibold truncate">{what}</div>
-        <div className="text-[11.5px] text-slate-600 mt-0.5">
-          <div className="truncate">
-            {trainerName}
-            {b.service?.duration ? ` · ${b.service.duration} min` : ""}
-            {cancelled ? " · anulowana" : completed ? " · ukończona" : ""}
-          </div>
-          <div className="flex gap-2 items-center mt-1 flex-wrap text-[11px]">
-            {b.trainer?.location && (
-              <span className="inline-flex gap-1 items-center text-slate-500">
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1118 0z" />
-                  <circle cx="12" cy="10" r="3" />
-                </svg>
-                {b.trainer.location}
-              </span>
-            )}
-            {!isPast && !cancelled && (
-              <span className="inline-flex items-center text-slate-500">
-                · {STATUS_LABEL[b.status] ?? b.status}
-              </span>
-            )}
-            {isNext && (
-              <span className="text-emerald-700 font-medium">· Najbliższa</span>
-            )}
-          </div>
-        </div>
+  const fromPackage = !!r.package_id;
+  const total = r.package?.sessions_total ?? null;
 
-        {!isPast && !cancelled ? (
-          <div className="mt-2 flex gap-1.5 flex-wrap">
-            <Link
-              href={`/account/messages?with=${b.trainer_id}`}
-              className="px-2.5 py-1 rounded-[7px] text-[11px] font-medium bg-slate-900 text-white hover:bg-black transition"
-            >
-              Otwórz
-            </Link>
-            {pendingReschedule ? (
-              <Link
-                href={`/account/messages?with=${b.trainer_id}`}
-                className="px-2.5 py-1 rounded-[7px] text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200"
-              >
-                Czeka na zmianę
-              </Link>
-            ) : (
-              <RescheduleDialog
-                bookingId={b.id}
-                trainerId={b.trainer_id}
-                currentStartIso={b.start_time}
-                durationMin={b.service?.duration ?? 60}
-                triggerLabel="Przenieś"
-              />
-            )}
-            <form action={cancelMyBooking}>
-              <input type="hidden" name="booking_id" value={b.id} />
-              <button
-                type="submit"
-                className="px-2.5 py-1 rounded-[7px] text-[11px] font-medium bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-400 transition"
-              >
-                Anuluj
-              </button>
-            </form>
-            <span className="ml-auto text-[12px] font-semibold text-slate-900 self-center">{b.price} zł</span>
-          </div>
-        ) : (
-          <div className="mt-2 flex items-center gap-2">
-            <span className="text-[12px] font-semibold text-slate-900">{b.price} zł</span>
-            {completed && (
-              // TODO: only show if no review by this client for this trainer; needs query against reviews table
-              <Link
-                href={`/trainers/${b.trainer?.slug ?? ""}#reviews`}
-                className="ml-auto inline-flex gap-1.5 items-center px-2.5 py-1.5 rounded-[8px] text-[11px] font-medium border border-amber-300 bg-gradient-to-br from-amber-50 to-white text-amber-800 hover:border-amber-400 transition"
-              >
-                <span className="text-amber-600">★★★★★</span>
-                Wystaw opinię
-              </Link>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  return {
+    id: r.id,
+    trainerId: r.trainer_id,
+    trainerSlug: r.trainer?.slug ?? "",
+    trainerName,
+    trainerInitials: initials || "T",
+    trainerLocation: r.trainer?.location ?? "",
+    startIso: r.start_time,
+    endIso: r.end_time,
+    status: r.status,
+    price: r.price,
+    serviceName,
+    durationMin: r.service_duration ?? r.service?.duration ?? 60,
+    fromPackage,
+    packageProgress: fromPackage && total ? { done: 0, total } : null,
+    category,
+    variant,
+    pendingReschedule,
+  };
+}
+
+function pickEmoji(name: string): string {
+  const n = name.toLowerCase();
+  if (/siłow|gym|hantl|sztang/.test(n)) return "💪";
+  if (/online|zoom|konsultac/.test(n)) return "💻";
+  if (/cardio|outdoor|bieg|rower/.test(n)) return "🌳";
+  if (/diagnost|fms|test/.test(n)) return "🎯";
+  if (/grupow|funkcjon/.test(n)) return "👥";
+  if (/joga|stretch|mobil/.test(n)) return "🧘";
+  return "🏋️";
+}
+
+function formatPLDate(iso: string): string {
+  const d = new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso);
+  return `${d.getUTCDate()} ${PL_MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
+function mondayOf(d: Date): Date {
+  const r = new Date(d);
+  r.setHours(0, 0, 0, 0);
+  const dow = r.getDay();
+  const offset = (dow + 6) % 7;
+  r.setDate(r.getDate() - offset);
+  return r;
+}
+
+function weekKey(d: Date): string {
+  const m = mondayOf(d);
+  return `${m.getFullYear()}-${m.getMonth() + 1}-${m.getDate()}`;
 }
