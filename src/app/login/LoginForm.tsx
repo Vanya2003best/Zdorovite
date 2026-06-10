@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import GoogleAuthButton from "@/components/GoogleAuthButton";
 import { login, type AuthState } from "./actions";
 
 export default function LoginForm() {
@@ -12,7 +13,9 @@ export default function LoginForm() {
   const next = sp.get("next") ?? "";
 
   return (
-    <form action={action} className="grid gap-4 max-w-[440px]">
+    <div className="grid gap-4 max-w-[440px]">
+      <GoogleAuthButton next={next} />
+      <form action={action} className="grid gap-4">
       <input type="hidden" name="next" value={next} />
 
       <div>
@@ -67,9 +70,9 @@ export default function LoginForm() {
             defaultChecked
             className="w-4 h-4 accent-emerald-500"
           />
-          Pamiętaj mnie 30 dni
+          Pamiętaj mnie
         </label>
-        <Link href="#" className="text-slate-700 hover:text-slate-900">
+        <Link href="/forgot-password" className="text-slate-700 hover:text-slate-900">
           Zapomniałeś hasła?
         </Link>
       </div>
@@ -87,6 +90,7 @@ export default function LoginForm() {
       >
         {pending ? "Logowanie..." : "Zaloguj się →"}
       </button>
-    </form>
+      </form>
+    </div>
   );
 }

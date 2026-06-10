@@ -1,12 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { Suspense, useActionState, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import GoogleAuthButton from "@/components/GoogleAuthButton";
 import { register, type RegisterState } from "./actions";
 
 export default function RegisterPage() {
+  // useSearchParams needs a Suspense boundary in a client page.
+  return (
+    <Suspense fallback={null}>
+      <RegisterPageInner />
+    </Suspense>
+  );
+}
+
+function RegisterPageInner() {
   const [state, action, pending] = useActionState<RegisterState, FormData>(register, null);
   const [showPassword, setShowPassword] = useState(false);
+  const sp = useSearchParams();
+  const next = sp.get("next") ?? "";
+  const loginHref = next ? `/login?next=${encodeURIComponent(next)}` : "/login";
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 lg:fixed lg:inset-0 lg:h-[100dvh] lg:overflow-hidden min-h-[100dvh] bg-slate-100">
@@ -101,7 +115,7 @@ export default function RegisterPage() {
           <span>Klient</span>
           <span>
             Masz konto?{" "}
-            <Link href="/login" className="text-emerald-700 font-semibold hover:underline">
+            <Link href={loginHref} className="text-emerald-700 font-semibold hover:underline">
               Zaloguj się
             </Link>
           </span>
@@ -125,7 +139,11 @@ export default function RegisterPage() {
           Konto zajmie 30 sekund. Resztę dopowiesz w krótkim quizie po rejestracji.
         </p>
 
-        <form action={action} className="grid gap-4 max-w-[440px]">
+        <div className="max-w-[440px]">
+          <GoogleAuthButton next={next} />
+        </div>
+        <form action={action} className="grid gap-4 max-w-[440px] mt-4">
+          <input type="hidden" name="next" value={next} />
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1.5">Imię i nazwisko</label>
             <input

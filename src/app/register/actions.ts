@@ -13,6 +13,11 @@ export async function register(
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const displayName = String(formData.get("display_name") ?? "").trim();
+  const next = String(formData.get("next") ?? "").trim();
+  // Carry the booking (or any in-progress) destination through sign-up AND
+  // through the email-confirmation round-trip — the cold QR-scan flow depends
+  // on landing back where the user started.
+  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/account";
 
   // Validate inputs before any I/O — fail fast with a precise message.
   if (!email || !password || !displayName) {
@@ -34,7 +39,7 @@ export async function register(
       password,
       options: {
         data: { display_name: displayName },
-        emailRedirectTo: `${origin}/auth/callback?next=/account`,
+        emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(safeNext)}`,
       },
     });
 
@@ -46,11 +51,11 @@ export async function register(
     // If OFF, session is present and user is logged in.
     if (!data.session) {
       return {
-        info: "Sprawdź skrzynkę — wysłaliśmy link aktywacyjny. Po potwierdzeniu zaloguj się.",
+        info: "Sprawdź skrzynkę — wysłaliśmy link aktywacyjny. Po potwierdzeniu wrócisz dokładnie tam, gdzie skończyłeś.",
       };
     }
 
-    redirect("/account");
+    redirect(safeNext);
   } catch (err) {
     // redirect() throws NEXT_REDIRECT — let Next handle it, don't swallow it.
     unstable_rethrow(err);

@@ -1,7 +1,8 @@
 "use server";
 
 import { redirect, unstable_rethrow } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
+import { createClient, SESSION_ONLY_COOKIE } from "@/lib/supabase/server";
 import { roleHome, isPathAllowedForRole, type UserRole } from "@/lib/auth";
 
 export type AuthState = { error: string } | null;
@@ -13,6 +14,7 @@ export async function login(
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const next = String(formData.get("next") ?? "").trim();
+  const remember = formData.get("remember") === "on";
 
   // Validate inputs before any I/O — fail fast with a precise message.
   if (!email || !password) {
@@ -20,6 +22,15 @@ export async function login(
   }
 
   try {
+    // The marker must be in place BEFORE createClient(): its cookie adapter
+    // reads it once to decide whether auth cookies get an expiry.
+    const cookieStore = await cookies();
+    if (remember) {
+      cookieStore.delete(SESSION_ONLY_COOKIE);
+    } else {
+      cookieStore.set(SESSION_ONLY_COOKIE, "1"); // no maxAge → session cookie
+    }
+
     const supabase = await createClient();
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 

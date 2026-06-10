@@ -18,7 +18,11 @@ function LoginFormFallback() {
   );
 }
 
-export default function LoginPage() {
+export default async function LoginPage(props: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const { next } = await props.searchParams;
+  const registerHref = next ? `/register?next=${encodeURIComponent(next)}` : "/register";
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 lg:fixed lg:inset-0 lg:h-[100dvh] lg:overflow-hidden min-h-[100dvh] bg-slate-100">
       {/* ============ LEFT: brand panel ============ */}
@@ -67,8 +71,8 @@ export default function LoginPage() {
             <div className="text-[11px] opacity-70 tracking-wider uppercase mt-0.5">Średni czas logowania</div>
           </div>
           <div>
-            <div className="text-[22px] font-bold tracking-[-0.02em]">2FA</div>
-            <div className="text-[11px] opacity-70 tracking-wider uppercase mt-0.5">Dostępne dla wszystkich</div>
+            <div className="text-[22px] font-bold tracking-[-0.02em]">SSL</div>
+            <div className="text-[11px] opacity-70 tracking-wider uppercase mt-0.5">Szyfrowane połączenie</div>
           </div>
         </div>
       </aside>
@@ -90,7 +94,7 @@ export default function LoginPage() {
           </span>
           <span>
             Nie masz konta?{" "}
-            <Link href="/register" className="text-emerald-700 font-semibold hover:underline">
+            <Link href={registerHref} className="text-emerald-700 font-semibold hover:underline">
               Załóż
             </Link>
           </span>

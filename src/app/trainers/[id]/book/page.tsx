@@ -20,7 +20,16 @@ export default async function BookPage(props: {
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect(`/login?next=/trainers/${id}/book${packageParam ? `?package=${packageParam}` : ""}`);
+  if (!user) {
+    // Preserve the FULL booking context (date, service, package) through the
+    // auth round-trip — the cold QR-scan flow must land back on this exact slot.
+    const qs = new URLSearchParams();
+    if (dateParam) qs.set("date", dateParam);
+    if (serviceParam) qs.set("service", serviceParam);
+    if (packageParam) qs.set("package", packageParam);
+    const suffix = qs.size > 0 ? `?${qs.toString()}` : "";
+    redirect(`/login?next=${encodeURIComponent(`/trainers/${id}/book${suffix}`)}`);
+  }
 
   const { data: trainerRow } = await supabase
     .from("trainers")
