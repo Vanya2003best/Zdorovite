@@ -94,6 +94,40 @@ type BookingRow = {
   package_id: string | null;
 };
 
+/** Single source of truth for the status rules (see header comment). */
+export function deriveStatus(input: {
+  archived: boolean;
+  firstCompletedIso: string | null;
+  lastCompletedIso: string | null;
+  completedCount: number;
+  hasUpcoming: boolean;
+  rosterCreatedIso: string;
+  now: number;
+}): { status: ClientStatus; statusDays: number | null } {
+  const { archived, firstCompletedIso, lastCompletedIso, completedCount, hasUpcoming, rosterCreatedIso, now } = input;
+  if (archived) return { status: "ended", statusDays: null };
+  if (!firstCompletedIso && !hasUpcoming) {
+    return { status: "lead", statusDays: daysAgo(rosterCreatedIso, now) };
+  }
+  if (
+    hasUpcoming ||
+    (lastCompletedIso && daysAgo(lastCompletedIso, now) <= ACTIVE_WINDOW_DAYS)
+  ) {
+    if (
+      firstCompletedIso &&
+      daysAgo(firstCompletedIso, now) <= ACTIVE_WINDOW_DAYS &&
+      completedCount <= 3
+    ) {
+      return { status: "new", statusDays: daysAgo(firstCompletedIso, now) };
+    }
+    return { status: "active", statusDays: null };
+  }
+  return {
+    status: "pause",
+    statusDays: lastCompletedIso ? daysAgo(lastCompletedIso, now) : null,
+  };
+}
+
 export async function getClientsForTrainer(trainerId: string): Promise<RosterClient[]> {
   const supabase = await createClient();
   const now = Date.now();
@@ -154,25 +188,15 @@ export async function getClientsForTrainer(trainerId: string): Promise<RosterCli
     const last = completed[completed.length - 1] ?? null;
     const next = upcoming[0] ?? null;
 
-    // ----- status derivation (see header comment) -----
-    let status: ClientStatus;
-    let statusDays: number | null = null;
-    if (row.archived_at) {
-      status = "ended";
-    } else if (!first && !next) {
-      status = "lead";
-      statusDays = daysAgo(row.created_at, now);
-    } else if (next || (last && daysAgo(last.start_time, now) <= ACTIVE_WINDOW_DAYS)) {
-      if (first && daysAgo(first.start_time, now) <= ACTIVE_WINDOW_DAYS && completed.length <= 3) {
-        status = "new";
-        statusDays = daysAgo(first.start_time, now);
-      } else {
-        status = "active";
-      }
-    } else {
-      status = "pause";
-      statusDays = last ? daysAgo(last.start_time, now) : null;
-    }
+    const { status, statusDays } = deriveStatus({
+      archived: !!row.archived_at,
+      firstCompletedIso: first?.start_time ?? null,
+      lastCompletedIso: last?.start_time ?? null,
+      completedCount: completed.length,
+      hasUpcoming: !!next,
+      rosterCreatedIso: row.created_at,
+      now,
+    });
 
     // ----- package saldo: most recent package the client booked under -----
     let pkg: RosterClient["pkg"] = null;
