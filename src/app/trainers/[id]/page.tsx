@@ -67,6 +67,7 @@ export default async function TrainerProfilePage(props: PageProps<"/trainers/[id
     return (
       <CinematicProfile
         trainer={trainer}
+        trainerDbId={trainerDbId}
         editMode={editMode}
         isOwner={isOwner}
         published={published}
@@ -106,6 +107,7 @@ export default async function TrainerProfilePage(props: PageProps<"/trainers/[id
     return (
       <LuxuryProfile
         trainer={trainer}
+        trainerDbId={trainerDbId}
         editMode={editMode}
         isOwner={isOwner}
         published={published}

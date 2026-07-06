@@ -296,12 +296,14 @@ export default function StudioProfile({
                   >
                     Umów konsultację →
                   </Link>
-                  <Link
-                    href={`/trainers/${trainer.id}#contact`}
-                    className="inline-flex items-center gap-2 h-11 px-5 rounded-full bg-transparent text-[#141413] border border-[#d4d1c7] text-[14px] font-medium hover:bg-[#141413] hover:text-white hover:border-[#141413] transition"
-                  >
-                    Napisz wiadomość
-                  </Link>
+                  {trainerDbId && (
+                    <Link
+                      href={`/account/messages?with=${trainerDbId}`}
+                      className="inline-flex items-center gap-2 h-11 px-5 rounded-full bg-transparent text-[#141413] border border-[#d4d1c7] text-[14px] font-medium hover:bg-[#141413] hover:text-white hover:border-[#141413] transition"
+                    >
+                      Napisz wiadomość
+                    </Link>
+                  )}
                 </>
               )}
             </div>
@@ -1176,12 +1178,14 @@ export default function StudioProfile({
                 >
                   <Stu k="finalCtaPrimary" fb="Umów bezpłatną rozmowę →" maxLength={60} rich={false} />
                 </Link>
-                <Link
-                  href={`/trainers/${trainer.id}#contact`}
-                  className="inline-flex items-center gap-2 h-12 px-6 rounded-full bg-transparent text-[#141413] border border-[#d4d1c7] text-[14px] font-medium hover:bg-[#141413] hover:text-white hover:border-[#141413] transition"
-                >
-                  <Stu k="finalCtaSecondary" fb="Napisz wiadomość" maxLength={60} rich={false} />
-                </Link>
+                {trainerDbId && (
+                  <Link
+                    href={`/account/messages?with=${trainerDbId}`}
+                    className="inline-flex items-center gap-2 h-12 px-6 rounded-full bg-transparent text-[#141413] border border-[#d4d1c7] text-[14px] font-medium hover:bg-[#141413] hover:text-white hover:border-[#141413] transition"
+                  >
+                    <Stu k="finalCtaSecondary" fb="Napisz wiadomość" maxLength={60} rich={false} />
+                  </Link>
+                )}
               </>
             )}
           </div>
@@ -1195,8 +1199,8 @@ export default function StudioProfile({
             <div className="flex gap-6">
               <Link href="/regulamin" className="hover:text-[#141413] transition">Regulamin</Link>
               <Link href="/prywatnosc" className="hover:text-[#141413] transition">Prywatność</Link>
-              {!isOwner && (
-                <Link href={`/trainers/${trainer.id}#contact`} className="hover:text-[#141413] transition">
+              {!isOwner && trainerDbId && (
+                <Link href={`/account/messages?with=${trainerDbId}`} className="hover:text-[#141413] transition">
                   Kontakt
                 </Link>
               )}

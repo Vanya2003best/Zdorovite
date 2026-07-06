@@ -90,6 +90,19 @@ export default async function Home(props: { searchParams: SP }) {
     sort: parseSort(sp.sort),
   };
 
+  // Honest hero numbers: global COUNTs over the whole marketplace (NOT the
+  // filtered result list below). Two head-only queries — no rows transferred.
+  // CatalogClient hides the stats line entirely while the marketplace is
+  // small (<25 trainers): small numbers aren't shown, fake ones never.
+  const [trainersHead, reviewsHead] = await Promise.all([
+    supabase.from("trainers").select("id", { count: "exact", head: true }).eq("published", true),
+    supabase.from("reviews").select("id", { count: "exact", head: true }),
+  ]);
+  const heroStats = {
+    trainers: trainersHead.count ?? 0,
+    reviews: reviewsHead.count ?? 0,
+  };
+
   let trainers = await getTrainers(filters);
 
   if (wantsFavOnly && user) {
@@ -130,6 +143,7 @@ export default async function Home(props: { searchParams: SP }) {
       isLoggedIn={!!user}
       favActive={wantsFavOnly}
       filters={catalogFilters}
+      heroStats={heroStats}
     />
   );
 }

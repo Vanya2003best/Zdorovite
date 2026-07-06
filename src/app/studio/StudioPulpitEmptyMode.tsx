@@ -109,8 +109,8 @@ export default function StudioPulpitEmptyMode({
           <div className="bg-white rounded-xl p-5 shadow-[0_0_0_1px_rgba(0,47,52,0.06)]">
             <h3 className="m-0 mb-3 text-[13px] tracking-[0.04em] text-[#002f34] font-extrabold uppercase flex items-center">
               Dobre praktyki na start
-              <Link href="/jak-to-dziala" className="ml-auto text-[11.5px] text-slate-500 font-semibold normal-case tracking-normal hover:text-emerald-700">
-                Wszystkie wskazówki →
+              <Link href="/studio/start" className="ml-auto text-[11.5px] text-slate-500 font-semibold normal-case tracking-normal hover:text-emerald-700">
+                Plan startu →
               </Link>
             </h3>
             <div className="grid gap-1.5">

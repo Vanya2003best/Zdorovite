@@ -107,9 +107,27 @@ type Props = {
   isLoggedIn: boolean;
   favActive: boolean;
   filters: CatalogFilters;
+  /** Global marketplace COUNTs for the hero line (independent of the
+      filtered `trainers` list). Hidden below the honest-numbers threshold. */
+  heroStats?: { trainers: number; reviews: number };
 };
 
-export default function CatalogClient({ trainers, favActive, filters }: Props) {
+// Polish plural for "opinia" — 1 opinia / 2-4 opinie / 5+ opinii (with the
+// 12-14 teens exception).
+function opinieWord(n: number): string {
+  if (n === 1) return "opinia";
+  const last = n % 10;
+  const lastTwo = n % 100;
+  if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) return "opinie";
+  return "opinii";
+}
+
+// Honest-numbers rule: don't show marketplace counters until they're
+// something to be proud of. Below this we show no stats line at all.
+const HERO_STATS_MIN_TRAINERS = 25;
+const HERO_STATS_MIN_REVIEWS = 25;
+
+export default function CatalogClient({ trainers, favActive, filters, heroStats }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -311,14 +329,22 @@ export default function CatalogClient({ trainers, favActive, filters }: Props) {
           context bar above instead, shown once user scrolls past hero. */}
       <section className="text-white pt-6 pb-6" style={{ background: "#002f34" }}>
         <div className="mx-auto max-w-[1280px] px-4 sm:px-6">
-          <h1 className="m-0 mb-2 text-[24px] sm:text-[36px] leading-[1.15] sm:leading-[1.1] tracking-[-0.025em] font-bold">
+          <h1 className={`m-0 text-[24px] sm:text-[36px] leading-[1.15] sm:leading-[1.1] tracking-[-0.025em] font-bold ${heroStats && heroStats.trainers >= HERO_STATS_MIN_TRAINERS ? "mb-2" : "mb-5"}`}>
             Znajdź trenera personalnego w Polsce
           </h1>
-          <p className="text-[13px] sm:text-[15px] text-white/75 max-w-[640px] mb-5 m-0">
-            {/* MOCK: hardcoded marketing copy — replace with real COUNT()
-                queries when we want live numbers in the hero. */}
-            <b className="text-white font-bold">240 zweryfikowanych trenerów</b> · <b className="text-white font-bold">12 400 opinii</b> · <b className="text-white font-bold">38 000 odbytych sesji</b>
-          </p>
+          {/* Real global COUNTs from page.tsx — never shown while the
+              marketplace is small (honest-numbers rule). */}
+          {heroStats && heroStats.trainers >= HERO_STATS_MIN_TRAINERS && (
+            <p className="text-[13px] sm:text-[15px] text-white/75 max-w-[640px] mb-5 m-0">
+              <b className="text-white font-bold">{heroStats.trainers.toLocaleString("pl-PL")} trenerów</b>
+              {heroStats.reviews >= HERO_STATS_MIN_REVIEWS && (
+                <>
+                  {" · "}
+                  <b className="text-white font-bold">{heroStats.reviews.toLocaleString("pl-PL")} {opinieWord(heroStats.reviews)}</b>
+                </>
+              )}
+            </p>
+          )}
 
           {/* Mobile (<sm): 2-col grid — q and city full-width rows, radius +
               price side by side, format below, big Szukaj at the bottom.

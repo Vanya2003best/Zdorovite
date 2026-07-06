@@ -61,6 +61,7 @@ function extractYear(text: string): string {
 
 export default function LuxuryProfile({
   trainer,
+  trainerDbId,
   editMode,
   isOwner,
   published,
@@ -69,6 +70,8 @@ export default function LuxuryProfile({
   isEmbed = false,
 }: {
   trainer: Trainer;
+  /** DB uuid of the trainer — target for /account/messages?with=. */
+  trainerDbId?: string;
   editMode: boolean;
   isOwner: boolean;
   published: boolean;
@@ -352,12 +355,14 @@ export default function LuxuryProfile({
               >
                 Umów konsultację
               </Link>
-              <Link
-                href={`/trainers/${trainer.id}/messages`}
-                className="inline-flex items-center justify-center h-12 px-6 sm:px-7 text-[12px] tracking-[0.18em] uppercase font-medium border border-[#1c1a15] text-[#1c1a15] hover:bg-[#1c1a15] hover:text-[#fbf8f1] transition"
-              >
-                Napisz wiadomość
-              </Link>
+              {trainerDbId && (
+                <Link
+                  href={`/account/messages?with=${trainerDbId}`}
+                  className="inline-flex items-center justify-center h-12 px-6 sm:px-7 text-[12px] tracking-[0.18em] uppercase font-medium border border-[#1c1a15] text-[#1c1a15] hover:bg-[#1c1a15] hover:text-[#fbf8f1] transition"
+                >
+                  Napisz wiadomość
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -832,7 +837,7 @@ export default function LuxuryProfile({
                   {trainer.reviewCount > reviews.length && (
                     <div className="text-center mt-16">
                       <Link
-                        href={`/trainers/${trainer.id}/reviews`}
+                        href="#reviews"
                         className="inline-flex items-center justify-center h-12 px-6 text-[12px] tracking-[0.18em] uppercase font-medium border border-[#1c1a15] text-[#1c1a15] hover:bg-[#1c1a15] hover:text-[#fbf8f1] transition"
                       >
                         Czytaj wszystkie referencje ({trainer.reviewCount})
@@ -871,11 +876,11 @@ export default function LuxuryProfile({
       {/* FOOTER */}
       {!isEmbed && (
         <footer className="bg-[#f6f1e8] border-t border-[#d9cfb8] px-6 sm:px-10 py-10 text-[10px] tracking-[0.2em] uppercase text-[#7a7365] flex justify-between items-center gap-4 flex-wrap">
-          <span>Zdorovite · Polska · {new Date().getFullYear()}</span>
+          <span>NaZdrow! · Polska · {new Date().getFullYear()}</span>
           <div className="flex gap-6 sm:gap-8">
-            <Link href="#" className="hover:text-[#8a7346] transition">Regulamin</Link>
-            <Link href="#" className="hover:text-[#8a7346] transition">Prywatność</Link>
-            <Link href="#" className="hover:text-[#8a7346] transition">Kontakt</Link>
+            <Link href="/regulamin" className="hover:text-[#8a7346] transition">Regulamin</Link>
+            <Link href="/prywatnosc" className="hover:text-[#8a7346] transition">Prywatność</Link>
+            <a href="mailto:kontakt@nazdrow.pl" className="hover:text-[#8a7346] transition">Kontakt</a>
           </div>
         </footer>
       )}

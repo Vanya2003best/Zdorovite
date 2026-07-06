@@ -39,18 +39,13 @@ export default async function Footer() {
             <h4 className="text-[13px] font-semibold text-slate-900 mb-3.5">Dla klientów</h4>
             <ul className="space-y-2.5 text-sm text-slate-600">
               <li><Link href="/" className="hover:text-slate-900 transition">Znajdź trenera</Link></li>
-              <li><Link href="#" className="hover:text-slate-900 transition">Specjalizacje</Link></li>
-              <li><Link href="#" className="hover:text-slate-900 transition">Pakiety</Link></li>
-              <li><Link href="#" className="hover:text-slate-900 transition">Opinie</Link></li>
             </ul>
           </div>
           <div>
             <h4 className="text-[13px] font-semibold text-slate-900 mb-3.5">Dla trenerów</h4>
             <ul className="space-y-2.5 text-sm text-slate-600">
               <li><Link href="/register/trainer" className="hover:text-slate-900 transition">Dołącz</Link></li>
-              <li><Link href="#" className="hover:text-slate-900 transition">Szablony profilu</Link></li>
-              <li><Link href="#" className="hover:text-slate-900 transition">Kalendarz</Link></li>
-              <li><Link href="#" className="hover:text-slate-900 transition">Cennik</Link></li>
+              <li><Link href="/cennik" className="hover:text-slate-900 transition">Cennik</Link></li>
             </ul>
           </div>
           <div>
@@ -63,10 +58,9 @@ export default async function Footer() {
           <div>
             <h4 className="text-[13px] font-semibold text-slate-900 mb-3.5">Firma</h4>
             <ul className="space-y-2.5 text-sm text-slate-600">
-              <li><Link href="#" className="hover:text-slate-900 transition">O nas</Link></li>
-              <li><Link href="#" className="hover:text-slate-900 transition">Kontakt</Link></li>
-              <li><Link href="#" className="hover:text-slate-900 transition">Regulamin</Link></li>
-              <li><Link href="#" className="hover:text-slate-900 transition">Polityka prywatności</Link></li>
+              <li><a href="mailto:kontakt@nazdrow.pl" className="hover:text-slate-900 transition">Kontakt</a></li>
+              <li><Link href="/regulamin" className="hover:text-slate-900 transition">Regulamin</Link></li>
+              <li><Link href="/prywatnosc" className="hover:text-slate-900 transition">Polityka prywatności</Link></li>
             </ul>
           </div>
         </div>
@@ -77,9 +71,9 @@ export default async function Footer() {
           <span className="hidden sm:inline">Made in Warszawa 🇵🇱</span>
           {/* Mobile: simple links */}
           <div className="flex gap-6 sm:hidden">
-            <Link href="#" className="hover:text-slate-700 transition">Regulamin</Link>
-            <Link href="#" className="hover:text-slate-700 transition">Prywatność</Link>
-            <Link href="#" className="hover:text-slate-700 transition">Kontakt</Link>
+            <Link href="/regulamin" className="hover:text-slate-700 transition">Regulamin</Link>
+            <Link href="/prywatnosc" className="hover:text-slate-700 transition">Prywatność</Link>
+            <a href="mailto:kontakt@nazdrow.pl" className="hover:text-slate-700 transition">Kontakt</a>
           </div>
         </div>
       </div>

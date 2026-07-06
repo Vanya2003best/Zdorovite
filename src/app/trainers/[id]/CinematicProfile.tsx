@@ -35,6 +35,7 @@ const FALLBACK_FULLBLEED = "https://images.unsplash.com/photo-1552674605-db6ffd4
 
 export default function CinematicProfile({
   trainer,
+  trainerDbId,
   editMode,
   isOwner,
   published,
@@ -43,6 +44,9 @@ export default function CinematicProfile({
   isEmbed = false,
 }: {
   trainer: Trainer;
+  /** DB uuid of the trainer — target for /account/messages?with=.
+      (trainer.id is the SLUG — never use it for the messages link.) */
+  trainerDbId?: string;
   editMode: boolean;
   isOwner: boolean;
   published: boolean;
@@ -292,13 +296,15 @@ export default function CinematicProfile({
               >
                 Zarezerwuj sesję →
               </Link>
-              <Link
-                href={`/account/messages?with=${trainer.id}`}
-                className="inline-flex items-center gap-2 h-14 px-7 rounded-full border border-white/15 text-[15px] font-medium hover:bg-white/5 transition"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></svg>
-                Wiadomość
-              </Link>
+              {trainerDbId && (
+                <Link
+                  href={`/account/messages?with=${trainerDbId}`}
+                  className="inline-flex items-center gap-2 h-14 px-7 rounded-full border border-white/15 text-[15px] font-medium hover:bg-white/5 transition"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></svg>
+                  Wiadomość
+                </Link>
+              )}
             </div>
           </div>
 
@@ -1031,16 +1037,18 @@ export default function CinematicProfile({
               <span dangerouslySetInnerHTML={{ __html: copy.finaleCtaPrimary ?? "Umów bezpłatną rozmowę →" }} />
             )}
           </Link>
-          <Link
-            href={`/account/messages?with=${trainer.id}`}
-            className="inline-flex items-center gap-2 h-14 px-7 rounded-full border border-white/15 text-[15px] font-medium hover:bg-white/5 transition"
-          >
-            {editMode ? (
-              <EditableCopy field="finaleCtaSecondary" initial={copy.finaleCtaSecondary} defaultValue="Napisz wiadomość" maxLength={40} theme="dark" />
-            ) : (
-              <span dangerouslySetInnerHTML={{ __html: copy.finaleCtaSecondary ?? "Napisz wiadomość" }} />
-            )}
-          </Link>
+          {trainerDbId && (
+            <Link
+              href={`/account/messages?with=${trainerDbId}`}
+              className="inline-flex items-center gap-2 h-14 px-7 rounded-full border border-white/15 text-[15px] font-medium hover:bg-white/5 transition"
+            >
+              {editMode ? (
+                <EditableCopy field="finaleCtaSecondary" initial={copy.finaleCtaSecondary} defaultValue="Napisz wiadomość" maxLength={40} theme="dark" />
+              ) : (
+                <span dangerouslySetInnerHTML={{ __html: copy.finaleCtaSecondary ?? "Napisz wiadomość" }} />
+              )}
+            </Link>
+          )}
         </div>
       </section>
 

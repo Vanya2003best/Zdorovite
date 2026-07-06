@@ -416,14 +416,18 @@ export default function SignatureProfile({
               >
                 Umów konsultację
               </Link>
-              <span className="text-[#7d7268] text-[13px] italic">lub</span>
-              <a
-                href={`/trainers/${trainer.id}/messages`}
-                className="inline-flex items-center justify-center gap-2 px-7 rounded-full bg-transparent text-[#3d362f] border border-[#cfc3b0] hover:bg-[#1a1613] hover:text-white hover:border-[#1a1613] transition font-medium text-[14px] tracking-[-0.005em]"
-                style={{ height: 52 }}
-              >
-                Napisz wiadomość
-              </a>
+              {trainerDbId && (
+                <>
+                  <span className="text-[#7d7268] text-[13px] italic">lub</span>
+                  <Link
+                    href={`/account/messages?with=${trainerDbId}`}
+                    className="inline-flex items-center justify-center gap-2 px-7 rounded-full bg-transparent text-[#3d362f] border border-[#cfc3b0] hover:bg-[#1a1613] hover:text-white hover:border-[#1a1613] transition font-medium text-[14px] tracking-[-0.005em]"
+                    style={{ height: 52 }}
+                  >
+                    Napisz wiadomość
+                  </Link>
+                </>
+              )}
             </div>
           </div>
 
@@ -1127,13 +1131,15 @@ export default function SignatureProfile({
               >
                 Umów konsultację →
               </Link>
-              <a
-                href={`/trainers/${trainer.id}/messages`}
-                className="inline-flex items-center justify-center px-7 rounded-full bg-transparent text-[#3d362f] border border-[#cfc3b0] hover:bg-[#1a1613] hover:text-white hover:border-[#1a1613] transition font-medium text-[14px]"
-                style={{ height: 52 }}
-              >
-                Napisz
-              </a>
+              {trainerDbId && (
+                <Link
+                  href={`/account/messages?with=${trainerDbId}`}
+                  className="inline-flex items-center justify-center px-7 rounded-full bg-transparent text-[#3d362f] border border-[#cfc3b0] hover:bg-[#1a1613] hover:text-white hover:border-[#1a1613] transition font-medium text-[14px]"
+                  style={{ height: 52 }}
+                >
+                  Napisz
+                </Link>
+              )}
             </div>
           </div>
           <div className="bg-white border border-[#e4dccf] rounded-sm p-8 sm:p-9 shadow-[0_30px_60px_-30px_rgba(26,22,19,0.25)]">
