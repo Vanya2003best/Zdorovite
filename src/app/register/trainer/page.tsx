@@ -2,9 +2,18 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { specializations } from "@/data/specializations";
 import { getCurrentUser, isTrainer } from "@/lib/auth";
+import { sanitizeBranchParam } from "./onboarding";
 import TrainerSignupForm from "./TrainerSignupForm";
 
-export default async function TrainerRegisterPage() {
+export default async function TrainerRegisterPage(props: {
+  searchParams: Promise<{ branch?: string }>;
+}) {
+  // Zdrofit funnel: /sieci/[chain]/[branch] links here with
+  // ?branch=<chain-slug>-<branch-slug> — carried through the form so the
+  // signup action can record the pending club affiliation.
+  const { branch } = await props.searchParams;
+  const branchParam = sanitizeBranchParam(branch);
+
   // Already a trainer? Skip the signup, send them straight to Studio.
   const cu = await getCurrentUser();
   if (cu && isTrainer(cu.profile)) redirect("/studio");
@@ -37,14 +46,14 @@ export default async function TrainerRegisterPage() {
             Twój gabinet zawsze otwarty.
           </h2>
           <p className="text-[13px] leading-relaxed opacity-85 max-w-[360px] mb-3.5">
-            Zbuduj profil w 15 minut. Wybierz jeden z 7 szablonów. Zacznij przyjmować rezerwacje
+            Zbuduj profil w 15 minut. Wybierz jeden z 6 szablonów. Zacznij przyjmować rezerwacje
             jeszcze dziś — bez prowizji od pierwszej sesji.
           </p>
           <div className="grid gap-2.5">
             {[
               ["Bez prowizji przez 30 dni", "Plan Free do 3 klientów. Bez karty."],
               ["6 szablonów profilu", "Premium i Cozy darmowe, Cinematic / Luxury / Studio / Signature w planie PRO."],
-              ["Płatności i rezerwacje", "BLIK, karta, Przelewy24. Pieniądze następnego dnia."],
+              ["Płatność bezpośrednio u Ciebie", "Klient płaci Ci na miejscu — BLIK, przelew lub gotówka. Bez pośredników."],
             ].map(([title, desc]) => (
               <div key={title} className="flex gap-2.5 items-start text-[12.5px] leading-[1.4]">
                 <span className="min-w-[22px] h-[22px] rounded-lg bg-white/[0.16] inline-flex items-center justify-center shrink-0 mt-px">
@@ -119,7 +128,7 @@ export default async function TrainerRegisterPage() {
         </p>
 
         <div className="max-w-[560px]">
-          <TrainerSignupForm specializations={specializations} />
+          <TrainerSignupForm specializations={specializations} branch={branchParam} />
         </div>
       </section>
     </div>

@@ -3,6 +3,7 @@
 import { redirect, unstable_rethrow } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient, SESSION_ONLY_COOKIE } from "@/lib/supabase/server";
+import { translateAuthError } from "@/lib/auth-errors";
 import { roleHome, isPathAllowedForRole, type UserRole } from "@/lib/auth";
 
 export type AuthState = { error: string } | null;
@@ -35,7 +36,7 @@ export async function login(
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      return { error: error.message };
+      return { error: translateAuthError(error) };
     }
 
     // Resolve role (with fallback to is_trainer if migration 004 not yet applied)

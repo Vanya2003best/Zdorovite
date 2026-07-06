@@ -30,8 +30,11 @@ function slugify(s: string): string {
 
 export default function TrainerSignupForm({
   specializations,
+  branch,
 }: {
   specializations: SpecializationInfo[];
+  /** Composite "<chain>-<branch>" slug from the club landing's recruiting CTA. */
+  branch?: string;
 }) {
   const [displayName, setDisplayName] = useState("");
   const [slug, setSlug] = useState("");
@@ -58,6 +61,18 @@ export default function TrainerSignupForm({
 
   return (
     <form action={action} className="grid gap-6">
+      {branch && (
+        <>
+          {/* Zdrofit funnel: carry the club through signup → pending affiliation */}
+          <input type="hidden" name="branch" value={branch} />
+          <p className="text-[13px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 m-0 leading-[1.45]">
+            Aplikujesz przez stronę klubu — po założeniu konta Twoje zgłoszenie
+            do klubu trafi do weryfikacji i pojawi się na jego stronie po
+            zatwierdzeniu.
+          </p>
+        </>
+      )}
+
       {/* Account section */}
       <fieldset className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5">
         <legend className="text-[13px] font-semibold uppercase tracking-[0.06em] text-emerald-700 px-2">

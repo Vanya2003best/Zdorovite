@@ -3,6 +3,7 @@
 import { redirect, unstable_rethrow } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { translateAuthError } from "@/lib/auth-errors";
 
 export type RegisterState = { error?: string; info?: string } | null;
 
@@ -44,7 +45,7 @@ export async function register(
     });
 
     if (error) {
-      return { error: error.message };
+      return { error: translateAuthError(error) };
     }
 
     // If email confirmation is ON in Supabase, session will be null and user must confirm.

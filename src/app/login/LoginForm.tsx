@@ -6,21 +6,47 @@ import { useSearchParams } from "next/navigation";
 import GoogleAuthButton from "@/components/GoogleAuthButton";
 import { login, type AuthState } from "./actions";
 
+// /auth/callback and the OAuth action redirect here with ?error=… when the
+// flow breaks; /auth/reset sends ?reset=1 after a password change without a
+// session. Both used to be silently ignored — the user saw a mute login form.
+const URL_ERRORS: Record<string, string> = {
+  auth_failed:
+    "Nie udało się dokończyć logowania — link mógł wygasnąć. Spróbuj ponownie.",
+  oauth_failed:
+    "Logowanie przez Google nie powiodło się. Spróbuj ponownie lub zaloguj się hasłem.",
+};
+
 export default function LoginForm() {
   const [state, action, pending] = useActionState<AuthState, FormData>(login, null);
   const [showPassword, setShowPassword] = useState(false);
   const sp = useSearchParams();
   const next = sp.get("next") ?? "";
+  const errorParam = sp.get("error");
+  const urlError = errorParam
+    ? URL_ERRORS[errorParam] ?? "Coś poszło nie tak podczas logowania. Spróbuj ponownie."
+    : null;
+  const resetDone = sp.get("reset") === "1";
 
   return (
     <div className="grid gap-4 max-w-[440px]">
+      {/* URL banners step aside once the form itself has something to say. */}
+      {!state && urlError && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-[10px] px-3.5 py-2.5 m-0">
+          {urlError}
+        </p>
+      )}
+      {!state && resetDone && (
+        <p className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-[10px] px-3.5 py-2.5 m-0">
+          Hasło zostało zmienione — zaloguj się nowym hasłem.
+        </p>
+      )}
       <GoogleAuthButton next={next} />
       <form action={action} className="grid gap-4">
       <input type="hidden" name="next" value={next} />
 
       <div>
         <label className="block text-xs font-medium text-slate-700 mb-1.5">
-          Email lub telefon
+          Email
         </label>
         <input
           type="email"

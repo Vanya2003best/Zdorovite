@@ -136,7 +136,7 @@ function RegisterPageInner() {
 
         <h1 className="text-[26px] tracking-[-0.025em] font-semibold mt-0 mb-2">Cześć! Zaczynamy?</h1>
         <p className="text-sm text-slate-600 mb-5 leading-relaxed max-w-[440px]">
-          Konto zajmie 30 sekund. Resztę dopowiesz w krótkim quizie po rejestracji.
+          Konto zajmie 30 sekund. Resztę uzupełnisz później w swoim panelu.
         </p>
 
         <div className="max-w-[440px]">
@@ -208,11 +208,11 @@ function RegisterPageInner() {
             />
             <span>
               Akceptuję{" "}
-              <Link href="#" className="text-emerald-700 font-semibold">
+              <Link href="/regulamin" className="text-emerald-700 font-semibold">
                 Regulamin
               </Link>{" "}
               i{" "}
-              <Link href="#" className="text-emerald-700 font-semibold">
+              <Link href="/prywatnosc" className="text-emerald-700 font-semibold">
                 Politykę prywatności
               </Link>
               .

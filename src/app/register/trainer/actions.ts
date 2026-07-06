@@ -3,6 +3,12 @@
 import { redirect, unstable_rethrow } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { translateAuthError } from "@/lib/auth-errors";
+import {
+  completeTrainerOnboarding,
+  sanitizeBranchParam,
+  type TrainerOnboardingData,
+} from "./onboarding";
 
 export type TrainerSignupState = { error?: string; info?: string } | null;
 
@@ -33,6 +39,9 @@ export async function registerTrainer(
   const specializations = formData.getAll("specializations").map(String);
   const languages = LANGS.filter((l) => formData.get(`lang_${l}`) === "on");
   const slug = slugify(slugRaw || displayName);
+  // Zdrofit funnel: branch landing links here with ?branch=<chain>-<branch>,
+  // the form carries it through as a hidden field.
+  const branch = sanitizeBranchParam(formData.get("branch"));
 
   // Validation
   if (!email || !password) return { error: "Email i hasło są wymagane." };
@@ -43,6 +52,18 @@ export async function registerTrainer(
   if (specializations.length === 0) return { error: "Wybierz co najmniej jedną specjalizację." };
   if (!location) return { error: "Podaj miasto." };
   if (languages.length === 0) return { error: "Wybierz co najmniej jeden język." };
+
+  const onboarding: TrainerOnboardingData = {
+    display_name: displayName,
+    slug,
+    tagline,
+    location,
+    experience,
+    price_from: priceFrom,
+    specializations,
+    languages,
+    ...(branch ? { branch } : {}),
+  };
 
   try {
     const supabase = await createClient();
@@ -61,73 +82,36 @@ export async function registerTrainer(
     const protocol = host.startsWith("localhost") ? "http" : "https";
     const origin = `${protocol}://${host}`;
 
-    // Sign up
+    // Sign up. The full onboarding payload rides in user_metadata so that
+    // when "Confirm email" is ON (no session here), /auth/callback can
+    // finish the trainer profile after the user clicks the link — nothing
+    // the wizard collected gets lost.
     const { data: signUp, error: signUpErr } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { display_name: displayName },
+        data: { display_name: displayName, trainer_onboarding: onboarding },
         emailRedirectTo: `${origin}/auth/callback?next=/studio`,
       },
     });
-    if (signUpErr) return { error: signUpErr.message };
+    if (signUpErr) return { error: translateAuthError(signUpErr) };
 
-    // If email confirmation is on, no session yet — user must confirm. Save trainer onboarding for callback flow.
+    // Email confirmation ON → no session yet. The metadata path takes over
+    // in /auth/callback once the user confirms.
     if (!signUp.session) {
       return {
-        info: "Sprawdź skrzynkę — wysłaliśmy link aktywacyjny. Po potwierdzeniu zaloguj się i dokończ profil.",
+        info: "Sprawdź skrzynkę — wysłaliśmy link aktywacyjny. Po kliknięciu Twój profil trenera będzie gotowy i wylądujesz w Studio.",
       };
     }
 
-    // We have a session — finish onboarding now
+    // We have a session — finish onboarding now.
     const userId = signUp.user!.id;
+    const result = await completeTrainerOnboarding(supabase, userId, onboarding);
+    if (result.error) return { error: result.error };
 
-    // The handle_new_user trigger created profile row; bring is_trainer=true
-    const { error: profErr } = await supabase
-      .from("profiles")
-      .update({ role: "trainer", display_name: displayName })
-      .eq("id", userId);
-    if (profErr) return { error: profErr.message };
-
-    // Insert trainers row
-    const { error: tErr } = await supabase.from("trainers").upsert(
-      {
-        id: userId,
-        slug,
-        tagline,
-        about: "",
-        experience,
-        price_from: priceFrom,
-        location,
-        languages,
-        published: true,
-      },
-      { onConflict: "id" },
-    );
-    if (tErr) return { error: tErr.message };
-
-    // Specializations
-    await supabase.from("trainer_specializations").delete().eq("trainer_id", userId);
-    await supabase.from("trainer_specializations").insert(
-      specializations.map((s) => ({ trainer_id: userId, specialization_id: s })),
-    );
-
-    // Default availability Mon-Fri 09:00-18:00
-    const { data: existingAvail } = await supabase
-      .from("availability_rules")
-      .select("id")
-      .eq("trainer_id", userId)
-      .limit(1);
-    if (!existingAvail || existingAvail.length === 0) {
-      await supabase.from("availability_rules").insert(
-        [1, 2, 3, 4, 5].map((dow) => ({
-          trainer_id: userId,
-          day_of_week: dow,
-          start_time: "09:00",
-          end_time: "18:00",
-        })),
-      );
-    }
+    // Profile is in the DB — drop the metadata copy so callback/logins
+    // never re-run onboarding from stale data.
+    await supabase.auth.updateUser({ data: { trainer_onboarding: null } });
 
     // New trainers land on the onboarding wizard so they don't drown in
     // the empty /studio with no guidance. The wizard collapses naturally

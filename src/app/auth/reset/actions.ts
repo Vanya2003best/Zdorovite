@@ -2,6 +2,7 @@
 
 import { redirect, unstable_rethrow } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { translateAuthError } from "@/lib/auth-errors";
 import { getCurrentUser, roleHome } from "@/lib/auth";
 
 export type ResetState = { error: string } | null;
@@ -28,11 +29,13 @@ export async function setNewPassword(
       if (/session/i.test(error.message)) {
         redirect("/forgot-password");
       }
-      return { error: error.message };
+      return { error: translateAuthError(error) };
     }
 
     const cu = await getCurrentUser();
-    redirect(cu ? roleHome(cu.profile.role) : "/login");
+    // No session after the update (edge case) → login page with the green
+    // "hasło zmienione" banner instead of a silent, unexplained login form.
+    redirect(cu ? roleHome(cu.profile.role) : "/login?reset=1");
   } catch (err) {
     unstable_rethrow(err);
     console.error("[auth/reset] crashed:", err);
