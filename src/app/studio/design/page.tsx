@@ -240,6 +240,32 @@ export default async function DesignDashboard(props: PageProps<"/studio/design">
   const hasCinematicCopy = !!(saved as ProfileCustomization | null | undefined)?.cinematicCopy;
 
   return (
+    <>
+      {/* Mobile gate — per MVP the design editor is desktop-only. Full-screen
+          stub under the studio topbar; the editor itself renders from lg: up. */}
+      <div className="lg:hidden min-h-[calc(100vh-64px)] flex flex-col items-center justify-center text-center px-6 py-16 bg-slate-50">
+        <div className="w-14 h-14 rounded-2xl bg-slate-900 text-white flex items-center justify-center mb-5">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="26" height="26">
+            <rect x="2" y="3" width="20" height="14" rx="2" />
+            <path d="M8 21h8M12 17v4" />
+          </svg>
+        </div>
+        <h1 className="text-[22px] font-bold text-slate-900 mb-2">
+          Edytor dostępny na komputerze
+        </h1>
+        <p className="text-[14px] text-slate-500 max-w-[340px] mb-7">
+          Zaawansowany edytor wyglądu profilu działa na ekranach od 1024&nbsp;px.
+          Otwórz NaZdrow! na komputerze, aby zmienić szablon, sekcje i treści.
+        </p>
+        <Link
+          href={`/trainers/${trainer.slug}`}
+          className="inline-flex items-center justify-center h-12 px-7 rounded-xl bg-emerald-600 text-white text-[14px] font-semibold hover:bg-emerald-700 transition"
+        >
+          Podgląd profilu →
+        </Link>
+      </div>
+
+      <div className="hidden lg:block">
     <EditorClient
       slug={trainer.slug}
       trainerName={profile?.display_name ?? "Twój profil"}
@@ -270,5 +296,7 @@ export default async function DesignDashboard(props: PageProps<"/studio/design">
         status: p.status,
       }))}
     />
+      </div>
+    </>
   );
 }

@@ -49,7 +49,7 @@ export default function StudioPulpitModeBar({
         <span className="text-[11px] uppercase tracking-[0.08em] text-slate-500 font-bold">
           Stan trenera:
         </span>
-        <div className="inline-flex bg-slate-100 rounded-lg p-0.5">
+        <div className="inline-flex bg-slate-100 rounded-lg p-0.5 max-w-full overflow-x-auto scrollbar-hide">
           {visibleModes.map((m) => {
             const on = mode === m.id;
             const href = m.id === "working" ? pathname : `${pathname}?mode=${m.id}`;
@@ -59,7 +59,7 @@ export default function StudioPulpitModeBar({
                 href={href}
                 scroll={false}
                 className={
-                  "px-3.5 py-1.5 text-[13px] font-bold rounded-md inline-flex items-center gap-1.5 transition " +
+                  "px-3.5 py-1.5 text-[13px] font-bold rounded-md inline-flex items-center gap-1.5 transition whitespace-nowrap " +
                   (on
                     ? "bg-white text-[#002f34] shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
                     : "text-slate-500 hover:text-[#002f34]")

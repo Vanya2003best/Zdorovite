@@ -288,7 +288,7 @@ export default function SignatureProfile({
       {!isEmbed && (
         <AutoHideHeader>
         <header className="px-6 sm:px-10 py-5 sm:py-[22px] flex justify-between items-center border-b border-[#e4dccf] bg-[#f6f1ea] gap-4">
-          <div className="flex flex-col leading-none">
+          <div className="flex flex-col leading-none min-w-0">
             <Link href="/" aria-label="NaZdrow!">
               <span className="text-[18px] sm:text-[22px] tracking-[0.3em] font-medium">
                 {editMode ? (
@@ -314,7 +314,7 @@ export default function SignatureProfile({
             )}
             <a href="#contact" className="hover:text-[#7d1f1f] transition">Kontakt</a>
           </nav>
-          <div className="flex gap-3 items-center text-[12px]">
+          <div className="flex gap-3 items-center text-[12px] shrink-0">
             {!isOwner && (
               <FavoriteButton
                 slug={trainer.id}
@@ -339,7 +339,7 @@ export default function SignatureProfile({
             <span className="hidden @[640px]:inline text-[#7d7268] font-mono">+48 600 000 000</span>
             <Link
               href={`/trainers/${trainer.id}/book`}
-              className="inline-flex items-center justify-center gap-2 h-10 px-4 sm:h-[42px] sm:px-5 rounded-full bg-[#7d1f1f] text-white text-[12px] sm:text-[13px] font-medium tracking-[-0.005em] border border-[#7d1f1f] hover:bg-[#5e1515] hover:border-[#5e1515] transition"
+              className="inline-flex items-center justify-center gap-2 h-11 px-4 sm:h-[42px] sm:px-5 rounded-full bg-[#7d1f1f] text-white text-[12px] sm:text-[13px] font-medium tracking-[-0.005em] border border-[#7d1f1f] hover:bg-[#5e1515] hover:border-[#5e1515] transition whitespace-nowrap"
             >
               Umów konsultację →
             </Link>

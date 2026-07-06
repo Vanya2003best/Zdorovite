@@ -471,9 +471,10 @@ export default function CalendarClient({
 
       {/* Toolbar — 3-column grid so the date title sits in true horizontal
           center regardless of how wide the left (mode switcher + filter)
-          and right (view picker) groups grow. */}
-      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 py-2.5">
-        <div className="flex items-center gap-2">
+          and right (view picker) groups grow. On <sm the fixed grid would
+          overflow 390px, so groups wrap into centered rows instead. */}
+      <div className="flex flex-wrap items-center justify-center gap-3 sm:grid sm:grid-cols-[auto_1fr_auto] rounded-xl border border-slate-200 bg-white px-3 sm:px-4 py-2.5">
+        <div className="flex items-center gap-2 flex-wrap justify-center">
           <ModeSwitcher mode={mode} bookingsBadge={futureBookingsCount} />
           {mode !== "pattern" && (
             <FilterDropdown

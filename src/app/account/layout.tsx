@@ -5,6 +5,7 @@ import {
   getUnreadNotificationCount,
 } from "@/lib/db/notifications";
 import AccountTopBar from "./AccountTopBar";
+import AccountBottomNav from "./AccountBottomNav";
 
 /**
  * /account chrome — OLX-style horizontal nav, parallel to /studio.
@@ -57,7 +58,9 @@ export default async function AccountLayout({ children }: { children: React.Reac
           unreadNotifs={unreadNotifs}
         />
       )}
-      <main className="flex-1">{children}</main>
+      {/* pb keeps content clear of the fixed mobile bottom-nav (h-16 + safe area). */}
+      <main className={myId ? "flex-1 pb-24 lg:pb-0" : "flex-1"}>{children}</main>
+      {myId && <AccountBottomNav unreadMessages={unreadMessages} />}
     </div>
   );
 }
