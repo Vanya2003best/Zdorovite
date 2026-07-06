@@ -263,11 +263,13 @@ export default function CatalogClient({ trainers, favActive, filters }: Props) {
         }
       >
         <div className="mx-auto max-w-[1280px] px-4 sm:px-6 h-14 flex items-center gap-3 flex-wrap">
-          <h2 className="text-[15px] font-extrabold text-[#002f34] tracking-[-0.01em] m-0">
+          <h2 className="text-[15px] font-extrabold text-[#002f34] tracking-[-0.01em] m-0 truncate min-w-0">
             Trenerzy{city ? ` w ${city}` : ""} · <span className="text-emerald-600">{filtered.length}</span> ofert
           </h2>
+          {/* Chip cluster is desktop-only — on mobile the 56px bar keeps
+              just the count + jump-to-search so nothing overflows. */}
           {(activeSpecLabel || city) && (
-            <>
+            <div className="hidden sm:flex items-center gap-3">
               <span className="w-px h-4 bg-slate-200" />
               <span className="text-[11px] uppercase tracking-[0.08em] text-slate-500 font-bold">Filtry:</span>
               {city && (
@@ -290,12 +292,12 @@ export default function CatalogClient({ trainers, favActive, filters }: Props) {
                   <span className="opacity-60 text-[12px]">×</span>
                 </button>
               )}
-            </>
+            </div>
           )}
           <button
             type="button"
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            className="ml-auto text-[12px] text-slate-500 font-semibold hover:text-[#002f34] inline-flex items-center gap-1"
+            className="ml-auto shrink-0 text-[12px] text-slate-500 font-semibold hover:text-[#002f34] inline-flex items-center gap-1 min-h-[44px] sm:min-h-0"
           >
             ↑ Wyszukiwarka
           </button>
@@ -309,31 +311,37 @@ export default function CatalogClient({ trainers, favActive, filters }: Props) {
           context bar above instead, shown once user scrolls past hero. */}
       <section className="text-white pt-6 pb-6" style={{ background: "#002f34" }}>
         <div className="mx-auto max-w-[1280px] px-4 sm:px-6">
-          <h1 className="m-0 mb-2 text-[28px] sm:text-[36px] leading-[1.1] tracking-[-0.025em] font-bold">
+          <h1 className="m-0 mb-2 text-[24px] sm:text-[36px] leading-[1.15] sm:leading-[1.1] tracking-[-0.025em] font-bold">
             Znajdź trenera personalnego w Polsce
           </h1>
-          <p className="text-[14px] sm:text-[15px] text-white/75 max-w-[640px] mb-5 m-0">
+          <p className="text-[13px] sm:text-[15px] text-white/75 max-w-[640px] mb-5 m-0">
             {/* MOCK: hardcoded marketing copy — replace with real COUNT()
                 queries when we want live numbers in the hero. */}
             <b className="text-white font-bold">240 zweryfikowanych trenerów</b> · <b className="text-white font-bold">12 400 opinii</b> · <b className="text-white font-bold">38 000 odbytych sesji</b>
           </p>
 
+          {/* Mobile (<sm): 2-col grid — q and city full-width rows, radius +
+              price side by side, format below, big Szukaj at the bottom.
+              Each cell gets its own border + taller padding for touch. The
+              `order-*` utilities only reorder the mobile grid; at sm+ every
+              cell resets to DOM order and the original single-row layout
+              with 1px divider columns stays pixel-identical. */}
           <form
             action="/#wyniki"
-            className="grid grid-cols-1 sm:grid-cols-[1.4fr_1px_1.1fr_1px_0.85fr_1px_0.95fr_1px_0.9fr_140px] gap-0 items-stretch bg-white border-[1.5px] border-[#002f34] rounded-[10px] p-1 shadow-[0_8px_24px_rgba(0,0,0,0.18)]"
+            className="grid grid-cols-2 sm:grid-cols-[1.4fr_1px_1.1fr_1px_0.85fr_1px_0.95fr_1px_0.9fr_140px] gap-1.5 sm:gap-0 items-stretch bg-white border-[1.5px] border-[#002f34] rounded-[10px] p-1.5 sm:p-1 shadow-[0_8px_24px_rgba(0,0,0,0.18)]"
           >
-            <label className="px-3.5 py-1.5 cursor-pointer min-w-0 hover:bg-slate-100 rounded-md transition">
+            <label className="col-span-2 sm:col-span-1 border border-slate-200 sm:border-0 min-h-[52px] sm:min-h-0 px-3.5 py-2 sm:py-1.5 cursor-pointer min-w-0 hover:bg-slate-100 rounded-md transition">
               <div className="text-[10px] uppercase tracking-[0.08em] text-slate-500 font-bold leading-tight">Czego szukasz</div>
               <input
                 name="q"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="trener personalny — siłownia"
-                className="text-[13.5px] text-slate-900 font-semibold w-full border-0 outline-none bg-transparent placeholder:text-slate-400"
+                className="text-[13.5px] text-slate-900 font-semibold w-full border-0 outline-none bg-transparent placeholder:text-slate-400 min-h-[28px] sm:min-h-0"
               />
             </label>
             <div className="bg-slate-200 my-1 hidden sm:block" />
-            <div className="px-3.5 py-1.5 min-w-0 hover:bg-slate-100 rounded-md transition">
+            <div className="col-span-2 sm:col-span-1 border border-slate-200 sm:border-0 min-h-[52px] sm:min-h-0 px-3.5 py-2 sm:py-1.5 min-w-0 hover:bg-slate-100 rounded-md transition">
               <div className="text-[10px] uppercase tracking-[0.08em] text-slate-500 font-bold leading-tight">Lokalizacja</div>
               <LocationPicker
                 name="city"
@@ -344,9 +352,9 @@ export default function CatalogClient({ trainers, favActive, filters }: Props) {
               />
             </div>
             <div className="bg-slate-200 my-1 hidden sm:block" />
-            <label className="px-3.5 py-1.5 cursor-pointer min-w-0 hover:bg-slate-100 rounded-md transition">
+            <label className="border border-slate-200 sm:border-0 min-h-[52px] sm:min-h-0 px-3.5 py-2 sm:py-1.5 cursor-pointer min-w-0 hover:bg-slate-100 rounded-md transition">
               <div className="text-[10px] uppercase tracking-[0.08em] text-slate-500 font-bold leading-tight">Promień</div>
-              <select name="radius" defaultValue="5" className="text-[13.5px] text-slate-900 font-semibold w-full border-0 outline-none bg-transparent appearance-none cursor-pointer">
+              <select name="radius" defaultValue="5" className="text-[13.5px] text-slate-900 font-semibold w-full border-0 outline-none bg-transparent appearance-none cursor-pointer min-h-[28px] sm:min-h-0">
                 <option value="2">+ 2 km</option>
                 <option value="5">+ 5 km</option>
                 <option value="10">+ 10 km</option>
@@ -357,18 +365,18 @@ export default function CatalogClient({ trainers, favActive, filters }: Props) {
               </select>
             </label>
             <div className="bg-slate-200 my-1 hidden sm:block" />
-            <label className="px-3.5 py-1.5 cursor-pointer min-w-0 hover:bg-slate-100 rounded-md transition">
+            <label className="order-last sm:order-none col-span-2 sm:col-span-1 border border-slate-200 sm:border-0 min-h-[52px] sm:min-h-0 px-3.5 py-2 sm:py-1.5 cursor-pointer min-w-0 hover:bg-slate-100 rounded-md transition">
               <div className="text-[10px] uppercase tracking-[0.08em] text-slate-500 font-bold leading-tight">Format</div>
-              <select name="format" className="text-[13.5px] text-slate-900 font-semibold w-full border-0 outline-none bg-transparent appearance-none cursor-pointer">
+              <select name="format" className="text-[13.5px] text-slate-900 font-semibold w-full border-0 outline-none bg-transparent appearance-none cursor-pointer min-h-[28px] sm:min-h-0">
                 <option value="">Stacjonarnie + Online</option>
                 <option value="onsite">Tylko stacjonarnie</option>
                 <option value="online">Tylko online</option>
               </select>
             </label>
             <div className="bg-slate-200 my-1 hidden sm:block" />
-            <label className="px-3.5 py-1.5 cursor-pointer min-w-0 hover:bg-slate-100 rounded-md transition">
+            <label className="border border-slate-200 sm:border-0 min-h-[52px] sm:min-h-0 px-3.5 py-2 sm:py-1.5 cursor-pointer min-w-0 hover:bg-slate-100 rounded-md transition">
               <div className="text-[10px] uppercase tracking-[0.08em] text-slate-500 font-bold leading-tight">Cena / sesja</div>
-              <select name="price" className="text-[13.5px] text-slate-900 font-semibold w-full border-0 outline-none bg-transparent appearance-none cursor-pointer">
+              <select name="price" className="text-[13.5px] text-slate-900 font-semibold w-full border-0 outline-none bg-transparent appearance-none cursor-pointer min-h-[28px] sm:min-h-0">
                 <option value="80-200">80–200 zł</option>
                 <option value="0-80">do 80 zł</option>
                 <option value="200-">200+ zł</option>
@@ -376,7 +384,7 @@ export default function CatalogClient({ trainers, favActive, filters }: Props) {
             </label>
             <button
               type="submit"
-              className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-md flex items-center justify-center gap-1.5 font-bold text-[13.5px] py-2 sm:py-0 px-4 transition"
+              className="order-last sm:order-none col-span-2 sm:col-auto bg-emerald-500 hover:bg-emerald-600 text-white rounded-md flex items-center justify-center gap-1.5 font-bold text-[15px] sm:text-[13.5px] min-h-[48px] sm:min-h-0 py-3 sm:py-0 px-4 transition"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <circle cx="11" cy="11" r="8" />
@@ -391,8 +399,8 @@ export default function CatalogClient({ trainers, favActive, filters }: Props) {
               `<Link>` to `/?<filter>=...` so the page reloads with the
               filter applied. MOCK counts on Promocje/Nowi until we have
               active_promotions + trainers.created_at aggregates. */}
-          <div className="mt-3.5 flex gap-2 items-center flex-wrap">
-            <span className="text-[12px] text-white/65 font-medium mr-1">Popularne:</span>
+          <div className="mt-3.5 flex gap-2 items-center flex-nowrap sm:flex-wrap overflow-x-auto sm:overflow-visible scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 pb-0.5 sm:pb-0">
+            <span className="text-[12px] text-white/65 font-medium mr-1 shrink-0">Popularne:</span>
             <QuickChip href="/?sort=top#wyniki">🏆 Top tygodnia</QuickChip>
             <QuickChip href="/?promo=1#wyniki">🔥 Promocje<b className="ml-1 text-emerald-300 font-bold">12</b></QuickChip>
             <QuickChip href="/?price=0-100#wyniki">💰 Tańsze niż 100 zł</QuickChip>
@@ -457,7 +465,8 @@ export default function CatalogClient({ trainers, favActive, filters }: Props) {
                   <rect x="14" y="14" width="7" height="7" />
                 </svg>
               </ViewToggleBtn>
-              <ViewToggleBtn on={view === "map"} onClick={() => setView("map")} title="Mapa">
+              {/* Map view is desktop-only in the MVP — hidden below sm. */}
+              <ViewToggleBtn on={view === "map"} onClick={() => setView("map")} title="Mapa" className="hidden sm:flex ">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
                   <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
                   <line x1="8" y1="2" x2="8" y2="18" />
@@ -469,8 +478,10 @@ export default function CatalogClient({ trainers, favActive, filters }: Props) {
         </div>
 
         {/* ============================ PROMO ROW ============================ */}
-        {/* Design 46 promo strip — 3 cards contextualised to the search. */}
-        <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr] gap-3.5 mb-5">
+        {/* Design 46 promo strip — 3 cards contextualised to the search.
+            Mobile: horizontal swipe row bleeding to screen edges; desktop
+            keeps the 2fr/1fr/1fr grid. */}
+        <div className="flex overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-[2fr_1fr_1fr] gap-3 sm:gap-3.5 mb-5">
           <PromoCard tone="dark" emoji="⭐" title="Polecane przez NaZdrow! Pro" body={`Trenerzy Pro · gwarancja zwrotu po 1. sesji`} cta="Zobacz wszystkich Pro" href="/?pro=1#wyniki" />
           <PromoCard tone="amber" emoji="🔥" title="Promocje tygodnia" body="12 trenerów do −30%" cta="Sprawdź" href="/?promo=1#wyniki" />
           <PromoCard tone="emerald" emoji="🎁" title="Pierwsza sesja gratis" body="41 trenerów bez ryzyka" cta="Wypróbuj" href="/?freeconsult=1#wyniki" />
@@ -735,13 +746,13 @@ function SubTab({ on, onClick, label, count }: { on: boolean; onClick: () => voi
   );
 }
 
-function ViewToggleBtn({ on, onClick, title, children }: { on: boolean; onClick: () => void; title: string; children: React.ReactNode }) {
+function ViewToggleBtn({ on, onClick, title, children, className }: { on: boolean; onClick: () => void; title: string; children: React.ReactNode; className?: string }) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={title}
-      className={"w-[38px] h-[36px] flex items-center justify-center transition " + (on ? "bg-[#002f34] text-white" : "bg-white text-slate-500 hover:text-[#002f34]")}
+      className={"w-[38px] h-[36px] items-center justify-center transition " + (className ?? "flex ") + (on ? "bg-[#002f34] text-white" : "bg-white text-slate-500 hover:text-[#002f34]")}
     >
       {children}
     </button>
@@ -954,8 +965,10 @@ function ResultCard({ trainer, index, featured }: { trainer: Trainer; index: num
       {/* ============================ RIGHT ============================ */}
       {/* Tighter spacing per UX feedback — price/pkg/slot/gift/actions
           all close together, less wasted whitespace. justify-between
-          removed; let content stack tight from top. */}
-      <div className="flex flex-col gap-2 py-1 pl-4 border-l border-slate-200">
+          removed; let content stack tight from top. Mobile: the column
+          stacks under the body, so the desktop left border becomes a
+          top border. */}
+      <div className="flex flex-col gap-2 py-1 pt-3 border-t border-slate-200 sm:pt-1 sm:border-t-0 sm:pl-4 sm:border-l">
         {/* Price block */}
         <div>
           <div className="text-[9.5px] uppercase tracking-[0.12em] text-slate-500 font-bold mb-0.5">Od</div>
@@ -991,12 +1004,13 @@ function ResultCard({ trainer, index, featured }: { trainer: Trainer; index: num
           </div>
         )}
 
-        {/* Actions */}
-        <div className="flex flex-col gap-1.5 mt-0.5">
-          <button type="button" className="py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-md text-[13px] font-extrabold transition">
+        {/* Actions — side by side on mobile (both thumb-reachable),
+            stacked in the narrow right column on desktop. */}
+        <div className="grid grid-cols-2 gap-1.5 mt-0.5 sm:flex sm:flex-col">
+          <button type="button" className="py-3 sm:py-2.5 min-h-[44px] sm:min-h-0 bg-emerald-500 hover:bg-emerald-600 text-white rounded-md text-[13px] font-extrabold transition">
             Umów wizytę
           </button>
-          <button type="button" className="py-2 bg-white border border-slate-300 hover:border-[#002f34] text-[#002f34] rounded-md text-[12.5px] font-extrabold transition">
+          <button type="button" className="py-3 sm:py-2 min-h-[44px] sm:min-h-0 bg-white border border-slate-300 hover:border-[#002f34] text-[#002f34] rounded-md text-[12.5px] font-extrabold transition">
             Napisz
           </button>
         </div>
@@ -1031,7 +1045,7 @@ function QuickChip({ href, children }: { href: string; children: React.ReactNode
   return (
     <Link
       href={href}
-      className="inline-flex items-center gap-1 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-full text-[12px] text-white font-medium transition"
+      className="inline-flex items-center gap-1 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-full text-[12px] text-white font-medium transition whitespace-nowrap shrink-0 min-h-[36px] sm:min-h-0"
     >
       {children}
     </Link>
@@ -1181,6 +1195,10 @@ function FilterChipRow({
 
   const softCount = chips.filter((c) => c.soft).length;
 
+  // Mobile: the pill row collapses behind a "Filtry (N)" toggle so the
+  // section stays one compact row; desktop (sm+) always shows the pills.
+  const [mobileOpen, setMobileOpen] = useState(false);
+
   return (
     // id="wyniki" — every filter shortcut (Popular chips / category tiles /
     // promo cards / Szukaj submit / city grid) navigates with #wyniki so the
@@ -1188,8 +1206,35 @@ function FilterChipRow({
     // hero after each click. scroll-mt-20 clears the sticky public header.
     <section id="wyniki" className="bg-white border-b border-slate-200 py-3 scroll-mt-20">
       <div className="mx-auto max-w-[1280px] px-4 sm:px-6">
-        {/* Row 1 — filter controls (visual only for now; phase 3 wiring). */}
-        <div className="flex gap-1.5 items-center flex-wrap">
+        {/* Mobile toggle row — "Filtry" with active-filter count. */}
+        <div className="flex sm:hidden gap-2 items-center">
+          <button
+            type="button"
+            onClick={() => setMobileOpen((v) => !v)}
+            aria-expanded={mobileOpen}
+            className="inline-flex items-center gap-2 px-4 min-h-[44px] flex-1 justify-center bg-white border border-[#002f34] text-[#002f34] rounded-md text-[13.5px] font-bold hover:bg-slate-50 transition"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+            </svg>
+            Filtry
+            {chips.length > 0 && (
+              <span className="bg-[#002f34] text-white text-[11px] px-1.5 py-0.5 rounded-full font-bold min-w-[20px] text-center">
+                {chips.length}
+              </span>
+            )}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={"transition-transform " + (mobileOpen ? "rotate-180" : "")}>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          <button type="button" aria-label="Obserwuj wyszukiwanie" className="inline-flex items-center justify-center w-11 min-h-[44px] bg-amber-100 text-amber-900 rounded-md text-[16px] font-bold hover:bg-amber-200 transition">
+            🔔
+          </button>
+        </div>
+
+        {/* Row 1 — filter controls (visual only for now; phase 3 wiring).
+            Hidden on mobile until the "Filtry" toggle opens it. */}
+        <div className={(mobileOpen ? "flex mt-2.5 pt-2.5 border-t border-slate-100 sm:mt-0 sm:pt-0 sm:border-t-0" : "hidden") + " sm:flex gap-1.5 items-center flex-wrap"}>
           <FilterPill label="Cena" />
           <FilterPill label="Ocena" />
           <FilterPill label="Dostępność" />
@@ -1197,11 +1242,11 @@ function FilterChipRow({
           <FilterPill label="Płeć" />
           <FilterPill label="Język" />
 
-          <button type="button" className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-[#002f34] text-[#002f34] rounded-md text-[12.5px] font-bold hover:bg-slate-50 transition">
+          <button type="button" className="inline-flex items-center gap-1.5 px-3.5 py-1.5 min-h-[40px] sm:min-h-0 bg-white border border-[#002f34] text-[#002f34] rounded-md text-[12.5px] font-bold hover:bg-slate-50 transition">
             ⊞ Wszystkie filtry
           </button>
 
-          <button type="button" className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 text-amber-900 rounded-md text-[12px] font-bold hover:bg-amber-200 transition">
+          <button type="button" className="ml-auto hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 text-amber-900 rounded-md text-[12px] font-bold hover:bg-amber-200 transition">
             🔔 Obserwuj wyszukiwanie
           </button>
         </div>
@@ -1250,7 +1295,7 @@ function FilterPill({ label }: { label: string }) {
   return (
     <button
       type="button"
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-[#002f34] rounded-md text-[12.5px] font-medium hover:border-[#002f34] transition"
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[40px] sm:min-h-0 bg-white border border-slate-200 text-[#002f34] rounded-md text-[12.5px] font-medium hover:border-[#002f34] transition"
     >
       {label}
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -1284,7 +1329,7 @@ function PromoCard({
   return (
     <Link
       href={href}
-      className={"relative overflow-hidden rounded-xl px-6 py-5 min-h-[130px] flex flex-col justify-center transition hover:-translate-y-0.5 " + bgCls}
+      className={"relative overflow-hidden rounded-xl px-6 py-5 min-h-[130px] min-w-[264px] shrink-0 sm:min-w-0 sm:shrink flex flex-col justify-center transition hover:-translate-y-0.5 " + bgCls}
       style={bg}
     >
       <h3 className="text-[17px] leading-tight tracking-[-0.015em] font-bold m-0 mb-1">{title}</h3>

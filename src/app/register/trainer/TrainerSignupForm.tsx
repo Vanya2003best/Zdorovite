@@ -110,7 +110,7 @@ export default function TrainerSignupForm({
 
         <label className="grid gap-1.5">
           <span className="text-[13px] font-semibold text-slate-700">Adres profilu</span>
-          <span className="flex items-center gap-2">
+          <span className="flex flex-col items-stretch gap-1 sm:flex-row sm:items-center sm:gap-2">
             <span className="text-sm text-slate-500 shrink-0">nazdrow.pl/trainers/</span>
             <input
               name="slug"
@@ -121,7 +121,7 @@ export default function TrainerSignupForm({
               data-lpignore="true"
               value={slug}
               onChange={(e) => { setSlug(slugify(e.target.value)); setSlugTouched(true); }}
-              className="flex-1 h-11 px-3.5 rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 text-sm font-mono"
+              className="w-full sm:flex-1 h-11 px-3.5 rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 text-sm font-mono"
             />
           </span>
         </label>
