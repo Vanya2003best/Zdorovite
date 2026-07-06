@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import RescheduleDialog from "@/components/RescheduleDialog";
+import type { MyReview } from "@/lib/db/reviews";
 import { cancelMyBooking } from "./actions";
+import { ReviewForm, ReviewThanks } from "./ReviewForm";
 
 /**
  * /account/bookings — Moje treningi (design 36).
@@ -35,6 +37,11 @@ export type Booking = {
   variant: "studio" | "outdoor" | "online";
   /** Reschedule pending (already supported in current schema) */
   pendingReschedule: boolean;
+  /** Review this client left for THIS session (history cards only). */
+  myReview: MyReview | null;
+  /** Client already reviewed this trainer — possibly via another session
+   *  (one review per client per trainer), so hide the "Wystaw opinię" CTA. */
+  trainerReviewed: boolean;
 };
 
 export type ActivePackage = {
@@ -98,6 +105,26 @@ type Mode = "upcoming" | "history" | "cancelled" | "book";
 export default function MojeTreningi({ data }: { data: MojeTreningiData }) {
   const [mode, setMode] = useState<Mode>("upcoming");
   const [filter, setFilter] = useState<string>("all");
+  /** Booking id whose inline review form is open (one at a time). */
+  const [reviewOpenId, setReviewOpenId] = useState<string | null>(null);
+
+  const toggleReview = (id: string) =>
+    setReviewOpenId((prev) => (prev === id ? null : id));
+
+  // "Wystaw opinie zaległe (N)" — jump to the first unreviewed completed
+  // session and open its form. Clears the category filter first so the
+  // target card is guaranteed to be rendered.
+  const openReviewBacklog = () => {
+    const first = data.history.find((h) => !h.myReview && !h.trainerReviewed);
+    if (!first) return;
+    setFilter("all");
+    setReviewOpenId(first.id);
+    setTimeout(() => {
+      document
+        .getElementById(`booking-${first.id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+  };
 
   const filteredUpcoming = useMemo(
     () => (filter === "all" ? data.upcoming : data.upcoming.filter((b) => b.category === filter)),
@@ -199,7 +226,7 @@ export default function MojeTreningi({ data }: { data: MojeTreningiData }) {
       </div>
 
       {/* Mode banner */}
-      <ModeBanner mode={mode} data={data} next={next} />
+      <ModeBanner mode={mode} data={data} next={next} onReviewBacklog={openReviewBacklog} />
 
       {/* Panels */}
       {mode === "upcoming" && (
@@ -224,6 +251,8 @@ export default function MojeTreningi({ data }: { data: MojeTreningiData }) {
           pendingReviews={data.pendingReviews}
           firstDateLabel={data.firstBookingDateLabel}
           totalCount={data.history.length}
+          reviewOpenId={reviewOpenId}
+          onToggleReview={toggleReview}
         />
       )}
       {mode === "cancelled" && (
@@ -325,6 +354,8 @@ function HistoryPanel({
   pendingReviews,
   firstDateLabel,
   totalCount,
+  reviewOpenId,
+  onToggleReview,
 }: {
   all: Booking[];
   historyHours: number;
@@ -333,6 +364,8 @@ function HistoryPanel({
   pendingReviews: number;
   firstDateLabel: string | null;
   totalCount: number;
+  reviewOpenId: string | null;
+  onToggleReview: (id: string) => void;
 }) {
   return (
     <>
@@ -360,7 +393,12 @@ function HistoryPanel({
       {all.length === 0 ? (
         <EmptyState text="Brak ukończonych sesji w tej kategorii." />
       ) : (
-        <SessionsByDay all={all} variant="history" />
+        <SessionsByDay
+          all={all}
+          variant="history"
+          reviewOpenId={reviewOpenId}
+          onToggleReview={onToggleReview}
+        />
       )}
     </>
   );
@@ -492,7 +530,17 @@ function BookPanel({
 
 /* ============================ SHARED ============================ */
 
-function SessionsByDay({ all, variant }: { all: Booking[]; variant: "upcoming" | "history" }) {
+function SessionsByDay({
+  all,
+  variant,
+  reviewOpenId,
+  onToggleReview,
+}: {
+  all: Booking[];
+  variant: "upcoming" | "history";
+  reviewOpenId?: string | null;
+  onToggleReview?: (id: string) => void;
+}) {
   const groups = groupByDay(all, variant);
   return (
     <div className="flex flex-col">
@@ -523,7 +571,14 @@ function SessionsByDay({ all, variant }: { all: Booking[]; variant: "upcoming" |
             </span>
           </div>
           {g.items.map((b, i) => (
-            <SessionCard key={b.id} b={b} variant={variant} isNext={variant === "upcoming" && i === 0 && g.tag === "tomorrow"} />
+            <SessionCard
+              key={b.id}
+              b={b}
+              variant={variant}
+              isNext={variant === "upcoming" && i === 0 && g.tag === "tomorrow"}
+              reviewOpen={reviewOpenId === b.id}
+              onToggleReview={onToggleReview}
+            />
           ))}
         </div>
       ))}
@@ -535,18 +590,23 @@ function SessionCard({
   b,
   variant,
   isNext,
+  reviewOpen,
+  onToggleReview,
 }: {
   b: Booking;
   variant: "upcoming" | "history" | "cancelled";
   isNext?: boolean;
+  /** History only: this card's inline review form is expanded. */
+  reviewOpen?: boolean;
+  onToggleReview?: (id: string) => void;
 }) {
-  const startD = new Date(b.startIso);
   const endLabel = fmtTime(b.endIso);
   const cancelled = variant === "cancelled";
   const completed = variant === "history";
 
   return (
     <div
+      id={`booking-${b.id}`}
       className={
         "rounded-[14px] border bg-white px-5 py-4 grid grid-cols-[80px_1fr_auto] gap-[18px] items-center transition hover:shadow-[0_1px_3px_rgba(2,6,23,.04)] " +
         (isNext
@@ -676,12 +736,32 @@ function SessionCard({
           )}
           {variant === "history" && (
             <>
-              <Link
-                href={`/trainers/${b.trainerSlug}#reviews`}
-                className="h-7 px-3 inline-flex items-center rounded-[7px] border border-slate-200 bg-white text-[11px] font-medium text-slate-700 hover:border-slate-300"
-              >
-                Wystaw opinię
-              </Link>
+              {b.myReview ? (
+                <span className="h-7 px-3 inline-flex items-center rounded-[7px] bg-emerald-50 text-emerald-700 text-[11px] font-semibold">
+                  ✓ Oceniono
+                </span>
+              ) : b.trainerReviewed ? (
+                <span
+                  className="h-7 px-3 inline-flex items-center rounded-[7px] bg-slate-100 text-slate-500 text-[11px] font-medium"
+                  title="Twoja opinia o tym trenerze dotyczy innej sesji — jedna opinia na trenera."
+                >
+                  ✓ Opinia wystawiona
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onToggleReview?.(b.id)}
+                  aria-expanded={!!reviewOpen}
+                  className={
+                    "h-7 px-3 inline-flex items-center rounded-[7px] border text-[11px] font-medium transition " +
+                    (reviewOpen
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300")
+                  }
+                >
+                  Wystaw opinię
+                </button>
+              )}
               <Link
                 href={`/trainers/${b.trainerSlug}/book?service_id=${encodeURIComponent(b.serviceName)}`}
                 className="h-7 px-3 inline-flex items-center rounded-[7px] bg-slate-900 text-white text-[11px] font-semibold hover:bg-black"
@@ -700,6 +780,16 @@ function SessionCard({
           )}
         </div>
       </div>
+
+      {/* Review area — full-width row under the card grid (history only). */}
+      {variant === "history" && b.myReview && <ReviewThanks review={b.myReview} />}
+      {variant === "history" && !b.myReview && !b.trainerReviewed && reviewOpen && (
+        <ReviewForm
+          bookingId={b.id}
+          trainerName={b.trainerName}
+          onClose={() => onToggleReview?.(b.id)}
+        />
+      )}
     </div>
   );
 }
@@ -733,7 +823,17 @@ function SummaryStrip({
   );
 }
 
-function ModeBanner({ mode, data, next }: { mode: Mode; data: MojeTreningiData; next: Booking | null }) {
+function ModeBanner({
+  mode,
+  data,
+  next,
+  onReviewBacklog,
+}: {
+  mode: Mode;
+  data: MojeTreningiData;
+  next: Booking | null;
+  onReviewBacklog?: () => void;
+}) {
   if (mode === "upcoming" && next) {
     return (
       <div className="flex items-center gap-3.5 px-4 py-3 rounded-[11px] text-[12.5px] mb-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900">
@@ -770,9 +870,13 @@ function ModeBanner({ mode, data, next }: { mode: Mode; data: MojeTreningiData; 
           )}
         </div>
         {data.pendingReviews > 0 && (
-          <span className="ml-auto font-semibold underline underline-offset-[3px] cursor-pointer">
+          <button
+            type="button"
+            onClick={onReviewBacklog}
+            className="ml-auto font-semibold underline underline-offset-[3px] text-sky-900 hover:text-sky-950"
+          >
             Wystaw opinie zaległe ({data.pendingReviews}) →
-          </span>
+          </button>
         )}
       </div>
     );

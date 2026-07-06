@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireClient } from "@/lib/auth";
 import { getPendingRescheduleMap } from "@/lib/db/reschedule";
+import type { ReviewCategoryKey } from "@/lib/db/reviews";
 import MojeTreningi, {
   type Booking,
   type ActivePackage,
@@ -209,11 +210,14 @@ export default async function BookingsPage() {
     longestStreakWeeks = best;
   }
 
-  // Reviews this client wrote — drives the avg-rating-given card and the
-  // pending-reviews count (history items without a corresponding review).
+  // Reviews this client wrote — drives the avg-rating-given card, the
+  // pending-reviews count and the per-card review state (thank-you block
+  // vs. "Wystaw opinię" form vs. already-reviewed-elsewhere).
   const { data: reviewsRaw } = await supabase
     .from("reviews")
-    .select("trainer_id, rating, booking_id")
+    .select(
+      "trainer_id, rating, text, booking_id, cat_wiedza, cat_atmosfera, cat_punktualnosc, cat_efekty",
+    )
     .eq("author_id", user.id);
   const myReviews = reviewsRaw ?? [];
   const avgRatingGiven =
@@ -222,8 +226,23 @@ export default async function BookingsPage() {
           (myReviews.reduce((a, r) => a + (r.rating ?? 0), 0) / myReviews.length).toFixed(2),
         )
       : null;
-  const reviewedBookingIds = new Set(myReviews.map((r) => r.booking_id).filter(Boolean));
-  const pendingReviews = history.filter((h) => !reviewedBookingIds.has(h.id)).length;
+  const reviewByBookingId = new Map(
+    myReviews.filter((r) => r.booking_id).map((r) => [r.booking_id as string, r]),
+  );
+  const reviewedTrainerIds = new Set(myReviews.map((r) => r.trainer_id));
+  for (const h of history) {
+    const r = reviewByBookingId.get(h.id);
+    h.myReview = r
+      ? { rating: r.rating, text: r.text, categories: reviewCategories(r) }
+      : null;
+    h.trainerReviewed = reviewedTrainerIds.has(h.trainerId);
+  }
+  // One review per client per trainer (schema unique constraint) — so
+  // "opinii do napisania" = distinct trainers with a finished session and
+  // no review from this client yet, not raw unreviewed-booking count.
+  const pendingReviews = new Set(
+    history.filter((h) => !h.trainerReviewed).map((h) => h.trainerId),
+  ).size;
 
   // Bookable services from the most-frequent trainer this client books with.
   const trainerCount = new Map<string, number>();
@@ -348,7 +367,25 @@ function mapBooking(r: RawBooking, pendingReschedule: boolean): Booking {
     category,
     variant,
     pendingReschedule,
+    // Filled in after the client's reviews are fetched (history only).
+    myReview: null,
+    trainerReviewed: false,
   };
+}
+
+/** cat_* columns (migration 029) → chip keys for the client-side card. */
+function reviewCategories(r: {
+  cat_wiedza: number | null;
+  cat_atmosfera: number | null;
+  cat_punktualnosc: number | null;
+  cat_efekty: number | null;
+}): ReviewCategoryKey[] {
+  const out: ReviewCategoryKey[] = [];
+  if (r.cat_wiedza != null) out.push("wiedza");
+  if (r.cat_atmosfera != null) out.push("atmosfera");
+  if (r.cat_punktualnosc != null) out.push("punktualnosc");
+  if (r.cat_efekty != null) out.push("efekty");
+  return out;
 }
 
 function pickEmoji(name: string): string {
