@@ -145,20 +145,13 @@ export default function SpecializationsForm({
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-6">
       <div>
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="flex items-center gap-2">
-            <div>
-              <h3 className="text-[15px] font-semibold tracking-[-0.005em] m-0">Specjalizacje</h3>
-              <p className="text-[12px] text-slate-500 mt-1">
-                Wpływa na to, w jakich filtrach katalogu się pojawisz. Wybierz 3–6.
-              </p>
-            </div>
-            {saving && (
-              <span className="text-[11px] text-slate-400 italic shrink-0 mt-1">
-                zapisuję…
-              </span>
-            )}
-          </div>
+        {/* Section title/description moved to the CollapsibleSection
+            wrapper (ProfileEditorShell) — keep only the functional bits:
+            live "zapisuję…" indicator + heuristic suggest button. */}
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <span className="text-[11px] text-slate-400 italic shrink-0">
+            {saving ? "zapisuję…" : " "}
+          </span>
           <button
             type="button"
             onClick={suggestFromBio}

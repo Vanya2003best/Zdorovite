@@ -23,10 +23,13 @@ const MAX_MISSION = 200;
 const MAX_LOCATION = 100;
 const MAX_HANDLE = 200;
 
-type ProfileBasic = {
+type ProfileIdentity = {
   displayName: string;
   publicName: string;
   tagline: string;
+};
+
+type ProfileAbout = {
   about: string;
   mission: string;
 };
@@ -59,7 +62,13 @@ function bust(slug: string) {
   revalidatePath(`/trainers/${slug}`);
 }
 
-export async function updateProfileBasic(input: ProfileBasic): Promise<Result> {
+/**
+ * Identity slice of the former updateProfileBasic — photo-adjacent
+ * fields shown in the "Zdjęcie, imię i tagline" section of the
+ * two-pane editor. About/mission moved to updateProfileAbout so the
+ * two sections never clobber each other's fields on save.
+ */
+export async function updateProfileIdentity(input: ProfileIdentity): Promise<Result> {
   const ctx = await getCurrent();
   if ("error" in ctx) return ctx;
   const { supabase, userId, slug } = ctx;
@@ -69,8 +78,6 @@ export async function updateProfileBasic(input: ProfileBasic): Promise<Result> {
   // Empty publicName = clear override (fall back to displayName publicly).
   const publicName: string | null = publicNameRaw === "" ? null : publicNameRaw;
   const tagline = input.tagline.trim().slice(0, MAX_TAGLINE);
-  const about = input.about.trim().slice(0, MAX_ABOUT);
-  const mission = input.mission.trim().slice(0, MAX_MISSION);
   if (!displayName) return { error: "Imię nie może być puste." };
 
   // profile.display_name is on profiles, the rest on trainers — two
@@ -81,32 +88,51 @@ export async function updateProfileBasic(input: ProfileBasic): Promise<Result> {
     .eq("id", userId);
   if (profileUpd.error) return { error: profileUpd.error.message };
 
-  // Try the full trainers update (mission from 026 + display_name from 027).
-  // Fall back through column-missing errors so the page works on partially
-  // migrated databases without throwing for the user.
+  // Try the full trainers update (display_name from 027); fall back
+  // without it so the page works on partially migrated databases.
   const trainerUpdFull = await supabase
     .from("trainers")
-    .update({ tagline, about, mission, display_name: publicName })
+    .update({ tagline, display_name: publicName })
     .eq("id", userId);
   if (trainerUpdFull.error?.code === "42703") {
-    // Drop columns one at a time until the write succeeds. Order matters:
-    // 027 (display_name) is newer than 026 (mission), so try without it
-    // first; only then drop mission.
-    const without027 = await supabase
+    const minimal = await supabase
       .from("trainers")
-      .update({ tagline, about, mission })
+      .update({ tagline })
       .eq("id", userId);
-    if (without027.error?.code === "42703") {
-      const minimal = await supabase
-        .from("trainers")
-        .update({ tagline, about })
-        .eq("id", userId);
-      if (minimal.error) return { error: minimal.error.message };
-    } else if (without027.error) {
-      return { error: without027.error.message };
-    }
+    if (minimal.error) return { error: minimal.error.message };
   } else if (trainerUpdFull.error) {
     return { error: trainerUpdFull.error.message };
+  }
+
+  bust(slug);
+  return { ok: true };
+}
+
+/**
+ * About slice — bio text + mission quote, edited in the standalone
+ * "O mnie" section. Mission is migration-026-gated, same fallback
+ * pattern as everywhere else in this file.
+ */
+export async function updateProfileAbout(input: ProfileAbout): Promise<Result> {
+  const ctx = await getCurrent();
+  if ("error" in ctx) return ctx;
+  const { supabase, userId, slug } = ctx;
+
+  const about = input.about.trim().slice(0, MAX_ABOUT);
+  const mission = input.mission.trim().slice(0, MAX_MISSION);
+
+  const full = await supabase
+    .from("trainers")
+    .update({ about, mission })
+    .eq("id", userId);
+  if (full.error?.code === "42703") {
+    const minimal = await supabase
+      .from("trainers")
+      .update({ about })
+      .eq("id", userId);
+    if (minimal.error) return { error: minimal.error.message };
+  } else if (full.error) {
+    return { error: full.error.message };
   }
 
   bust(slug);

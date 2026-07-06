@@ -55,14 +55,9 @@ export default function SocialForm(initial: Props) {
 
   return (
     <>
+      {/* Section title/description now live in the CollapsibleSection
+          wrapper (ProfileEditorShell) — the card renders fields only. */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-        <div className="mb-4">
-          <h3 className="text-[15px] font-semibold tracking-[-0.005em] m-0">Social i kontakt</h3>
-          <p className="text-[12px] text-slate-500 mt-1">
-            Pokazane jako ikonki na profilu. Email i telefon zobaczy klient dopiero po pierwszej rezerwacji.
-          </p>
-        </div>
-
         <div className="space-y-2">
           <Row icon={<InstagramIcon />} label="Instagram">
             <input

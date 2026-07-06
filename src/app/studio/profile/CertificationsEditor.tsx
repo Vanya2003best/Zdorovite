@@ -67,15 +67,9 @@ export default function CertificationsEditor({ certs }: { certs: Certification[]
 
   return (
     <div>
-      <div className="flex items-start justify-between gap-4 mb-3">
-        <div className="min-w-0">
-          <h3 className="text-[15px] font-semibold tracking-[-0.005em] text-slate-900 m-0">
-            Certyfikaty i dokumenty
-          </h3>
-          <p className="text-[12px] text-slate-500 mt-1 max-w-[640px] leading-[1.55]">
-            Przesłane PDF/JPG widoczne tylko po weryfikacji. Klienci widzą tylko nazwę i rok.
-          </p>
-        </div>
+      {/* Section title/description moved to the CollapsibleSection
+          wrapper (ProfileEditorShell) — only the "+ Dodaj" action stays. */}
+      <div className="flex items-center justify-end gap-4 mb-3">
         <button
           type="button"
           onClick={onAdd}

@@ -99,14 +99,9 @@ export default function LocationForm({
 
   return (
     <>
+      {/* Section title/description now live in the CollapsibleSection
+          wrapper (ProfileEditorShell) — the card renders fields only. */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-        <div className="mb-4">
-          <h3 className="text-[15px] font-semibold tracking-[-0.005em] m-0">Lokalizacja</h3>
-          <p className="text-[12px] text-slate-500 mt-1">
-            Gdzie prowadzisz treningi. Wpływa na sortowanie po odległości w katalogu.
-          </p>
-        </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <label className="grid gap-1.5 md:col-span-2">
             <span className="text-[12px] font-semibold text-slate-700">Główne miejsce treningu</span>

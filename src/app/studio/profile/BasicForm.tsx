@@ -2,12 +2,9 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { updateProfileBasic } from "./profile-actions";
+import { updateProfileIdentity } from "./profile-actions";
 
-const MIN_BIO = 200;
-const MAX_BIO = 600;
 const MAX_TAGLINE = 200;
-const MAX_MISSION = 200;
 
 type Props = {
   avatarUrl: string | null;
@@ -16,8 +13,6 @@ type Props = {
   publicName: string;
   email: string;
   tagline: string;
-  about: string;
-  mission: string;
   location: string;
   roleLine: string;
   experience: number;
@@ -26,13 +21,17 @@ type Props = {
   avatarSlot: ReactNode;
 };
 
+/**
+ * Identity form — avatar hero + name / display name / tagline.
+ * About + mission moved to AboutForm (own "O mnie" section in the
+ * two-pane editor); the section-card header is provided by the
+ * CollapsibleSection wrapper in ProfileEditorShell.
+ */
 export default function BasicForm({
   displayName: initialDisplayName,
   publicName: initialPublicName,
   email: _email,
   tagline: initialTagline,
-  about: initialAbout,
-  mission: initialMission,
   location,
   roleLine,
   experience,
@@ -46,15 +45,11 @@ export default function BasicForm({
     displayName: initialDisplayName,
     publicName: initialPublicName,
     tagline: initialTagline,
-    about: initialAbout,
-    mission: initialMission,
   };
 
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [publicName, setPublicName] = useState(initialPublicName);
   const [tagline, setTagline] = useState(initialTagline);
-  const [about, setAbout] = useState(initialAbout);
-  const [mission, setMission] = useState(initialMission);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -62,22 +57,20 @@ export default function BasicForm({
   const dirty =
     displayName !== initial.displayName ||
     publicName !== initial.publicName ||
-    tagline !== initial.tagline ||
-    about !== initial.about ||
-    mission !== initial.mission;
+    tagline !== initial.tagline;
 
   // Track most recent dirty values via a ref so we can guard against
   // stale-closure saves when the user clicks Zapisz right after typing.
-  const liveRef = useRef({ displayName, publicName, tagline, about, mission });
+  const liveRef = useRef({ displayName, publicName, tagline });
   useEffect(() => {
-    liveRef.current = { displayName, publicName, tagline, about, mission };
-  }, [displayName, publicName, tagline, about, mission]);
+    liveRef.current = { displayName, publicName, tagline };
+  }, [displayName, publicName, tagline]);
 
   const handleSave = async () => {
     if (!dirty || saving) return;
     setSaving(true);
     setError(null);
-    const res = await updateProfileBasic(liveRef.current);
+    const res = await updateProfileIdentity(liveRef.current);
     setSaving(false);
     if ("error" in res) {
       setError(res.error);
@@ -91,21 +84,12 @@ export default function BasicForm({
     setDisplayName(initial.displayName);
     setPublicName(initial.publicName);
     setTagline(initial.tagline);
-    setAbout(initial.about);
-    setMission(initial.mission);
     setError(null);
   };
 
   return (
     <>
       <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-        <div className="mb-3">
-          <h3 className="text-[15px] font-semibold tracking-[-0.005em] m-0">Profil podstawowy</h3>
-          <p className="text-[12px] text-slate-500 mt-1">
-            Zdjęcie, imię, krótkie bio i misja — najczęściej oglądana sekcja.
-          </p>
-        </div>
-
         <div className="flex gap-[22px] items-center">
           {/* Avatar (component injected so server-side actions stay attached) */}
           <div className="shrink-0">{avatarSlot}</div>
@@ -179,37 +163,6 @@ export default function BasicForm({
               maxLength={MAX_TAGLINE}
               onChange={(e) => setTagline(e.target.value)}
               className="px-3 py-2.5 text-[13.5px] rounded-[9px] border border-slate-200 bg-white outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15"
-            />
-          </Field>
-
-          <Field label="O mnie" hint={`Markdown · ${MIN_BIO}–${MAX_BIO} znaków`} full>
-            <textarea
-              value={about}
-              maxLength={MAX_BIO + 200}
-              onChange={(e) => setAbout(e.target.value)}
-              className="px-3 py-2.5 text-[13.5px] rounded-[9px] border border-slate-200 bg-white outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 min-h-[110px] leading-[1.5] resize-y"
-            />
-            <div
-              className={
-                "text-[11px] text-right mt-1 " +
-                (about.length > MAX_BIO
-                  ? "text-rose-600"
-                  : about.length >= MIN_BIO
-                    ? "text-emerald-600"
-                    : "text-slate-500")
-              }
-            >
-              {about.length} / {MAX_BIO}
-            </div>
-          </Field>
-
-          <Field label="Misja" hint="krótkie zdanie, pokazuje się jako cytat" full>
-            <input
-              value={mission}
-              maxLength={MAX_MISSION}
-              onChange={(e) => setMission(e.target.value)}
-              className="px-3 py-2.5 text-[13.5px] rounded-[9px] border border-slate-200 bg-white outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15"
-              placeholder="Np. „Nie ma magicznych planów. Jest konsekwencja."
             />
           </Field>
         </div>
