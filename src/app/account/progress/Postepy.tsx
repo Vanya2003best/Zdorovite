@@ -10,7 +10,7 @@ import { logWeight } from "@/lib/actions/weight";
  *
  * Five modes via top switcher: Przegląd / Sylwetka / Siła / Cardio / Cele.
  * Server orchestrator (page.tsx) supplies real data from the existing
- * tables (weight_log, goals, bookings, session_notes); modes without
+ * tables (weight_log, goals, bookings); modes without
  * a backing dataset (body measurements, strength tracking, Garmin)
  * render an honest empty state pointing to what's needed to enable them.
  */
@@ -35,8 +35,6 @@ export type PostepyData = {
   goals: Goal[];
   /** Achieved goals (pct >= 100), capped at 6 for the history strip. */
   achievedGoals: Goal[];
-  /** Trainer's session_notes — most recent first. */
-  trainerNotes: TrainerNote[];
   /** Streak — consecutive weeks with at least one completed session. */
   streakWeeks: number;
   /** Total months coaching — first booking → today. */
@@ -55,14 +53,6 @@ export type Goal = {
   targetDate: string | null;
   /** Optional human-friendly progress string ("−3.4 / −5 kg"). */
   progressLabel: string | null;
-};
-
-export type TrainerNote = {
-  id: string;
-  trainerName: string;
-  trainerInitials: string;
-  whenLabel: string;
-  text: string;
 };
 
 type Mode = "overview" | "body" | "strength" | "cardio" | "goals";
@@ -219,7 +209,9 @@ function OverviewPanel({ data, weightDelta }: { data: PostepyData; weightDelta: 
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
+      {/* Trainer-notes card removed: session_notes are trainer-private by
+          design (migration 025), so the section could never show data. */}
+      <div className="mb-4">
         <Card>
           <CardHeader
             title="Postęp celów"
@@ -233,38 +225,6 @@ function OverviewPanel({ data, weightDelta }: { data: PostepyData; weightDelta: 
             <div className="flex flex-col gap-3.5">
               {data.goals.slice(0, 4).map((g) => (
                 <GoalRow key={g.id} g={g} />
-              ))}
-            </div>
-          )}
-        </Card>
-
-        <Card>
-          <CardHeader
-            title="Notatki trenera"
-            sub={data.trainerNotes.length > 0 ? `${data.trainerNotes.length} ostatnie` : ""}
-          />
-          {data.trainerNotes.length === 0 ? (
-            <p className="text-[13px] text-slate-500">
-              Trener jeszcze nie dodał żadnej notatki po sesji.
-            </p>
-          ) : (
-            <div className="flex flex-col">
-              {data.trainerNotes.slice(0, 3).map((n, i) => (
-                <div
-                  key={n.id}
-                  className={
-                    "flex gap-2.5 py-3 " +
-                    (i < Math.min(2, data.trainerNotes.length - 1) ? "border-b border-dashed border-slate-100" : "")
-                  }
-                >
-                  <span className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-white inline-flex items-center justify-center font-bold text-[11px] shrink-0">
-                    {n.trainerInitials}
-                  </span>
-                  <div className="text-[12px] text-slate-700 leading-[1.5] flex-1">
-                    <div className="text-[11px] text-slate-500 mb-0.5">{n.whenLabel}</div>
-                    {n.text}
-                  </div>
-                </div>
               ))}
             </div>
           )}

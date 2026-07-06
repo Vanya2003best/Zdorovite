@@ -220,6 +220,7 @@ export default function AccountTopBar({
             </div>
             <AccountMenu
               variant="chip"
+              role="client"
               displayName={displayName}
               email={email}
               avatarUrl={avatarUrl}

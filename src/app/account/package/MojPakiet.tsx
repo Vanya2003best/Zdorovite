@@ -23,9 +23,11 @@ export type PackageHero = {
   description: string;
   /** Total sessions in the package. */
   total: number;
-  /** Sessions already completed. */
+  /** Sessions the trainer marked as completed — the only ones counted as "used". */
   done: number;
-  /** Sessions booked but not completed yet (= upcoming). */
+  /** Past sessions awaiting the trainer's completion mark ("czeka na potwierdzenie trenera"). */
+  pendingConfirmation: number;
+  /** Future sessions booked but not held yet (= upcoming). */
   scheduled: number;
   /** First booking date in this package — anchors the validity window. */
   firstBookedIso: string | null;
@@ -50,8 +52,9 @@ export type PackageSessionRow = {
   serviceName: string;
   durationMin: number;
   location: string;
-  /** "done" | "upcoming" | "cancelled" — drives the badge + deduction copy. */
-  state: "done" | "upcoming" | "cancelled";
+  /** "done" | "pending" (czeka na potwierdzenie trenera) | "upcoming" |
+   *  "cancelled" — drives the badge + deduction copy. */
+  state: "done" | "pending" | "upcoming" | "cancelled";
   /** Sessions remaining after this row (computed by the server). */
   sessionsLeftAfter: number;
 };
@@ -91,14 +94,15 @@ export default function MojPakiet({ data }: { data: MojPakietData }) {
     return <NoPackageState alternatives={data.alternatives} />;
   }
 
-  const remaining = Math.max(0, data.hero.total - data.hero.done - data.hero.scheduled);
-  const pctUsed = Math.round(((data.hero.done + data.hero.scheduled) / Math.max(1, data.hero.total)) * 100);
+  const consumed = data.hero.done + data.hero.pendingConfirmation + data.hero.scheduled;
+  const remaining = Math.max(0, data.hero.total - consumed);
+  const pctUsed = Math.round((consumed / Math.max(1, data.hero.total)) * 100);
 
   return (
     <div className="px-4 sm:px-7 pt-2 pb-8">
       <Topbar trainerId={data.hero.trainerId} />
       <Hero hero={data.hero} pctUsed={pctUsed} remaining={remaining} />
-      <ModeBar mode={mode} onChange={setMode} sessionsCount={data.hero.done + data.hero.scheduled} total={data.hero.total} />
+      <ModeBar mode={mode} onChange={setMode} sessionsCount={consumed} total={data.hero.total} />
       <ModeBanner mode={mode} hero={data.hero} remaining={remaining} weeklyAvg={data.weeklyAvg} />
 
       {mode === "current" && <CurrentPanel hero={data.hero} sessions={data.sessions} />}
@@ -183,11 +187,16 @@ function Hero({ hero, pctUsed, remaining }: { hero: PackageHero; pctUsed: number
         <div>
           <div className="text-[10px] uppercase tracking-[0.08em] opacity-80 font-bold">Sesje</div>
           <div className="text-[24px] font-bold tracking-[-0.02em] tabular-nums leading-none">
-            {hero.done + hero.scheduled} / {hero.total}
+            {hero.done + hero.pendingConfirmation + hero.scheduled} / {hero.total}
           </div>
           <div className="text-[11px] opacity-85 mt-1">
             {remaining} {plural(remaining, "wolna", "wolne", "wolnych")}
           </div>
+          {hero.pendingConfirmation > 0 && (
+            <div className="text-[11px] opacity-85 mt-0.5">
+              {hero.pendingConfirmation} czeka na potwierdzenie trenera
+            </div>
+          )}
         </div>
       </div>
 
@@ -273,6 +282,9 @@ function ModeBanner({ mode, hero, remaining, weeklyAvg }: { mode: Mode; hero: Pa
         <div>
           <b className="font-semibold">
             Pakiet aktywny — {hero.done} {plural(hero.done, "sesja zrealizowana", "sesje zrealizowane", "sesji zrealizowanych")} ·
+            {hero.pendingConfirmation > 0 && (
+              <>{" "}{hero.pendingConfirmation} czeka na potwierdzenie trenera ·</>
+            )}
             {" "}{remaining} {plural(remaining, "wolna", "wolne", "wolnych")} do umówienia
           </b>
           <div className="text-emerald-800/80 mt-0.5">
@@ -290,8 +302,11 @@ function ModeBanner({ mode, hero, remaining, weeklyAvg }: { mode: Mode; hero: Pa
         </span>
         <div>
           <b className="font-semibold">
-            {hero.done} {plural(hero.done, "sesja", "sesje", "sesji")} wykorzystana · {hero.scheduled} zaplanowana ·
-            {" "}{remaining} do umówienia
+            {hero.done} {plural(hero.done, "sesja wykorzystana", "sesje wykorzystane", "sesji wykorzystanych")} ·
+            {hero.pendingConfirmation > 0 && (
+              <>{" "}{hero.pendingConfirmation} czeka na potwierdzenie trenera ·</>
+            )}
+            {" "}{hero.scheduled} zaplanowane · {remaining} do umówienia
           </b>
           <div className="text-sky-800/80 mt-0.5">
             {weeklyAvg != null
@@ -335,10 +350,11 @@ function ModeBanner({ mode, hero, remaining, weeklyAvg }: { mode: Mode; hero: Pa
 /* ====================== CURRENT PANEL ====================== */
 
 function CurrentPanel({ hero, sessions }: { hero: PackageHero; sessions: PackageSessionRow[] }) {
-  const slots: ("done" | "upcoming" | "free")[] = [];
+  const slots: ("done" | "pending" | "upcoming" | "free")[] = [];
   for (let i = 0; i < hero.total; i++) {
     if (i < hero.done) slots.push("done");
-    else if (i < hero.done + hero.scheduled) slots.push("upcoming");
+    else if (i < hero.done + hero.pendingConfirmation) slots.push("pending");
+    else if (i < hero.done + hero.pendingConfirmation + hero.scheduled) slots.push("upcoming");
     else slots.push("free");
   }
   const lastSession = sessions.find((s) => s.state === "upcoming") ?? sessions[sessions.length - 1] ?? null;
@@ -354,7 +370,11 @@ function CurrentPanel({ hero, sessions }: { hero: PackageHero; sessions: Package
         <Card>
           <CardHeader
             title="Wykorzystanie sesji"
-            sub={`${hero.done} użytych · ${hero.scheduled} zaplanowanych · ${hero.total - hero.done - hero.scheduled} wolnych`}
+            sub={
+              `${hero.done} użytych · ` +
+              (hero.pendingConfirmation > 0 ? `${hero.pendingConfirmation} czeka na potwierdzenie · ` : "") +
+              `${hero.scheduled} zaplanowanych · ${hero.total - hero.done - hero.pendingConfirmation - hero.scheduled} wolnych`
+            }
           />
           <div className="grid grid-cols-4 gap-2">
             {slots.map((s, i) => (
@@ -364,19 +384,26 @@ function CurrentPanel({ hero, sessions }: { hero: PackageHero; sessions: Package
                   "aspect-square rounded-[10px] flex items-center justify-center text-[14px] font-bold " +
                   (s === "done"
                     ? "bg-emerald-500 text-white"
-                    : s === "upcoming"
-                      ? "bg-amber-100 text-amber-900 border-[1.5px] border-dashed border-amber-400"
-                      : "bg-slate-100 text-slate-400")
+                    : s === "pending"
+                      ? "bg-sky-100 text-sky-900 border-[1.5px] border-dashed border-sky-400"
+                      : s === "upcoming"
+                        ? "bg-amber-100 text-amber-900 border-[1.5px] border-dashed border-amber-400"
+                        : "bg-slate-100 text-slate-400")
                 }
               >
                 {i + 1}
               </div>
             ))}
           </div>
-          <div className="flex gap-3.5 mt-3.5 text-[11.5px] text-slate-500">
+          <div className="flex gap-3.5 mt-3.5 text-[11.5px] text-slate-500 flex-wrap">
             <span className="inline-flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-[3px] bg-emerald-500" />Użyta
             </span>
+            {hero.pendingConfirmation > 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-[3px] bg-sky-100 border-[1.5px] border-dashed border-sky-400" />Czeka na potwierdzenie
+              </span>
+            )}
             <span className="inline-flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-[3px] bg-amber-100 border-[1.5px] border-dashed border-amber-400" />Zaplanowana
             </span>
@@ -384,10 +411,10 @@ function CurrentPanel({ hero, sessions }: { hero: PackageHero; sessions: Package
               <span className="w-2.5 h-2.5 rounded-[3px] bg-slate-100" />Wolna
             </span>
           </div>
-          {hero.total - hero.done - hero.scheduled > 0 && (
+          {hero.total - hero.done - hero.pendingConfirmation - hero.scheduled > 0 && (
             <div className="mt-3.5 px-3.5 py-3 bg-emerald-50 rounded-[9px] text-[12px] text-emerald-800 leading-[1.5]">
-              <b>📅 Wskazówka:</b> Zarezerwuj pozostałe {hero.total - hero.done - hero.scheduled}{" "}
-              {plural(hero.total - hero.done - hero.scheduled, "sesję", "sesje", "sesji")} z odpowiednim wyprzedzeniem.
+              <b>📅 Wskazówka:</b> Zarezerwuj pozostałe {hero.total - hero.done - hero.pendingConfirmation - hero.scheduled}{" "}
+              {plural(hero.total - hero.done - hero.pendingConfirmation - hero.scheduled, "sesję", "sesje", "sesji")} z odpowiednim wyprzedzeniem.
               <Link
                 href="/account/bookings?mode=book"
                 className="block mt-2 inline-flex items-center bg-emerald-700 text-white px-3 py-1.5 rounded-[6px] text-[11px] font-semibold hover:bg-emerald-800"
@@ -523,7 +550,7 @@ function UsagePanel({
           title="Pakiet aktywny"
           value={String(daysActive)}
           unit="dni"
-          detail={`${hero.done + hero.scheduled} z ${hero.total} sesji wykorzystane`}
+          detail={`${hero.done + hero.pendingConfirmation + hero.scheduled} z ${hero.total} sesji wykorzystane`}
           accent="neutral"
         />
       </div>
@@ -571,10 +598,19 @@ function SessionRow({ s }: { s: PackageSessionRow }) {
   const stateClasses =
     s.state === "done"
       ? "bg-emerald-50 text-emerald-700"
-      : s.state === "upcoming"
-        ? "bg-amber-50 text-amber-900"
-        : "bg-red-50 text-red-700";
-  const stateLabel = s.state === "done" ? "✓ Zrealizowana" : s.state === "upcoming" ? "⏰ Zaplanowana" : "⊘ Anulowana";
+      : s.state === "pending"
+        ? "bg-sky-50 text-sky-900"
+        : s.state === "upcoming"
+          ? "bg-amber-50 text-amber-900"
+          : "bg-red-50 text-red-700";
+  const stateLabel =
+    s.state === "done"
+      ? "✓ Zrealizowana"
+      : s.state === "pending"
+        ? "⏳ Czeka na potwierdzenie"
+        : s.state === "upcoming"
+          ? "⏰ Zaplanowana"
+          : "⊘ Anulowana";
   return (
     <div className="grid grid-cols-[60px_1.7fr_1fr_auto_120px] gap-3 items-center py-3 border-b border-dashed border-slate-100 last:border-0">
       <div className="text-center">
@@ -707,7 +743,7 @@ function InvoicesPanel({ hero }: { hero: PackageHero }) {
           title="Sesje opłacone"
           value={String(hero.total)}
           unit=""
-          detail={`${hero.done + hero.scheduled} wykorzystanych`}
+          detail={`${hero.done + hero.pendingConfirmation + hero.scheduled} wykorzystanych`}
           accent="neutral"
         />
         <StatCard

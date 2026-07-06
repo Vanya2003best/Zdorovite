@@ -13,8 +13,8 @@ import StudioTopBar from "./StudioTopBar";
  * - Horizontal tabs row (Pulpit / Kalendarz / Klienci / Wiadomości / Usługi /
  *   Oceny / Płatności / Profil / Design stron)
  *
- * Replaces the previous vertical 240px sidebar (StudioSidebar.tsx still on
- * disk for reference but no longer mounted). Visual reference: design file
+ * Replaces the previous vertical 240px sidebar (StudioSidebar.tsx, removed
+ * as dead code). Visual reference: design file
  * 35-studio-klienci-olx-style.html.
  */
 export default async function StudioLayout({

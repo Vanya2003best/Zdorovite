@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { packageUsage } from "@/lib/db/package-usage";
 
 /**
  * /studio/klienci data layer — real roster from trainer_clients (023)
@@ -205,8 +206,13 @@ export async function getClientsForTrainer(trainerId: string): Promise<RosterCli
       .sort((a, b) => b.start_time.localeCompare(a.start_time))[0];
     if (lastPkgBooking?.package_id) {
       const total = pkgTotals.get(lastPkgBooking.package_id)!;
-      const used = completed.filter((b) => b.package_id === lastPkgBooking.package_id).length;
-      pkg = { used: Math.min(used, total), total };
+      // Shared derivation (lib/db/package-usage) — "used" = completed only.
+      const usage = packageUsage(
+        list.filter((b) => b.package_id === lastPkgBooking.package_id),
+        total,
+        now,
+      );
+      pkg = { used: Math.min(usage.used, total), total };
     }
 
     // ----- LTV: completed sessions in the last 12 months -----

@@ -42,7 +42,8 @@ type Item =
   | { kind: "link"; href: string; label: string; icon: React.ReactNode; soon?: boolean; description?: string }
   | { kind: "divider" };
 
-const ITEMS: Item[] = [
+/** Trainer menu — Studio destinations (guarded by requireTrainer). */
+const TRAINER_ITEMS: Item[] = [
   {
     kind: "link",
     href: "/studio/profile",
@@ -83,6 +84,39 @@ const ITEMS: Item[] = [
   { kind: "divider" },
 ];
 
+const ChartIcon = (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M3 3v18h18M7 14l4-4 4 4 6-6" />
+  </svg>
+);
+
+/** Client menu — /account destinations only. /studio/* would bounce a
+ *  client off the requireTrainer gate, so none of those appear here. */
+const CLIENT_ITEMS: Item[] = [
+  {
+    kind: "link",
+    href: "/account/settings",
+    label: "Ustawienia",
+    description: "Profil, hasło, powiadomienia",
+    icon: SettingsIcon,
+  },
+  {
+    kind: "link",
+    href: "/account/payments",
+    label: "Płatności",
+    description: "Historia płatności i pakiety",
+    icon: FinansaIcon,
+  },
+  {
+    kind: "link",
+    href: "/account/progress",
+    label: "Postępy",
+    description: "Waga, cele, sesje",
+    icon: ChartIcon,
+  },
+  { kind: "divider" },
+];
+
 const ExternalIcon = (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
@@ -96,8 +130,10 @@ const ExternalIcon = (
  *  - "chip": OLX-style chip (small avatar + "Twoje konto" label + chevron),
  *    styled for the dark-teal StudioTopBar. Matches design 35-studio-klienci.
  *  - "pill": full-width row (avatar + name + email + caret), opens UP.
- *    Used at the bottom of StudioSidebar / AccountSidebar so the user
- *    has identity + actions in one persistent place.
+ *
+ * Menu items depend on `role`: trainers get Studio destinations, clients
+ * get /account destinations (a client hitting /studio/* would be thrown
+ * out by the requireTrainer gate).
  *
  * Optional `publicPageHref` adds a "Strona publiczna" item to the menu —
  * lets us drop the dedicated sidebar-footer link without losing access.
@@ -108,6 +144,7 @@ export default function AccountMenu({
   avatarUrl,
   avatarFocal,
   variant = "icon",
+  role = "trainer",
   publicPageHref,
 }: {
   displayName: string;
@@ -118,6 +155,8 @@ export default function AccountMenu({
    *  set via drag-pan on /studio/profile. */
   avatarFocal?: string | null;
   variant?: "icon" | "chip" | "pill";
+  /** Picks the menu contents — defaults to trainer (Studio surfaces). */
+  role?: "trainer" | "client";
   publicPageHref?: string | null;
 }) {
   const [open, setOpen] = useState(false);
@@ -140,6 +179,8 @@ export default function AccountMenu({
   }, [open]);
 
   const initial = (displayName || "?").charAt(0).toUpperCase();
+
+  const items = role === "client" ? CLIENT_ITEMS : TRAINER_ITEMS;
 
   const isPill = variant === "pill";
   const isChip = variant === "chip";
@@ -276,7 +317,7 @@ export default function AccountMenu({
               </Link>
             )}
             {publicPageHref && <div className="border-t border-slate-100 my-1" />}
-            {ITEMS.map((item, i) => {
+            {items.map((item, i) => {
               if (item.kind === "divider") {
                 return <div key={`div-${i}`} className="border-t border-slate-100 my-1" />;
               }

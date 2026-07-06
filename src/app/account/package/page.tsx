@@ -1,5 +1,6 @@
 import { requireClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { packageUsage } from "@/lib/db/package-usage";
 import MojPakiet, {
   type MojPakietData,
   type PackageHero,
@@ -7,7 +8,6 @@ import MojPakiet, {
   type AlternativePackage,
 } from "./MojPakiet";
 
-const DONE_STATUSES = ["completed", "paid"];
 const PL_MONTHS_SHORT = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
 
 /**
@@ -83,9 +83,11 @@ export default async function PackagePage() {
     const pkg = firstRow?.package ?? null;
 
     if (pkg && pkg.sessions_total) {
-      const now = new Date();
-      const done = pkgBookings.filter((b) => DONE_STATUSES.includes(b.status) || (b.status === "confirmed" && new Date(b.end_time) < now)).length;
-      const upcoming = pkgBookings.filter((b) => b.status !== "cancelled" && new Date(b.start_time) > now).length;
+      const nowMs = Date.now();
+      // Shared derivation (lib/db/package-usage) — same function the studio
+      // roster uses, so both surfaces show the same saldo. "used" = completed
+      // only; past-but-unconfirmed sessions surface as pendingConfirmation.
+      const usage = packageUsage(pkgBookings, pkg.sessions_total, nowMs);
 
       const trainerName = firstRow?.trainer?.profile?.display_name?.split(" ")[0] ?? null;
       const description = pkg.description?.trim()
@@ -96,8 +98,9 @@ export default async function PackagePage() {
         name: pkg.name,
         description,
         total: pkg.sessions_total,
-        done,
-        scheduled: upcoming,
+        done: usage.used,
+        pendingConfirmation: usage.pendingConfirmation,
+        scheduled: usage.scheduled,
         firstBookedIso: pkgBookings[0]?.start_time ?? null,
         lastBookedIso: pkgBookings[pkgBookings.length - 1]?.start_time ?? null,
         pricePaid: pkg.price,
@@ -111,12 +114,18 @@ export default async function PackagePage() {
       let runningLeft = pkg.sessions_total;
       sessions = pkgBookings.map((b) => {
         const d = new Date(b.start_time);
-        const wasDone = DONE_STATUSES.includes(b.status) || (b.status === "confirmed" && new Date(b.end_time) < now);
-        const isCancelled = b.status === "cancelled";
-        const isUpcoming = !isCancelled && !wasDone;
-        if (wasDone) runningLeft -= 1;
-        // Cancelled refunds the slot — leave runningLeft unchanged
-        const state: PackageSessionRow["state"] = isCancelled ? "cancelled" : isUpcoming ? "upcoming" : "done";
+        // Mirrors packageUsage(): completed = done; past-but-unconfirmed =
+        // pending ("czeka na potwierdzenie trenera"); future = upcoming.
+        // Cancelled refunds the slot — leaves runningLeft unchanged.
+        const state: PackageSessionRow["state"] =
+          b.status === "cancelled"
+            ? "cancelled"
+            : b.status === "completed"
+              ? "done"
+              : new Date(b.end_time ?? b.start_time).getTime() < nowMs
+                ? "pending"
+                : "upcoming";
+        if (state === "done" || state === "pending") runningLeft -= 1;
         return {
           id: b.id,
           iso: b.start_time,
@@ -130,12 +139,13 @@ export default async function PackagePage() {
         };
       });
 
-      // Weekly average — done sessions / weeks active.
-      if (pkgBookings.length >= 2 && done > 0) {
+      // Weekly average — sessions that actually took place (completed +
+      // awaiting the trainer's confirmation) / weeks active.
+      const happened = usage.used + usage.pendingConfirmation;
+      if (pkgBookings.length >= 2 && happened > 0) {
         const firstT = new Date(pkgBookings[0].start_time).getTime();
-        const lastT = Date.now();
-        const weeks = Math.max(1, (lastT - firstT) / (7 * 86_400_000));
-        weeklyAvg = done / weeks;
+        const weeks = Math.max(1, (nowMs - firstT) / (7 * 86_400_000));
+        weeklyAvg = happened / weeks;
       }
       if (pkgBookings.length > 0) {
         daysActive = Math.round((Date.now() - new Date(pkgBookings[0].start_time).getTime()) / 86_400_000);

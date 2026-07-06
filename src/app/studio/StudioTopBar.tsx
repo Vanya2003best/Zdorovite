@@ -11,8 +11,8 @@ import type { Notification } from "@/lib/db/notifications";
 /**
  * OLX-style studio chrome — dark-green top strip + horizontal page-tabs.
  *
- * Replaces the legacy left sidebar (StudioSidebar.tsx, still on disk but
- * no longer mounted by the layout). The visual reference is `35-studio-
+ * Replaces the legacy left sidebar (StudioSidebar.tsx, removed as dead
+ * code). The visual reference is `35-studio-
  * klienci-olx-style.html` from the design bundle.
  *
  * Two parts in one component because both depend on usePathname for the

@@ -47,11 +47,11 @@ export default async function TrainerRegisterPage(props: {
           </h2>
           <p className="text-[13px] leading-relaxed opacity-85 max-w-[360px] mb-3.5">
             Zbuduj profil w 15 minut. Wybierz jeden z 6 szablonów. Zacznij przyjmować rezerwacje
-            jeszcze dziś — bez prowizji od pierwszej sesji.
+            jeszcze dziś — bez żadnej prowizji.
           </p>
           <div className="grid gap-2.5">
             {[
-              ["Bez prowizji przez 30 dni", "Plan Free do 3 klientów. Bez karty."],
+              ["0% prowizji — zawsze", "Nie pobieramy prowizji od Twoich sesji. Nigdy."],
               ["6 szablonów profilu", "Premium i Cozy darmowe, Cinematic / Luxury / Studio / Signature w planie PRO."],
               ["Płatność bezpośrednio u Ciebie", "Klient płaci Ci na miejscu — BLIK, przelew lub gotówka. Bez pośredników."],
             ].map(([title, desc]) => (
@@ -71,20 +71,9 @@ export default async function TrainerRegisterPage(props: {
         </div>
         </div>
 
-        {/* Bottom: stats — pinned to the bottom of the aside. */}
-        <div className="relative z-[2] flex gap-5 flex-wrap">
-          <div>
-            <div className="text-[19px] font-bold tracking-[-0.02em]">2 412</div>
-            <div className="text-[10px] opacity-70 tracking-wider uppercase mt-0.5">Trenerów na platformie</div>
-          </div>
-          <div>
-            <div className="text-[19px] font-bold tracking-[-0.02em]">38k</div>
-            <div className="text-[10px] opacity-70 tracking-wider uppercase mt-0.5">Sesji w 2026</div>
-          </div>
-          <div>
-            <div className="text-[19px] font-bold tracking-[-0.02em]">4,89★</div>
-            <div className="text-[10px] opacity-70 tracking-wider uppercase mt-0.5">Średnia ocena</div>
-          </div>
+        {/* Bottom line — honest, no invented platform stats. */}
+        <div className="relative z-[2] text-xs text-white/70">
+          Profil publiczny, kalendarz rezerwacji i czat z klientami — w jednym panelu.
         </div>
       </aside>
 

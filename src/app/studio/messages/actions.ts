@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 type ActionResult = { ok: true; data?: unknown } | { error: string };
 
 const DEFAULT_ERROR = "Coś poszło nie tak. Spróbuj ponownie.";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function sendMessage(formData: FormData): Promise<ActionResult> {
   try {
@@ -43,6 +44,10 @@ export async function markThreadRead(otherId: string): Promise<ActionResult> {
       return { error: "Brak id rozmówcy." };
     }
 
+    // Same guard as the client analog (account/messages/actions.ts).
+    const normalizedOtherId = otherId.trim();
+    if (!UUID_RE.test(normalizedOtherId)) return { error: "Nieprawidłowy rozmówca." };
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Nie zalogowano." };
@@ -51,7 +56,7 @@ export async function markThreadRead(otherId: string): Promise<ActionResult> {
       .from("messages")
       .update({ read_at: new Date().toISOString() })
       .eq("to_id", user.id)
-      .eq("from_id", otherId)
+      .eq("from_id", normalizedOtherId)
       .is("read_at", null);
     if (error) return { error: error.message };
 

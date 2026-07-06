@@ -13,7 +13,7 @@ const ExternalIcon = (
 
 /**
  * Mobile-only drawer triggered by the hamburger Menu button.
- * Desktop has the persistent <StudioSidebar/>; this component is hidden there
+ * Desktop uses the StudioTopBar chrome; this component is hidden there
  * (callers wrap in `lg:hidden`).
  */
 export default function StudioNavMenu({

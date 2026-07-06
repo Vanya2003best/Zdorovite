@@ -53,17 +53,17 @@ function RegisterPageInner() {
             Dla klientów
           </div>
           <h2 className="text-[28px] sm:text-[32px] leading-[1.08] tracking-[-0.025em] font-semibold m-0 mb-3">
-            Trener, który Cię rozumie. W 5 minut.
+            Trener, który Cię rozumie.
           </h2>
           <p className="text-[13px] leading-snug opacity-85 max-w-[360px] mb-5">
-            Powiedz nam o sobie, a my dobierzemy 3 trenerów dopasowanych do celu, dostępności i budżetu.
-            Pierwsza sesja — zwrot pieniędzy w 7 dni jeśli nie pasuje.
+            Przeglądaj profile trenerów, porównaj ceny i specjalizacje, umów pierwszą sesję —
+            wszystko w jednym miejscu.
           </p>
           <div className="grid gap-2.5">
             {[
-              ["★", "Tylko zweryfikowani trenerzy", "Sprawdzamy certyfikaty i opinie. 4,89 średnia ocena."],
-              ["↻", "Gwarancja zwrotu", "Pierwsza sesja Cię nie przekonała? Zwracamy 100% w 7 dni."],
-              ["⚡", "Dopasowanie w 5 minut", "Krótki quiz → 3 propozycje. Bez przeglądania setek profili."],
+              ["⚡", "Umawiaj sesje online i stacjonarnie", "Rezerwujesz termin w kalendarzu trenera w kilka kliknięć."],
+              ["💬", "Czat z trenerem po rezerwacji", "Dopytasz o szczegóły i przygotowanie przed pierwszą sesją."],
+              ["★", "Płatność bezpośrednio u trenera", "BLIK, przelew lub gotówka — bez pośredników."],
             ].map(([ico, title, desc]) => (
               <div key={title} className="flex gap-3 items-start text-[13px] leading-[1.45]">
                 <span className="w-6.5 h-6.5 min-w-[26px] h-[26px] rounded-lg bg-white/[0.16] inline-flex items-center justify-center">
@@ -78,25 +78,10 @@ function RegisterPageInner() {
           </div>
         </div>
 
-        {/* Avatar row — bottom of column, raised by mb cushion */}
-        <div className="relative z-[3] mb-16 flex gap-2.5 items-center">
-          <div className="flex">
-            {[
-              "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=60&h=60&fit=crop&crop=faces",
-              "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=60&h=60&fit=crop&crop=faces",
-              "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=60&h=60&fit=crop&crop=faces",
-            ].map((src, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={src}
-                src={src}
-                alt=""
-                className={`w-[30px] h-[30px] rounded-full border-2 border-slate-900 object-cover ${i > 0 ? "-ml-2.5" : ""}`}
-              />
-            ))}
-          </div>
+        {/* Bottom line — honest, no invented numbers */}
+        <div className="relative z-[3] mb-16">
           <span className="text-xs text-white/70">
-            Dołącz do 14 200 osób, które już ćwiczą z NaZdrow!
+            Konto jest darmowe — płacisz tylko trenerowi za sesje.
           </span>
         </div>
       </aside>

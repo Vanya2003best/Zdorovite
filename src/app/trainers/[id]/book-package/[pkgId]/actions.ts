@@ -61,7 +61,7 @@ export async function createPackageBooking(
 
   const { data: pkg, error: pkgErr } = await supabase
     .from("packages")
-    .select("id, name, description, price, period")
+    .select("id, name, description, price, period, sessions_total")
     .eq("id", packageId)
     .eq("trainer_id", trainer.id)
     .maybeSingle();
@@ -74,20 +74,10 @@ export async function createPackageBooking(
   const durationMin = 60;
   const endDate = new Date(startDate.getTime() + durationMin * 60_000);
 
-  // Per-session price = package total / number of sessions if known.
-  // Falls back to 0 (paid as part of the package up front).
-  // Note: 001 packages table has no `sessions_total` column directly;
-  // newer schema may. We read it defensively from the row if present.
-  type PkgWithMaybeSessions = {
-    id: string;
-    name: string;
-    description: string | null;
-    price: number;
-    period: string | null;
-    sessions_total?: number | null;
-  };
-  const pkgWithSessions = pkg as PkgWithMaybeSessions;
-  const sessionsTotal = pkgWithSessions.sessions_total ?? null;
+  // Per-session price = package total / number of sessions — same math as
+  // the per-service booking action (book/actions.ts). Keeps Finanse/LTV
+  // honest: without it the first package session lands with price=0.
+  const sessionsTotal: number | null = pkg.sessions_total ?? null;
   const pricePerSession =
     sessionsTotal && sessionsTotal > 0 ? Math.round(pkg.price / sessionsTotal) : 0;
 

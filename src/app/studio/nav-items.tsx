@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 
 /**
- * Studio sidebar nav — restructured into design-31 sections (top
- * group / Oferta / Komunikacja / Profil) so the nav reads as a
- * compact grouped list instead of a flat scroll. Section headers
- * are the small uppercase labels rendered between groups.
+ * Studio nav items — consumed by the mobile drawer (StudioNavMenu,
+ * mounted in the design editor). Structured into design-31 sections
+ * (top group / Oferta / Komunikacja / Profil) so the nav reads as a
+ * compact grouped list instead of a flat scroll.
  */
 export type NavGroup = "top" | "oferta" | "komunikacja" | "profil";
 
@@ -29,8 +29,7 @@ export type StudioNavItem = {
   /** Disabled "wkrótce" state. */
   soon?: boolean;
   /** Optional second-line description used by the mobile drawer
-   *  (StudioNavMenu) and the page-title fallback. The desktop
-   *  sidebar (design 31) ignores this and renders single-line. */
+   *  (StudioNavMenu). */
   description?: string;
   /** Sub-links rendered under this item (when active). Used for
    *  Calendar's mode deeplinks: Wzorzec / Wolne sloty. */
@@ -123,19 +122,13 @@ export const STUDIO_NAV: StudioNavItem[] = [
   {
     href: "/studio/profile",
     label: "Profil",
-    description: "Dane publiczne, kupony, opinie",
+    description: "Dane publiczne, opinie",
     group: "top",
     icon: ProfileIcon,
     match: (p) =>
       p.startsWith("/studio/profile") ||
-      p.startsWith("/studio/reviews") ||
-      p.startsWith("/studio/kupony"),
+      p.startsWith("/studio/reviews"),
     subItems: [
-      {
-        href: "/studio/kupony",
-        label: "Kupony",
-        match: (_search, pathname) => pathname.startsWith("/studio/kupony"),
-      },
       {
         href: "/studio/reviews",
         label: "Opinie",

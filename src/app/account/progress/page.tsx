@@ -5,7 +5,6 @@ import { getWeightLog } from "@/lib/db/weight";
 import Postepy, {
   type PostepyData,
   type Goal as ViewGoal,
-  type TrainerNote,
 } from "./Postepy";
 
 const PL_MONTHS = [
@@ -164,11 +163,9 @@ export default async function ProgressPage() {
   const activeGoals = allGoals.filter((g) => g.pct < 100);
   const achievedGoals = allGoals.filter((g) => g.pct >= 100);
 
-  // Trainer notes shared with client — currently we don't have a
-  // "share with client" flag on bookings.session_notes (it's marked
-  // trainer-private in migration 025). Leave empty until that feature
-  // ships. UI shows an honest empty state.
-  const trainerNotes: TrainerNote[] = [];
+  // NOTE: session_notes are trainer-private by design (migration 025) —
+  // there is no "share with client" flag, so the UI has no trainer-notes
+  // section. If sharing ever ships, reintroduce it end-to-end.
 
   const data: PostepyData = {
     latestWeightKg,
@@ -182,7 +179,6 @@ export default async function ProgressPage() {
     weekMinutesTarget,
     goals: activeGoals.concat(achievedGoals),
     achievedGoals,
-    trainerNotes,
     streakWeeks,
     monthsCoaching,
     sessionsAllTime,

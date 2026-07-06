@@ -18,12 +18,13 @@ type BookingRow = {
   service?: { name: string } | null;
 };
 
+// Client→trainer money is always direct (BLIK/przelew/gotówka or a
+// prepaid package) — there is no "paid via platform" method by design.
 const METHOD_LABEL: Record<string, string> = {
   blik: "BLIK",
   cash: "Gotówka",
   transfer: "Przelew",
   package: "Pakiet",
-  platform: "NaZdrow!",
 };
 
 /**
@@ -122,13 +123,13 @@ export default async function FinansePage() {
       </header>
 
       {migrationMissing ? (
-        <div className="rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50/40 py-12 px-6 text-center">
-          <p className="text-[14px] text-amber-800 font-semibold m-0">
-            Funkcja wkrótce dostępna
+        <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/60 py-12 px-6 text-center">
+          <p className="text-[14px] text-slate-700 font-semibold m-0">
+            Sekcja Finanse jest chwilowo niedostępna
           </p>
-          <p className="text-[12.5px] text-amber-700 mt-2 max-w-[480px] mx-auto m-0">
-            Sekcja Finanse wymaga migracji 024. Zastosuj ją w panelu Supabase, a
-            dashboard zacznie działać.
+          <p className="text-[12.5px] text-slate-500 mt-2 max-w-[480px] mx-auto m-0">
+            Zestawienie przychodów i oczekujących płatności pojawi się tutaj
+            automatycznie. Spróbuj ponownie za chwilę.
           </p>
         </div>
       ) : (

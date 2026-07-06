@@ -11,8 +11,7 @@ import AccountTopBar from "./AccountTopBar";
  *
  * Was a 240px left sidebar (AccountSidebar.tsx) + mobile bottom tab bar.
  * Both removed in favour of the same dark-teal top strip + page tabs we
- * ship under /studio, so the two surfaces feel like one app. AccountSidebar
- * and MOBILE_NAV stay on disk for reference (no longer mounted).
+ * ship under /studio, so the two surfaces feel like one app.
  *
  * Visual reference: studio/StudioTopBar.tsx + design 35-studio-klienci.
  */
