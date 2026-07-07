@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { ACCOUNT_LITE } from "@/lib/feature-flags";
 import { requireClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getGoals } from "@/lib/db/goals";
@@ -35,6 +37,9 @@ const DONE_STATUSES = ["completed", "paid"];
  * honest empty states inside the client component.
  */
 export default async function ProgressPage() {
+  // ACCOUNT_LITE: page hidden (витрина strategy) — flag flip restores it.
+  if (ACCOUNT_LITE) redirect("/account/bookings");
+
   const { user } = await requireClient("/account/progress");
   const supabase = await createClient();
 

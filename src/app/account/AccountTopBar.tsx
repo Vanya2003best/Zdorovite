@@ -7,6 +7,7 @@ import AccountMenu from "@/components/AccountMenu";
 import NotificationsBell from "@/components/NotificationsBell";
 import MessagesBadge from "./MessagesBadge";
 import type { Notification } from "@/lib/db/notifications";
+import { ACCOUNT_LITE } from "@/lib/feature-flags";
 
 /**
  * OLX-style client chrome — mirror of StudioTopBar but for the client
@@ -114,6 +115,16 @@ const TABS: Tab[] = [
   { href: "/account/package",  label: "Pakiet",      icon: PageNavIcon.package,  match: (p) => p.startsWith("/account/package") },
   { href: "/account/payments", label: "Płatności",   icon: PageNavIcon.card,     match: (p) => p.startsWith("/account/payments") },
   { href: "/account/settings", label: "Ustawienia",  icon: PageNavIcon.settings, match: (p) => p.startsWith("/account/settings") },
+];
+
+/** ACCOUNT_LITE (витрина strategy): the client surface collapses to
+ *  bookings / chat / settings — every other tab's page redirects to
+ *  /account/bookings, so the full TABS set above stays dormant until
+ *  the flag flips back. */
+const TABS_LITE: Tab[] = [
+  { href: "/account/bookings", label: "Rezerwacje", icon: PageNavIcon.cal,      match: (p) => p.startsWith("/account/bookings") },
+  { href: "/account/messages", label: "Czat",       icon: PageNavIcon.chat,     match: (p) => p.startsWith("/account/messages"), badgeKey: "messages" },
+  { href: "/account/settings", label: "Ustawienia", icon: PageNavIcon.settings, match: (p) => p.startsWith("/account/settings") },
 ];
 
 export default function AccountTopBar({
@@ -244,7 +255,7 @@ export default function AccountTopBar({
         style={{ top: hidden ? 0 : 64 }}
       >
         <nav className="max-w-[1280px] mx-auto px-4 sm:px-8 pt-1 flex items-center gap-1 overflow-x-auto scrollbar-hide">
-          {TABS.map((t) => {
+          {(ACCOUNT_LITE ? TABS_LITE : TABS).map((t) => {
             const active = t.match(pathname);
             return (
               <Link

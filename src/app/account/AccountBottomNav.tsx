@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ACCOUNT_LITE } from "@/lib/feature-flags";
 
 /**
  * Client bottom navigation — mobile only (<1024px), per MVP spec:
@@ -12,6 +13,10 @@ import { usePathname } from "next/navigation";
  * The top page-tabs stay visible on mobile too — they are the only
  * entry to Plan / Mój trener / Pakiet, which the 5-tab bottom bar
  * intentionally does not carry.
+ *
+ * ACCOUNT_LITE (витрина strategy) squeezes the bar to 4 tabs:
+ * Rezerwacje · Trenerzy · Czat · Ustawienia — Pulpit/Postępy pages
+ * redirect to /account/bookings while the flag is on.
  */
 
 const Icon = {
@@ -42,6 +47,12 @@ const Icon = {
       <path d="M3 3v18h18M7 14l4-4 4 4 6-6" />
     </svg>
   ),
+  settings: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+    </svg>
+  ),
 };
 
 type Tab = {
@@ -55,26 +66,39 @@ type Tab = {
 export default function AccountBottomNav({ unreadMessages }: { unreadMessages: number }) {
   const pathname = usePathname() ?? "";
 
-  const tabs: Tab[] = [
-    { href: "/account", label: "Pulpit", icon: Icon.home, match: (p) => p === "/account" },
-    { href: "/account/bookings", label: "Sesje", icon: Icon.cal, match: (p) => p.startsWith("/account/bookings") },
-    { href: "/", label: "Trenerzy", icon: Icon.search, match: () => false },
-    {
-      href: "/account/messages",
-      label: "Czat",
-      icon: Icon.chat,
-      match: (p) => p.startsWith("/account/messages"),
-      badge: unreadMessages,
-    },
-    { href: "/account/progress", label: "Postępy", icon: Icon.chart, match: (p) => p.startsWith("/account/progress") },
-  ];
+  const tabs: Tab[] = ACCOUNT_LITE
+    ? [
+        { href: "/account/bookings", label: "Rezerwacje", icon: Icon.cal, match: (p) => p.startsWith("/account/bookings") },
+        { href: "/", label: "Trenerzy", icon: Icon.search, match: () => false },
+        {
+          href: "/account/messages",
+          label: "Czat",
+          icon: Icon.chat,
+          match: (p) => p.startsWith("/account/messages"),
+          badge: unreadMessages,
+        },
+        { href: "/account/settings", label: "Ustawienia", icon: Icon.settings, match: (p) => p.startsWith("/account/settings") },
+      ]
+    : [
+        { href: "/account", label: "Pulpit", icon: Icon.home, match: (p) => p === "/account" },
+        { href: "/account/bookings", label: "Sesje", icon: Icon.cal, match: (p) => p.startsWith("/account/bookings") },
+        { href: "/", label: "Trenerzy", icon: Icon.search, match: () => false },
+        {
+          href: "/account/messages",
+          label: "Czat",
+          icon: Icon.chat,
+          match: (p) => p.startsWith("/account/messages"),
+          badge: unreadMessages,
+        },
+        { href: "/account/progress", label: "Postępy", icon: Icon.chart, match: (p) => p.startsWith("/account/progress") },
+      ];
 
   return (
     <nav
       aria-label="Nawigacja konta"
       className="fixed bottom-0 inset-x-0 z-50 lg:hidden bg-white border-t border-slate-200 pb-[env(safe-area-inset-bottom)]"
     >
-      <div className="grid grid-cols-5">
+      <div className={ACCOUNT_LITE ? "grid grid-cols-4" : "grid grid-cols-5"}>
         {tabs.map((t) => {
           const active = t.match(pathname);
           return (

@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { ACCOUNT_LITE } from "@/lib/feature-flags";
 import { requireClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getFavoriteTrainersBrief } from "@/lib/db/favorites";
@@ -62,6 +64,10 @@ type BookingRow = {
 const DONE_STATUSES = ["confirmed", "paid", "completed"];
 
 export default async function AccountDashboardPage() {
+  // ACCOUNT_LITE: /account root collapses to the bookings list — the
+  // pulpit dashboard is preserved in code for a future flag flip.
+  if (ACCOUNT_LITE) redirect("/account/bookings");
+
   const { user, profile } = await requireClient("/account");
   const supabase = await createClient();
 

@@ -3,9 +3,14 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { specializations } from "@/data/specializations";
 import { requireUser, isTrainer } from "@/lib/auth";
+import { ACCOUNT_LITE } from "@/lib/feature-flags";
 import BecomeTrainerForm from "./BecomeTrainerForm";
 
 export default async function BecomeTrainerPage() {
+  // ACCOUNT_LITE: page hidden (витрина strategy) — trainers onboard via
+  // /register/trainer; flag flip restores the client→trainer upgrade flow.
+  if (ACCOUNT_LITE) redirect("/account/bookings");
+
   const { user, profile } = await requireUser("/account/become-trainer");
   const trainer = isTrainer(profile);
   // Existing trainers edit their profile in /studio/profile, not here.

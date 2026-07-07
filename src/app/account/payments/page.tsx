@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { ACCOUNT_LITE } from "@/lib/feature-flags";
 import { requireClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import Platnosci, {
@@ -38,6 +40,9 @@ const DONE_STATUSES = ["completed", "paid"];
  * render explicit "we don't process payments" copy.
  */
 export default async function PaymentsPage() {
+  // ACCOUNT_LITE: page hidden (витрина strategy) — flag flip restores it.
+  if (ACCOUNT_LITE) redirect("/account/bookings");
+
   const { user } = await requireClient("/account/payments");
   const supabase = await createClient();
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { ACCOUNT_LITE } from "@/lib/feature-flags";
 
 const SettingsIcon = (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -117,6 +118,13 @@ const CLIENT_ITEMS: Item[] = [
   { kind: "divider" },
 ];
 
+/** ACCOUNT_LITE (витрина strategy): Płatności/Postępy pages redirect to
+ *  /account/bookings, so their menu entries are dropped — only Ustawienia
+ *  (+ Wyloguj below) stay. Flag flip restores the full CLIENT_ITEMS. */
+const CLIENT_ITEMS_LITE: Item[] = CLIENT_ITEMS.filter(
+  (it) => it.kind === "divider" || it.href === "/account/settings",
+);
+
 const ExternalIcon = (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
@@ -180,7 +188,8 @@ export default function AccountMenu({
 
   const initial = (displayName || "?").charAt(0).toUpperCase();
 
-  const items = role === "client" ? CLIENT_ITEMS : TRAINER_ITEMS;
+  const items =
+    role === "client" ? (ACCOUNT_LITE ? CLIENT_ITEMS_LITE : CLIENT_ITEMS) : TRAINER_ITEMS;
 
   const isPill = variant === "pill";
   const isChip = variant === "chip";

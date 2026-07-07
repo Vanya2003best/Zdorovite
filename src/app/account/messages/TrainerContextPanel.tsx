@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ACCOUNT_LITE } from "@/lib/feature-flags";
 
 /**
  * Right-rail context for the active conversation in /account/messages.
@@ -93,12 +94,16 @@ export default function TrainerContextPanel({
             >
               Zarezerwuj
             </Link>
-            <Link
-              href="/account/package"
-              className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-[12px] text-slate-700 hover:border-slate-300 transition text-center"
-            >
-              Pakiet
-            </Link>
+            {/* ACCOUNT_LITE: /account/package is gated (redirects to
+                bookings), so the shortcut disappears with the flag. */}
+            {!ACCOUNT_LITE && (
+              <Link
+                href="/account/package"
+                className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-[12px] text-slate-700 hover:border-slate-300 transition text-center"
+              >
+                Pakiet
+              </Link>
+            )}
           </>
         ) : (
           <button

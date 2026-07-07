@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { ACCOUNT_LITE } from "@/lib/feature-flags";
 import { requireClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { packageUsage } from "@/lib/db/package-usage";
@@ -22,6 +24,9 @@ const PL_MONTHS_SHORT = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie",
  * have those tables yet.
  */
 export default async function PackagePage() {
+  // ACCOUNT_LITE: page hidden (витрина strategy) — flag flip restores it.
+  if (ACCOUNT_LITE) redirect("/account/bookings");
+
   const { user } = await requireClient("/account/package");
   const supabase = await createClient();
 
